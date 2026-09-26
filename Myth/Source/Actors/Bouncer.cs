@@ -30,7 +30,6 @@ public class Bouncer : Actor, IResizable
 	// Membrane spring: accel per px of displacement from rest, and per-second velocity bleed.
 	static float Stiffness => 3280f;
 	static float DampingRate => 11f;
-	static float MaxSimStep => 1f / 60f;
 	static float VisualRecoilOffset => 4f;
 	static RumbleEffect BounceRumble => new(0.3f, 0.15f, 0.1f);
 
@@ -95,15 +94,8 @@ public class Bouncer : Actor, IResizable
 		var frameDelta = Time.Delta;
 		if (frameDelta > 0)
 		{
-			var stepCount = Math.Max(1, (int)MathF.Ceiling(frameDelta / MaxSimStep - 0.0001f));
-			var dt = frameDelta / stepCount;
-			var displacementScale = dt / lastDelta;
-			for (var step = 0; step < stepCount; step++)
-			{
-				SimulateStep(dt, displacementScale);
-				displacementScale = 1;
-			}
-			lastDelta = dt;
+			for (var steps = new Verlet.Steps(frameDelta, ref lastDelta); steps.Next(out var dt, out var scale);)
+				SimulateStep(dt, scale);
 		}
 
 		insideNow.Clear();
@@ -120,14 +112,9 @@ public class Bouncer : Actor, IResizable
 
 	void SimulateStep(float dt, float displacementScale)
 	{
-		var damp = MathF.Exp(-DampingRate * dt);
+		var damp = Verlet.Damping(DampingRate, dt);
 		for (var i = 0; i < points.Length; i++)
-		{
-			var accel = (rest[i] - points[i]) * Stiffness;
-			var p = points[i];
-			points[i] = p + (p - prev[i]) * displacementScale * damp + accel * (dt * dt);
-			prev[i] = p;
-		}
+			Verlet.Integrate(ref points[i], ref prev[i], (rest[i] - points[i]) * Stiffness, dt, displacementScale, damp);
 
 		var recoilAccel = -recoilOffset * RecoilStiffness - recoilVelocity * RecoilDamping;
 		recoilVelocity += recoilAccel * dt;

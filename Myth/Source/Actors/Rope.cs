@@ -52,7 +52,6 @@ public class Rope : Actor, IResizable
 	static float RiderExtraGravity => 500f;     // the hanging pawn's weight pulls the rope taut
 	static float RiderConstraintShare => 0.15f; // ridden point moves this fraction in the solve (it's heavy)
 	const int ConstraintIterations = 4;
-	static float MaxSimStep => 1f / 60f;
 
 	struct WindPush
 	{
@@ -126,17 +125,8 @@ public class Rope : Actor, IResizable
 			if (actor is Wind wind && wind.TryGetHorizontalPush(out var rect, out var accel, out var limit))
 				windPushes.Add(new WindPush { Rect = rect, Accel = accel, SpeedLimit = limit });
 
-		// Slow motion still gets one smooth, small step per update; fast motion and hitches
-		// split into equal steps so no solve exceeds the stable 60 Hz timestep.
-		var stepCount = Math.Max(1, (int)MathF.Ceiling(frameDelta / MaxSimStep - 0.0001f));
-		var dt = frameDelta / stepCount;
-		var displacementScale = dt / lastDelta;
-		for (var step = 0; step < stepCount; step++)
-		{
-			SimulateStep(dt, displacementScale);
-			displacementScale = 1;
-		}
-		lastDelta = dt;
+		for (var steps = new Verlet.Steps(frameDelta, ref lastDelta); steps.Next(out var dt, out var scale);)
+			SimulateStep(dt, scale);
 
 		foreach (var chain in chains)
 		{
@@ -155,8 +145,8 @@ public class Rope : Actor, IResizable
 		foreach (var chain in chains)
 		{
 			var held = chain.Pinned ? waiting : 0;
-			var damp = MathF.Exp(-DampingRate * Weight * dt);
-			var riddenDamp = chain.RiderIndex >= 0 ? MathF.Exp(-RiddenDampingRate * Weight * dt) : damp;
+			var damp = Verlet.Damping(DampingRate * Weight, dt);
+			var riddenDamp = chain.RiderIndex >= 0 ? Verlet.Damping(RiddenDampingRate * Weight, dt) : damp;
 			Integrate(chain, held, dt, displacementScale, damp, riddenDamp);
 			Constrain(chain, held);
 			Collide(chain, held);
@@ -204,10 +194,8 @@ public class Rope : Actor, IResizable
 			if (i == chain.RiderIndex)
 				accel += PumpDirection(chain, i) * MathF.Abs(chain.SwingAccel) + Vector2.UnitY * RiderExtraGravity;
 
-			var p = points[i];
 			var pointDamp = i <= chain.RiderIndex ? riddenDamp : damp;
-			points[i] = p + (p - prev[i]) * displacementScale * pointDamp + accel * (dt * dt);
-			prev[i] = p;
+			Verlet.Integrate(ref points[i], ref prev[i], accel, dt, displacementScale, pointDamp);
 		}
 	}
 
