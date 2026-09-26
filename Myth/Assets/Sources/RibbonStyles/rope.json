@@ -1,0 +1,27 @@
+{
+  "Surface": "curve-rope",
+  "Taper": false,
+  "Branches": false,
+  "Cap": "Round",
+  "Substance": "Wood",
+  "Stripes": [
+    {
+      "Offset": -0.3,
+      "Thickness": 0.12,
+      "Color": "d0a06a",
+      "Opacity": 0.35
+    }
+  ],
+  "Stamps": [
+    {
+      "Kind": "Band",
+      "Spacing": 22,
+      "Jitter": 0.15,
+      "Size": 1.04,
+      "Thickness": 0.2,
+      "Outline": 0.34,
+      "Color": "9c6c3e",
+      "OutlineColor": "3a2415"
+    }
+  ]
+}
