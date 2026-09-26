@@ -128,7 +128,9 @@
       "Id": "d4a27453a55ebb67",
       "Type": "Rope",
       "Position": [268, 46],
-      "Size": [8, 140]
+      "Size": [8, 140],
+      "Style": "cable",
+      "RibbonWidth": 2.629
     },
     {
       "Id": "bd4147c7ddd46175",

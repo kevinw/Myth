@@ -38,6 +38,11 @@ public class Rope : Actor, IResizable
 	// the falling end pulls taut, so the rope feeds down cleanly instead of tangling on the lip.
 	public bool StartCoiled;
 
+	// With a ribbon style set, the chains draw through CurveRibbon's material pipeline (see
+	// RopeRibbon) instead of the built-in two-tone lines. Empty keeps the original look.
+	[InspectorGroup("Ribbon")] public ContentRef<RibbonStyleContent> Style = new("");
+	[I(1, 16)] public float RibbonWidth = 4;
+
 	public const float SegmentLength = 4f;
 	static float RopeGravity => 260f;
 	static float DampingRate => 1.1f;           // per-second velocity bleed at Weight 1
@@ -61,6 +66,7 @@ public class Rope : Actor, IResizable
 	}
 
 	readonly List<Chain> chains = [];
+	readonly List<RopeRibbon> ribbons = [];
 	readonly List<WindPush> windPushes = [];
 	int waiting; // leading pinned-chain points still held at the anchor; 1 means fully paid out
 	Point2 builtSize;
@@ -82,6 +88,38 @@ public class Rope : Actor, IResizable
 		base.Added();
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		BuildChains();
+		SyncRibbons();
+	}
+
+	// One ribbon per chain, so Break() hands the fallen remnant its own and it keeps the same look
+	// as the part still hanging. Runs before the sim each frame rather than only on a change, so a
+	// paused or editor-previewed rope still has its ribbons positioned.
+	void SyncRibbons()
+	{
+		var wanted = Style.Name != "" ? chains.Count : 0;
+		while (ribbons.Count > wanted)
+		{
+			Game.Destroy(ribbons[^1]);
+			ribbons.RemoveAt(ribbons.Count - 1);
+		}
+		while (ribbons.Count < wanted)
+			ribbons.Add(Game.Create<RopeRibbon>(Position, it => it.Style = Style));
+
+		for (var i = 0; i < ribbons.Count; i++)
+		{
+			ribbons[i].Position = Position;
+			ribbons[i].Chain = chains[i];
+			ribbons[i].Width = RibbonWidth;
+			ribbons[i].Depth = Depth;
+			ribbons[i].KeepOnRoomTransition = KeepOnRoomTransition;
+		}
+	}
+
+	public override void Destroyed()
+	{
+		foreach (var ribbon in ribbons)
+			Game.Destroy(ribbon);
+		ribbons.Clear();
 	}
 
 	void BuildChains()
@@ -115,6 +153,7 @@ public class Rope : Actor, IResizable
 	{
 		if (builtSize != Size)
 			BuildChains(); // editor resize while unbroken; runtime never resizes
+		SyncRibbons();
 
 		var frameDelta = Time.Delta;
 		if (frameDelta <= 0)
@@ -403,12 +442,13 @@ public class Rope : Actor, IResizable
 	void RenderChains(Batcher batcher)
 	{
 		// Render happens in actor-local space; points are world.
-		foreach (var chain in chains)
-			for (var i = 1; i < chain.Points.Length; i++)
-			{
-				var color = i % 2 == 0 ? ColorMain : ColorLight;
-				batcher.Line(((Point2)chain.Points[i - 1]) - Position, ((Point2)chain.Points[i]) - Position, 1, color);
-			}
+		if (ribbons.Count == 0)
+			foreach (var chain in chains)
+				for (var i = 1; i < chain.Points.Length; i++)
+				{
+					var color = i % 2 == 0 ? ColorMain : ColorLight;
+					batcher.Line(((Point2)chain.Points[i - 1]) - Position, ((Point2)chain.Points[i]) - Position, 1, color);
+				}
 		if (PinnedChain != null)
 			batcher.Rect(new Rect(TopAnchor.X - Position.X - 1, TopAnchor.Y - Position.Y, 3, 2), ColorDark);
 	}
