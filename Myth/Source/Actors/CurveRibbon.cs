@@ -208,29 +208,27 @@ public class CurveRibbon : PointPathActor, IActivatable
 		var phase = WobbleSpeed > 0 ? wobblePhase : 0;
 		var key = new BuildKey(Position, style, FollowCurveTexture, Width, EndWidth, BranchSpacing, BranchLength, BranchWidth,
 			WobbleFrequency, WobbleIntensity, phase, Roundness, Bulge, Seed, Grown, TwistPeriod, TwistPeriod > 0 ? twistPhase : 0, Collision);
-		var pointsChanged = !builtPoints.AsSpan().SequenceEqual(Points);
-		if (key == builtKey && !pointsChanged)
+		var spineChanged = SpineChanged;
+		if (key == builtKey && !spineChanged)
 			return;
 
 		builtKey = key;
-		if (pointsChanged)
-			builtPoints = [.. Points];
-		spline.Clear();
+		if (spineChanged)
+			CaptureSpine();
 		spine.Clear();
 		spineEdges.Clear();
 		spineTwist.Clear();
 		triangles.Clear();
 		normalTriangles.Clear();
 		stamps.Clear();
-		if (Points.Length < 2)
+
+		PrepareSpine();
+		AppendSpine(spine, phase);
+		if (spine.Count < 2)
 		{
 			visualBounds = new Rect(Position, Vector2.Zero);
 			return;
 		}
-
-		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
-		Ribbon.AppendSpline(spline, Points, wobble ? 4 : 12, wobble ? 256 : 128);
-		AppendSpine(spine, phase);
 
 		var branches = style?.Branches != false && BranchSpacing > 0;
 		var pathLength = PathLength(spine);
@@ -238,7 +236,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 		var front = Grown * growthLength;
 		var taper = style?.Taper != false;
 		var collisionKey = new CollisionKey(Collision, Width, EndWidth, taper, WobbleFrequency, WobbleIntensity, Seed, front);
-		if (pointsChanged || collisionKey != builtCollisionKey)
+		if (spineChanged || collisionKey != builtCollisionKey)
 		{
 			builtCollisionKey = collisionKey;
 			BuildCollision(front, taper);
@@ -276,7 +274,25 @@ public class CurveRibbon : PointPathActor, IActivatable
 		visualBounds = triangles.Count > 0 ? Rect.Between(min, max).Inflate(reach) : new Rect(Position, Vector2.Zero);
 	}
 
-	void AppendSpine(List<Vector2> into, float phase)
+	// --- spine source ---------------------------------------------------------------------
+	// Everything above this point works on `spine`, a list of local-space points, and cares only
+	// that it exists. Authored Points are one way to produce it; a rope simulation, an IK chain
+	// reaching for a target, or a motion trail are others -- override these three and the whole
+	// ribbon (width profile, twist, grow, branches, stamps, collision, surface) comes along.
+	//
+	// It is two steps so the animated shape and the steady collision shape can share the
+	// expensive part: PrepareSpine runs once per geometry build, then AppendSpine can be asked
+	// for the shape at any phase.
+	protected virtual void PrepareSpine()
+	{
+		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
+		spline.Clear();
+		Ribbon.AppendSpline(spline, Points, wobble ? 4 : 12, wobble ? 256 : 128);
+	}
+
+	// phase advances time-based sway; BuildCollision asks for 0 so a swaying ribbon is still a
+	// steady floor. A source that simulates has no such steady shape and can ignore it.
+	protected virtual void AppendSpine(List<Vector2> into, float phase)
 	{
 		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
 		var traveled = 0f;
@@ -291,6 +307,12 @@ public class CurveRibbon : PointPathActor, IActivatable
 			into.Add(point);
 		}
 	}
+
+	// Whether the source would build a different spine than the one already built. Authored points
+	// change only when edited; a simulated source changes every frame (and so rebuilds collision
+	// every frame, the same cost an animating Grow already pays).
+	protected virtual bool SpineChanged => !builtPoints.AsSpan().SequenceEqual(Points);
+	protected virtual void CaptureSpine() => builtPoints = [.. Points];
 
 	static float PathLength(List<Vector2> points)
 	{
