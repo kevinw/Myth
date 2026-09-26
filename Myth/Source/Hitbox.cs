@@ -3,21 +3,24 @@ using Foster.Framework;
 
 namespace Myth;
 
-/// Hitbox can test overlaps between Rectangles, Grids and per-pixel masks. A Pixels hitbox's
-/// Rect is its mask's bounds.
+/// Hitbox can test overlaps between Rectangles, Grids, per-pixel masks and capsule chains. A
+/// Pixels or Capsules hitbox's Rect is its shape's bounds, cached when the Hitbox is built --
+/// rebuild it after reshaping the mask or chain.
 public readonly struct Hitbox
 {
 	public enum Shapes
 	{
 		Rect,
 		Grid,
-		Pixels
+		Pixels,
+		Capsules
 	}
 
 	public readonly Shapes Shape;
 	private readonly RectInt rect;
 	private readonly bool[,]? grid;
 	private readonly PixelMask? pixels;
+	private readonly CapsuleChain? capsules;
 
 	public RectInt Rect => rect;
 
@@ -46,6 +49,13 @@ public readonly struct Hitbox
 		Shape = Shapes.Pixels;
 		rect = value.Bounds;
 		pixels = value;
+	}
+
+	public Hitbox(CapsuleChain value)
+	{
+		Shape = Shapes.Capsules;
+		rect = value.Bounds;
+		capsules = value;
 	}
 
 	// Builds a hitbox from a sprite's visible (trimmed) pixels, expressed relative to the
@@ -106,11 +116,12 @@ public readonly struct Hitbox
 
 	public bool Overlaps(in RectInt rect) => Overlaps(Point2.Zero, new Hitbox(rect));
 
-	// Whether a local pixel is inside a Rect or Pixels hitbox; Grids answer false.
+	// Whether a local pixel is inside a Rect, Pixels or Capsules hitbox; Grids answer false.
 	public bool Contains(Point2 pixel) => Shape switch
 	{
 		Shapes.Rect => rect.Contains(pixel),
 		Shapes.Pixels => pixels![pixel],
+		Shapes.Capsules => capsules!.Contains(new Vector2(pixel.X + 0.5f, pixel.Y + 0.5f)),
 		_ => false,
 	};
 
@@ -126,6 +137,7 @@ public readonly struct Hitbox
 					case Shapes.Rect: return RectToRect(rect + offset, other.rect);
 					case Shapes.Grid: return RectToGrid(rect + offset, other.grid!);
 					case Shapes.Pixels: return other.pixels!.Overlaps(rect + offset);
+					case Shapes.Capsules: return other.capsules!.Overlaps(rect + offset);
 				}
 				break;
 			case Shapes.Grid:
@@ -140,6 +152,10 @@ public readonly struct Hitbox
 				if (other.Shape == Shapes.Rect)
 					return pixels!.Overlaps(other.rect - offset);
 				throw new NotImplementedException($"Pixels->{other.Shape} overlap not implemented!");
+			case Shapes.Capsules:
+				if (other.Shape == Shapes.Rect)
+					return capsules!.Overlaps(other.rect - offset);
+				throw new NotImplementedException($"Capsules->{other.Shape} overlap not implemented!");
 		}
 
 		throw new NotImplementedException();
@@ -179,6 +195,10 @@ public readonly struct Hitbox
 				for (var x = rect.Left; x < rect.Right; x++)
 					if (pixels[new Point2(x, y)])
 						batcher.Rect(new RectInt(x, y, 1, 1), color);
+		}
+		else if (Shape == Shapes.Capsules && capsules != null)
+		{
+			capsules.Render(batcher, color);
 		}
 		else if (Shape == Shapes.Grid && grid != null)
 		{

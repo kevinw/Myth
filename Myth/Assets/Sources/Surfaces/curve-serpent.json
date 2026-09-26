@@ -1,0 +1,14 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_72",
+      "Blend": "Over",
+      "Tint": "7ba85aff",
+      "BlackColor": "31492eff",
+      "Tiling": [10, 10]
+    }
+  ],
+  "NormalFromHeight": true,
+  "NormalStrength": 1.2,
+  "HeightFromLayer": 0
+}

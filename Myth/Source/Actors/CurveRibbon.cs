@@ -58,6 +58,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 	readonly List<Vector2> collisionTrimmed = [];
 	readonly List<RibbonEdge> collisionEdges = [];
 	readonly PixelMask collisionMask = new(new RectInt());
+	readonly CapsuleChain collisionCapsules = new();
 	CollisionKey builtCollisionKey;
 	readonly List<RibbonEdge> spineEdges = [];
 	readonly List<float> spineTwist = []; // turn angle per spine edge, empty when untwisted
@@ -361,6 +362,15 @@ public class CurveRibbon : PointPathActor, IActivatable
 		if (collisionEdges.Count < 2)
 			return;
 
+		if (UseCapsuleCollision)
+		{
+			collisionCapsules.Clear();
+			foreach (var edge in collisionEdges)
+				collisionCapsules.Add(edge.Center, edge.HalfWidth);
+			Hitbox = new(collisionCapsules);
+			return;
+		}
+
 		var min = new Vector2(float.PositiveInfinity);
 		var max = new Vector2(float.NegativeInfinity);
 		foreach (var edge in collisionEdges)
@@ -378,6 +388,12 @@ public class CurveRibbon : PointPathActor, IActivatable
 		}
 		Hitbox = new(collisionMask);
 	}
+
+	// A shape that reshapes every frame pays, through a pixel mask, for the whole area it spans;
+	// a capsule chain costs the length of its line instead -- around 30x less for a body that
+	// crosses a room. A static spine keeps the mask, which is built once and then answers from an
+	// array, so it is the cheaper of the two to ask.
+	protected virtual bool UseCapsuleCollision => false;
 
 	// The collision cross-section nearest this point, oriented upward. Growth moves the surface along
 	// this normal, so a rider needs it to know how much vertical travel a given swell really means.

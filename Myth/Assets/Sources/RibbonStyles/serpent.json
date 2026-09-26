@@ -1,0 +1,20 @@
+{
+  "Surface": "curve-serpent",
+  "Taper": true,
+  "Branches": false,
+  "Cap": "Round",
+  "Stripes": [
+    {
+      "Offset": 0,
+      "Thickness": 0.14,
+      "Color": "24351f",
+      "Opacity": 0.55
+    },
+    {
+      "Offset": -0.34,
+      "Thickness": 0.1,
+      "Color": "cfe08a",
+      "Opacity": 0.4
+    }
+  ]
+}
