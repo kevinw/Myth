@@ -75,7 +75,7 @@ public partial class Manager : App
 #endif
 	// --play-room runs from an empty save and never touches the one on disk.
 	internal bool EphemeralSave => args.playRoomId != null;
-	bool skipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
+	bool SkipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
 	bool startingPlay;
 	static float PlayMouseHideDelay => 3f;
 	float playMouseIdleTimer;
@@ -545,9 +545,13 @@ public partial class Manager : App
 	}
 
 	bool hasStartedGame;
+	
+	Stopwatch? startupClock;
+	bool didMeasureFirstFrameTime;
 
 	protected override void Startup()
 	{
+		startupClock = Stopwatch.StartNew();
 #if !BROWSER
 		// Assume focus until the OS says otherwise: the window starts hidden (so it can't report
 		// focus yet), and a launch that never grants focus (a launcher, a scheduled task) would
@@ -594,6 +598,9 @@ public partial class Manager : App
 #else
 		Assets.ConfigureVisualAssetPack(args.assetPackPath, args.useAssetPack);
 #endif
+		// Nothing between here and FinishLoadAudioBanks touches Audio, so FMOD can boot and
+		// load its banks alongside the asset bake instead of after it.
+		BeginLoadAudioBanks();
 		Assets.Load(GraphicsDevice, args.dumpAtlases);
 		if (Inbetweens.BenchMode)
 		{
@@ -624,8 +631,7 @@ public partial class Manager : App
 			Exit();
 			return;
 		}
-		if (AudioEnabled)
-			LoadAudioBanks();
+		FinishLoadAudioBanks();
 
 #if EDITOR
 		if (args.bakeWorldMap is { } mode)
@@ -719,7 +725,7 @@ public partial class Manager : App
 		fpsLogStartFrame = Time.RenderFrame;
 		fpsLogTimer = Stopwatch.StartNew();
 #if BROWSER || !EDITOR
-		if (!skipStartupMenu)
+		if (!SkipStartupMenu)
 		{
 			if (!args.title && !TryBeginStartupAttribution())
 				ShowTitleMenu();
@@ -818,6 +824,9 @@ public partial class Manager : App
 		LogFrameTimes();
 		ShutdownGame();
 		Steam.Shutdown();
+		// An exit during Startup (--bench, a load failure) can leave FMOD still booting on the
+		// background thread; tearing it down underneath that would race.
+		FinishLoadAudioBanks();
 		Audio.Shutdown();
 #if EDITOR
 		if (UserQuitRequested && !Assets.ContentIsPak)
@@ -887,7 +896,18 @@ public partial class Manager : App
 	}
 #endif
 
+	// FMOD init + bank loading is ~300ms of unmanaged work that needs nothing from the asset
+	// bake, so Startup kicks it off before loading assets and collects it afterwards. Everything
+	// that touches Manager state stays on the main thread, in FinishLoadAudioBanks.
+	Task? audioBankLoad;
+
 	void LoadAudioBanks()
+	{
+		BeginLoadAudioBanks();
+		FinishLoadAudioBanks();
+	}
+
+	void BeginLoadAudioBanks()
 	{
 		if (!AudioEnabled) return;
 		// The FMOD project lives in Assets/Sources (authoring) but must build its banks
@@ -920,17 +940,25 @@ public partial class Manager : App
 			return;
 		}
 
+		audioBankLoad = Par.Run(() => Audio.ReloadBanks(
+			banks,
+			liveUpdate:
+#if DEBUG
+			true
+#else
+			false
+#endif
+		));
+	}
+
+	void FinishLoadAudioBanks()
+	{
+		if (audioBankLoad is not { } load) return;
+		audioBankLoad = null;
+
 		try
 		{
-			Audio.ReloadBanks(
-				banks,
-				liveUpdate:
-#if DEBUG
-				true
-#else
-				false
-#endif
-			);
+			load.GetAwaiter().GetResult();
 			LoadMusicAreas();
 			ApplyGameplayAudioPause();
 			ApplyVolumes();
@@ -2047,6 +2075,13 @@ public partial class Manager : App
 		if (movieTracksPlayer)
 			RecordMoviePlayerSample();
 #endif
+
+		if (!didMeasureFirstFrameTime && startupClock != null)
+		{
+			didMeasureFirstFrameTime = true;
+			var timeToFirstFrame = startupClock.Elapsed;
+			Console.WriteLine($"Time to first frame: {timeToFirstFrame}");
+		}
 	}
 
 	void DrawControllerInputs()

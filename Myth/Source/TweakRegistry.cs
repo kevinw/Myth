@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using ImGuiNET;
 using Foster.Framework;
 
@@ -220,19 +221,52 @@ static class TweakRegistry
 	// line shifts that editing the file causes.
 	static readonly Dictionary<(string, string), float> baselines = [];
 
-	public static void ScanDiff()
+	// What a scan found, computed entirely off the main thread (two git subprocesses and a few
+	// hundred file reads) and merged by IntegrateDiffScan.
+	readonly record struct DiffMarker(string File, int Line, string Text, float Value, bool IsInt);
+	sealed record DiffScan(Dictionary<(string, string), float> Baselines, List<DiffMarker> Markers);
+
+	static Task<DiffScan?>? diffTask;
+
+	static void RequestDiffScan()
+		=> diffTask ??= Task.Run(ComputeDiffScan);
+
+	static void IntegrateDiffScan()
 	{
+		if (diffTask is not { IsCompleted: true })
+			return;
+		var scan = diffTask.IsCompletedSuccessfully ? diffTask.Result : null;
+		diffTask = null;
+		if (scan == null)
+			return;
+
 		foreach (var e in entries.Values)
 			e.InDiff = false;
 		baselines.Clear();
+		foreach (var (key, value) in scan.Baselines)
+			baselines[key] = value;
+
+		foreach (var (file, line, text, value, isInt) in scan.Markers)
+		{
+			var e = GetOrAdd(file, line, text, value, isInt, null, null);
+			e.HasMarker = true;
+			e.InDiff = true;
+			if (!e.Seen)
+				e.Default = value; // unseen: trust the parsed source literal
+		}
+	}
+
+	static DiffScan? ComputeDiffScan()
+	{
+		var found = new DiffScan([], []);
 
 		var root = RepoRoot();
 		if (root == null)
-			return;
+			return found;
 
 		var diff = RunGit(root, "diff --unified=0 --no-color HEAD");
 		if (diff == null)
-			return;
+			return found;
 
 		// Collect changed line ranges (new-side) per file.
 		var ranges = new Dictionary<string, List<(int start, int end)>>();
@@ -252,7 +286,7 @@ static class TweakRegistry
 			{
 				var removed = GetterRx.Match(raw[1..]);
 				if (removed.Success && TryParseLiteral(removed.Groups["lit"].Value, out var was, out _))
-					baselines[(current, removed.Groups["name"].Value)] = was;
+					found.Baselines[(current, removed.Groups["name"].Value)] = was;
 			}
 			var m = HunkRx.Match(raw);
 			if (!m.Success)
@@ -292,14 +326,12 @@ static class TweakRegistry
 						var text = mk.Groups["lit"].Value;
 						if (!TryParseLiteral(text, out var value, out var isInt))
 							continue;
-						var e = GetOrAdd(file, ln, text, value, isInt, null, null);
-						e.HasMarker = true;
-						e.InDiff = true;
-						if (!e.Seen)
-							e.Default = value; // unseen: trust the parsed source literal
+						found.Markers.Add(new(file, ln, text, value, isInt));
 					}
 				}
 		}
+
+		return found;
 	}
 
 	// A `.T()` inside a comment is documentation, not a tweak. Cheap and good enough: everything from
@@ -444,9 +476,10 @@ static class TweakRegistry
 	{
 		if (!scannedOnce)
 		{
-			ScanDiff();
+			RequestDiffScan();
 			scannedOnce = true;
 		}
+		IntegrateDiffScan();
 
 		if (!Open)
 		{
@@ -459,7 +492,7 @@ static class TweakRegistry
 		if (!scanRequested)
 		{
 			scanRequested = true;
-			ScanDiff();
+			RequestDiffScan();
 			RequestScan();
 		}
 		IntegrateScan();
@@ -535,7 +568,7 @@ static class TweakRegistry
 		{
 			if (ImGui.MenuItem("Rescan"))
 			{
-				ScanDiff();
+				RequestDiffScan();
 				RequestScan();
 			}
 			if (ImGui.MenuItem(RESET_ALL_TEXT))

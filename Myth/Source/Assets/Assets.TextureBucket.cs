@@ -122,71 +122,80 @@ public static partial class Assets
 	// the image extension); pass an empty prefix when the storage layout already encodes the key.
 	internal static TextureBucket LoadTextureBucket(GraphicsDevice gfx, StorageContainer storage, string dir, string keyPrefix)
 	{
-		var textures = new Dictionary<string, BucketTexture>(StringComparer.OrdinalIgnoreCase);
-		var order = new List<string>();
-
-		var entries = new List<(string Key, byte[] Encoded, Image Image, Texture Texture, TextureSwizzle Swizzle)>();
+		var files = new List<string>();
 		if (storage.DirectoryExists(dir))
-		{
-			var files = new List<string>();
 			foreach (var extension in BucketImageExtensions)
 				files.AddRange(storage.EnumerateDirectory(dir, $"*{extension}", SearchOption.AllDirectories));
-			files.Sort(StringComparer.Ordinal);
-			foreach (var file in files)
-			{
-				var rel = Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/');
-				var keyRel = rel[..^Path.GetExtension(rel).Length];
-				var key = string.IsNullOrEmpty(keyPrefix) ? keyRel : $"{keyPrefix}/{keyRel}";
+		files.Sort(StringComparer.Ordinal);
 
-				var encoded = storage.ReadAllBytes(file);
-				var image = new Image(encoded);
-				var isNormal = key.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
-					|| key.EndsWith("_normal", StringComparison.OrdinalIgnoreCase);
+		// Storage reads stay serial -- a pak is one shared zip -- but at a few hundred patterns
+		// the decode, the B&W classification and the thumbnail downscale are the bulk of the
+		// load, and each file's are independent of every other's.
+		var encoded = new byte[files.Count][];
+		for (var i = 0; i < files.Count; i++)
+			encoded[i] = storage.ReadAllBytes(files[i]);
 
-				Texture texture;
-				TextureSwizzle swizzle;
-				if (!isNormal && IsGrayscaleOpaque(image))
-				{
-					// B&W -> single channel R8 (a quarter of the memory).
-					var data = image.Data;
-					var bytes = new byte[data.Length];
-					for (var i = 0; i < bytes.Length; i++)
-						bytes[i] = data[i].R;
-					texture = new Texture(gfx, image.Width, image.Height, TextureFormat.R8, TextureFlags.None, key);
-					texture.SetData<byte>(bytes);
-					swizzle = TextureSwizzle.Luminance;
-				}
-				else
-				{
-					texture = new Texture(gfx, image, key);
-					swizzle = isNormal ? TextureSwizzle.Normal : TextureSwizzle.Rgba;
-				}
-
-				entries.Add((key, encoded, image, texture, swizzle));
-			}
-		}
-
-		// Pack downscaled previews into one RGBA atlas for the editor picker (ImGui
-		// samples RGBA, so R8 textures can't be previewed directly).
-		var columns = Math.Max(1, Math.Min(BucketThumbColumns, entries.Count));
-		var rows = Math.Max(1, (entries.Count + columns - 1) / columns);
+		var columns = Math.Max(1, Math.Min(BucketThumbColumns, files.Count));
+		var rows = Math.Max(1, (files.Count + columns - 1) / columns);
+		// Downscaled previews for the editor picker, packed into one RGBA atlas (ImGui samples
+		// RGBA, so R8 textures can't be previewed directly). Each entry owns a disjoint cell.
 		using var atlasImage = new Image(columns * BucketThumbSize, rows * BucketThumbSize, Color.Transparent);
-		for (var i = 0; i < entries.Count; i++)
-		{
-			var e = entries[i];
-			var origin = new Point2((i % columns) * BucketThumbSize, (i / columns) * BucketThumbSize);
-			BoxDownscaleInto(atlasImage, origin, e.Image.Data, e.Image.Width, e.Image.Height, BucketThumbSize, BucketThumbSize);
-			e.Image.Dispose();
-		}
-		var thumbnailAtlas = new Texture(gfx, atlasImage, name: $"{keyPrefix}-thumbnails");
 
-		for (var i = 0; i < entries.Count; i++)
+		var keys = new string[files.Count];
+		var images = new Image[files.Count];
+		var swizzles = new TextureSwizzle[files.Count];
+		var luminance = new byte[files.Count][]; // R8 bytes, non-null only for a B&W image
+		Par.For(0, files.Count, i =>
 		{
-			var e = entries[i];
+			var rel = Path.GetRelativePath(dir, files[i]).Replace(Path.DirectorySeparatorChar, '/');
+			var keyRel = rel[..^Path.GetExtension(rel).Length];
+			var key = keys[i] = string.IsNullOrEmpty(keyPrefix) ? keyRel : $"{keyPrefix}/{keyRel}";
+
+			var image = images[i] = new Image(encoded[i]);
+			var isNormal = key.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
+				|| key.EndsWith("_normal", StringComparison.OrdinalIgnoreCase);
+
+			if (!isNormal && IsGrayscaleOpaque(image))
+			{
+				// B&W -> single channel R8 (a quarter of the memory).
+				var data = image.Data;
+				var bytes = luminance[i] = new byte[data.Length];
+				for (var j = 0; j < bytes.Length; j++)
+					bytes[j] = data[j].R;
+				swizzles[i] = TextureSwizzle.Luminance;
+			}
+			else
+			{
+				swizzles[i] = isNormal ? TextureSwizzle.Normal : TextureSwizzle.Rgba;
+			}
+
+			BoxDownscaleInto(atlasImage, new Point2((i % columns) * BucketThumbSize, (i / columns) * BucketThumbSize),
+				image.Data, image.Width, image.Height, BucketThumbSize, BucketThumbSize);
+		});
+
+		var thumbnailAtlas = new Texture(gfx, atlasImage, name: $"{keyPrefix}-thumbnails");
+		var textures = new Dictionary<string, BucketTexture>(StringComparer.OrdinalIgnoreCase);
+		var order = new List<string>();
+		for (var i = 0; i < files.Count; i++)
+		{
+			var key = keys[i];
+			var image = images[i];
+			Texture texture;
+			if (luminance[i] is { } bytes)
+			{
+				texture = new Texture(gfx, image.Width, image.Height, TextureFormat.R8, TextureFlags.None, key);
+				texture.SetData<byte>(bytes);
+			}
+			else
+			{
+				texture = new Texture(gfx, image, key);
+			}
+			image.Dispose();
+
 			var thumb = new Subtexture(thumbnailAtlas,
 				new Rect((i % columns) * BucketThumbSize, (i / columns) * BucketThumbSize, BucketThumbSize, BucketThumbSize));
-			textures[e.Key] = new BucketTexture(e.Key, e.Encoded, e.Texture, e.Swizzle, thumb);
-			order.Add(e.Key);
+			textures[key] = new BucketTexture(key, encoded[i], texture, swizzles[i], thumb);
+			order.Add(key);
 		}
 
 		return new TextureBucket(thumbnailAtlas, textures, order);

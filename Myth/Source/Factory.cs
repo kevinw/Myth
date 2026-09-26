@@ -34,7 +34,10 @@ public static class Factory
 	/// Used to Place a Tile
 	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual);
 
-	public readonly struct Entry
+	// A class, not a struct: tile entries are immutable and registered once, and the grid
+	// lookups (Room.GetTileEntry) run per-tile over whole rooms -- by value this was ~140
+	// bytes of write-barriered copy per read.
+	public sealed class Entry
 	{
 		public readonly string Name;
 		public readonly Subtexture Image;
@@ -46,7 +49,7 @@ public static class Factory
 		public readonly bool CastsShadow;
 		public readonly ReflectionMode Reflection;
 		public readonly float ReflectionOpacity;
-		public readonly bool ReflectsSprites => Reflection != ReflectionMode.None;
+		public bool ReflectsSprites => Reflection != ReflectionMode.None;
 		public readonly bool Destructible;
 		public readonly string? TilesetName;
 		public readonly string? SlopeTilesetName;
@@ -57,7 +60,7 @@ public static class Factory
 		public readonly NctTileSpec? NeuralTexture;
 		public bool SupportsSlope => SlopeTilesetName != null || NeuralTexture is { HasSlope: true };
 
-		public Entry(string name, Subtexture image, TileFn tile, string? substance = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
+		public Entry(string name, Subtexture image, TileFn? tile, string? substance = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
 		{
 			Name = name;
 			Image = image;
@@ -216,9 +219,23 @@ public static class Factory
 	public static SpriteAnchor AnchorForType(string? typeName)
 		=> typeName != null && actorAnchors.TryGetValue(typeName, out var anchor) ? anchor : SpriteAnchor.Auto;
 
+	// Tilesets whose tiles can be painted as slopes, and so need the 220 slope shapes baked into
+	// the atlas. The visual bake runs before RegisterTypes -- it builds the tilesets registration
+	// reads -- so the set is declared here rather than read back off the Entries; Register flags
+	// any registration that drifts from it.
+	static readonly string[] BuiltInSlopeTilesets = ["castle", "crosshatch", "dirt", "metal", "stone"];
+
+	public static bool HasSlopeTiles(string tilesetName)
+		=> Array.IndexOf(BuiltInSlopeTilesets, tilesetName) >= 0
+			|| TileKits.Specs.Exists(it => it.HasEdges && it.Name == tilesetName)
+			|| TileKits.Registrations.Exists(it => it.HasSlope && it.Name == tilesetName);
+
 	// Registers a new Type
-	public static void Register(char id, in Entry entry)
+	public static void Register(char id, Entry entry)
 	{
+		if (entry.SlopeTilesetName is { } slopeTileset && !HasSlopeTiles(slopeTileset))
+			Console.Error.WriteLine($"Error: tile '{entry.Name}' renders slopes from '{slopeTileset}', which the atlas bake skips. Add it to Factory.BuiltInSlopeTilesets.");
+
 		Entries[id] = entry;
 		if (!string.IsNullOrEmpty(entry.Name))
 			charsByEntryName[entry.Name] = id;
@@ -307,7 +324,7 @@ public static class Factory
 	{
 		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
-			return new();
+			return new Entry("", default, null);
 
 		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{

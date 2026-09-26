@@ -100,6 +100,11 @@ what instead of computes?
 - the introduction of a new enemy is itself a payoff; new area, new enemies
 - downloaded horse model on 
 - door is rendering normals behind the hidden wall cover
+- nine-slice or procedurally draw doors. Door.RenderSized stretches the sprite by Size/Frame.Size,
+  and door.ase is 16x16 while DefaultSize is 12x16 -- so every door is nearest-sampled at 0.75x
+  and loses one pixel column in four (burrow_switch_test's Size=[12,25] loses rows too). Which
+  columns get dropped even depends on the atlas dimensions, so a repack visibly shifts door art.
+  Fixed caps + tiled middle, or authoring the sprite at its real size, would end the resampling.
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
 - the generic Pop is starting to feel a bit overused/generic
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.

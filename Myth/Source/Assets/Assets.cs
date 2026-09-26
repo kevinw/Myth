@@ -825,6 +825,7 @@ public static partial class Assets
 				}
 
 			using var baseNormal = normal != null ? ExtractTile(normal, new RectInt(0, 0, 1, 1) * Game.TileSize) : null;
+			var hasSlopes = Factory.HasSlopeTiles(name);
 			var variantIndex = 0;
 			foreach (var layer in variantLayers)
 			{
@@ -832,13 +833,19 @@ public static partial class Assets
 				for (int x = 0; x < columns; x++)
 					for (int y = 0; y < rows; y++)
 						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
-				using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
-				AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex: variantIndex, normal: baseNormal);
+				if (hasSlopes)
+				{
+					using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
+					AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex: variantIndex, normal: baseNormal);
+				}
 				variantIndex++;
 			}
 
-			using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
-			AddSlopeSubtextures(packer, name, baseTile, normal: baseNormal);
+			if (hasSlopes)
+			{
+				using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
+				AddSlopeSubtextures(packer, name, baseTile, normal: baseNormal);
+			}
 		}
 
 		foreach (var (name, variants) in generatedTileImages)
@@ -861,9 +868,7 @@ public static partial class Assets
 				var normal = normals != null && variantIndex < normals.Count ? normals[variantIndex] : null;
 				var slopeEdges = generatedSlopeEdgeImages.GetValueOrDefault(name);
 				var slopeEdge = slopeEdges != null && variantIndex < slopeEdges.Count ? slopeEdges[variantIndex] : null;
-				if (variantIndex == 0 && image.Width == Game.TileSize && image.Height == Game.TileSize)
-					AddSlopeSubtextures(packer, name, image, slopeEdge, normal);
-				if (image.Width == Game.TileSize && image.Height == Game.TileSize)
+				if (image.Width == Game.TileSize && image.Height == Game.TileSize && Factory.HasSlopeTiles(name))
 					AddSlopeSubtextures(packer, name, image, slopeEdge, normal, variantIndex);
 			}
 		}
@@ -3334,25 +3339,18 @@ public static partial class Assets
 		return output;
 	}
 
-	static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex, Image? edge = null)
+	// Writes into a reused scratch tile: the packer copies pixels on Add, and at ~32k slope
+	// subtextures a fresh Image per shape is ~32k SDL surface allocs and frees.
+	static void GenerateSlopeTile(Image output, Image source, SlopeMask mask, Image? edge)
 	{
-		var output = new Image(source.Width, source.Height);
-
-		for (var y = 0; y < source.Height; y++)
-			for (var x = 0; x < source.Width; x++)
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
 			{
-				if (!IsSlopeMaskSolid(x, y, direction, fill, runLength, runIndex))
-				{
-					output[x, y] = Color.Transparent;
-					continue;
-				}
-
-				output[x, y] = edge != null && IsSlopeMaskEdge(x, y, direction, fill, runLength, runIndex)
-					? edge[x, y]
+				var i = y * Game.TileSize + x;
+				output[x, y] = !mask.Solid[i] ? Color.Transparent
+					: edge != null && mask.Edge[i] ? edge[x, y]
 					: source[x, y];
 			}
-
-		return output;
 	}
 
 	static bool IsSlopeMaskSolid(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
@@ -3397,49 +3395,110 @@ public static partial class Assets
 		return false;
 	}
 
-	static Image GenerateSlopeNormals(Image color, Image? normal, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	static void GenerateSlopeNormals(Image output, Image color, Image? normal, SlopeMask mask)
 	{
-		var output = new Image(color.Width, color.Height);
-		// Sample the continuous slope across tile boundaries, avoiding bevels at internal seams.
-		float Solid(int x, int y) => IsSlopeSurfaceSolid(x, y, direction, fill, runLength, runIndex) ? 1 : 0;
-		for (var y = 0; y < color.Height; y++)
-			for (var x = 0; x < color.Width; x++)
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
 			{
-				var alpha = AlphaAt(color, x, y);
+				var alpha = color[x, y].A;
 				if (alpha <= 0)
+				{
+					output[x, y] = Color.Transparent;
 					continue;
-				var sx = Solid(x - 1, y) - Solid(x + 1, y);
-				var sy = Solid(x, y - 1) - Solid(x, y + 1);
-				if (sx != 0 || sy != 0)
-				{
-					var n = Vector3.Normalize(new Vector3(sx * 1.25f, sy * 1.25f, 1));
-					output[x, y] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, alpha);
 				}
-				else
-				{
-					var n = normal != null && normal[x, y].A > 0 ? normal[x, y] : new Color(0.5f, 0.5f, 1f, 1f);
-					n.A = color[x, y].A;
-					output[x, y] = n;
-				}
+
+				var i = y * Game.TileSize + x;
+				var n = mask.Bevel[i].A > 0 ? mask.Bevel[i]
+					: normal != null && normal[x, y].A > 0 ? normal[x, y]
+					: new Color(0.5f, 0.5f, 1f, 1f);
+				n.A = alpha;
+				output[x, y] = n;
 			}
-		return output;
 	}
 
 	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null, Image? normal = null, int? variantIndex = null)
 	{
+		var colors = slopeColorScratch ??= CreateSlopeScratch();
+		var normals = slopeNormalScratch ??= CreateSlopeScratch();
+
+		// Generation is per-shape independent; packing stays serial so the atlas layout is the
+		// same on every bake.
+		Par.For(0, SlopeShapes.Length, i =>
+		{
+			GenerateSlopeTile(colors[i], baseTile, SlopeShapes[i].Mask, edge);
+			GenerateSlopeNormals(normals[i], colors[i], normal, SlopeShapes[i].Mask);
+		});
+
+		for (var i = 0; i < SlopeShapes.Length; i++)
+		{
+			var (direction, fill, run, index, _) = SlopeShapes[i];
+			var name = variantIndex is { } variant
+				? SlopeVariantSubtextureName(tilesetName, variant, direction, fill, run, index)
+				: SlopeSubtextureName(tilesetName, direction, fill, run, index);
+			packer.Add(name, colors[i]);
+			packer.Add($"{name}/normal", normals[i]);
+		}
+	}
+
+	// The mask a slope tile is cut with is a pure function of (direction, fill, run, index) -- the
+	// tileset only supplies the pixels underneath it. So the shapes are derived once for the whole
+	// bake rather than per tileset, which is where the edge neighbourhood test used to be re-run
+	// ~74 times over.
+	sealed class SlopeMask
+	{
+		public readonly bool[] Solid = new bool[Game.TileSize * Game.TileSize];
+		public readonly bool[] Edge = new bool[Game.TileSize * Game.TileSize];
+		// Bevel normal where the silhouette turns; A == 0 means "flat here, use the tileset's own".
+		public readonly Color[] Bevel = new Color[Game.TileSize * Game.TileSize];
+	}
+
+	static readonly (Room.SlopeDirection Direction, Room.SlopeFill Fill, int Run, int Index, SlopeMask Mask)[] SlopeShapes = BuildSlopeShapes();
+
+	// One scratch tile per shape, reused across every tileset's bake.
+	static Image[]? slopeColorScratch;
+	static Image[]? slopeNormalScratch;
+
+	static Image[] CreateSlopeScratch()
+	{
+		var scratch = new Image[SlopeShapes.Length];
+		for (var i = 0; i < scratch.Length; i++)
+			scratch[i] = new Image(Game.TileSize, Game.TileSize);
+		return scratch;
+	}
+
+	static (Room.SlopeDirection, Room.SlopeFill, int, int, SlopeMask)[] BuildSlopeShapes()
+	{
+		var shapes = new List<(Room.SlopeDirection, Room.SlopeFill, int, int, SlopeMask)>();
 		for (var run = 1; run <= MaxSlopeRun; run++)
 			for (var index = 0; index < run; index++)
 				foreach (var direction in Enum.GetValues<Room.SlopeDirection>())
 					foreach (var fill in Enum.GetValues<Room.SlopeFill>())
-					{
-						var name = variantIndex is { } variant
-							? SlopeVariantSubtextureName(tilesetName, variant, direction, fill, run, index)
-							: SlopeSubtextureName(tilesetName, direction, fill, run, index);
-						using var color = GenerateSlopeTile(baseTile, direction, fill, run, index, edge);
-						using var normals = GenerateSlopeNormals(color, normal, direction, fill, run, index);
-						packer.Add(name, color);
-						packer.Add($"{name}/normal", normals);
-					}
+						shapes.Add((direction, fill, run, index, BuildSlopeMask(direction, fill, run, index)));
+		return [.. shapes];
+	}
+
+	static SlopeMask BuildSlopeMask(Room.SlopeDirection direction, Room.SlopeFill fill, int run, int index)
+	{
+		var mask = new SlopeMask();
+		// Sample the continuous slope across tile boundaries, avoiding bevels at internal seams.
+		float Solid(int x, int y) => IsSlopeSurfaceSolid(x, y, direction, fill, run, index) ? 1 : 0;
+
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				var i = y * Game.TileSize + x;
+				mask.Solid[i] = IsSlopeMaskSolid(x, y, direction, fill, run, index);
+				mask.Edge[i] = IsSlopeMaskEdge(x, y, direction, fill, run, index);
+
+				var sx = Solid(x - 1, y) - Solid(x + 1, y);
+				var sy = Solid(x, y - 1) - Solid(x, y + 1);
+				if (sx == 0 && sy == 0)
+					continue;
+				var n = Vector3.Normalize(new Vector3(sx * 1.25f, sy * 1.25f, 1));
+				mask.Bevel[i] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
+			}
+
+		return mask;
 	}
 
 	static float AlphaAt(Image image, int x, int y)

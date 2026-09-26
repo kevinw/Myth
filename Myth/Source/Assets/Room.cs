@@ -266,9 +266,13 @@ public class Room
 				SetBackgroundTileUnchecked(x, tileY, '0');
 			}
 
+		// A room read from disk loads before the Factory is registered, so its geometry would be
+		// built against an empty legend; every caller of LoadRooms follows with RebuildRoomGeometry,
+		// which is the pass that actually counts. An empty room has nothing to defer.
 		if (json != null)
 			LoadJson(json);
-		RebuildGeometry();
+		else
+			RebuildGeometry();
 	}
 
 	void LoadJson(JsonObject json)
