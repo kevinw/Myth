@@ -32,7 +32,7 @@ public partial class Manager : App
 #if EDITOR
 	const string EditorSettingsFileName = "editor-settings.json";
 #endif
-	readonly Point MinimumRestoredWindowSize = new(640, 360);
+	static Point MinimumRestoredWindowSize => new(640, 360);
 
 	const float DEFAULT_UI_SCALE = 2.5f;
 	float Scale => imgui?.Scale ?? DEFAULT_UI_SCALE;
@@ -353,12 +353,19 @@ public partial class Manager : App
 	public static Manager Create(StartArgs args) {
 		var settings = GetWindowSettingsFromJSON();
 		args.fullscreen ??= settings?.Fullscreen;
-		return new(args);
+		return new(args, RestoredWindowSize(settings));
 	}
 
-	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
+	// The size the last session left the window at, so it can be created that way instead of
+	// appearing at the default and visibly resizing once LoadWindowSettings runs mid-Startup.
+	static Point2? RestoredWindowSize(WindowSettings? settings)
+		=> settings is { Width: > 0, Height: > 0 }
+			? new Point2(Math.Max(settings.Width, MinimumRestoredWindowSize.X), Math.Max(settings.Height, MinimumRestoredWindowSize.Y))
+			: null;
+
+	public Manager(StartArgs args, Point2? restoredSize = null) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
 		offscreen: args.bakeWorldMap != null || args.writeAllRooms || args.checkRooms, fullscreen: args.fullscreen,
-		framesInFlight: args.framesInFlight ?? 2))
+		framesInFlight: args.framesInFlight ?? 2, restoredSize: restoredSize))
 	{
 		this.args = args;
 #if EDITOR
@@ -483,7 +490,7 @@ public partial class Manager : App
 	internal static bool DOTNET_WATCH = Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false,
-		bool offscreen = false, bool? fullscreen = null, int framesInFlight = 1)
+		bool offscreen = false, bool? fullscreen = null, int framesInFlight = 1, Point2? restoredSize = null)
 	{
 		const string windowTitle = APPLICATION_NAME;
 		Point2 windowSize = new(1280, 720);
@@ -501,6 +508,15 @@ public partial class Manager : App
 		AppFlags appFlags = AppFlags.ScaleWindowToDisplay;
 #if BROWSER
 		graphicsDriver = GraphicsDriver.WebGPU;
+#else
+		// A restored size is a literal previous window size, already in whatever units SDL
+		// measures windows in, so it must not be scaled to the display a second time -- that
+		// would grow the window on every launch on a scaled Windows/X11 desktop.
+		if (restoredSize is { } saved)
+		{
+			windowSize = saved;
+			appFlags &= ~AppFlags.ScaleWindowToDisplay;
+		}
 #endif
 		if (headless)
 		{
