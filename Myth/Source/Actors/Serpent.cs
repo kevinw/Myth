@@ -27,6 +27,11 @@ public class Serpent : TrailCurve
 	// clockwise and anticlockwise, or crawling a floor rather than the ceiling above it.
 	public bool SolidLeft;
 
+	// A creature, so it stamps out of the lighting dither the way the other creatures do. The
+	// default rule exempts Player and Enemy *masks*, and a ribbon's mask comes from its collision
+	// mode -- Hazard, not Enemy -- so it would otherwise dither like scenery.
+	public override bool LightingDithered => false;
+
 	// Generous on purpose: a serpent is dropped roughly near the ground in the editor, not placed
 	// against it the way a burrowing player already is.
 	static float AttachProbe => 56f;
