@@ -36,8 +36,29 @@ public class Serpent : TrailCurve
 	// against it the way a burrowing player already is.
 	static float AttachProbe => 56f;
 
+	// The furthest gap it will commit to crossing; 0 never leaps and it crawls down into pits
+	// instead, following the boundary the whole way.
+	[InspectorGroup("Leap"), I(0, 160)] public float MaxGap = 56;
+	// How high the arc bows above the straight line between the lip and the landing.
+	[I(0, 64)] public float LeapArc = 14;
+
+	// How far ahead to look for the ground running out, and the most pixels of surface one frame
+	// may cover -- a long frame (loading, a breakpoint) would otherwise bank enough budget to
+	// walk the head clean across the room in a single step.
+	const int LookAhead = 6;
+	const int MaxStepPerFrame = 12;
+	const int MinGap = 6;
+	// A landing may sit a little above or well below the lip it launched from.
+	const int LandingRise = 12;
+	const int LandingDrop = 28;
+
 	Point2 crawlAt, crawlHeading;
 	bool warnedUnattached;
+
+	bool leaping;
+	Vector2 leapFrom, leapControl, leapTo;
+	float leapAt, leapSpan;
+	int leapDirection;
 	bool crawlSolidLeft, crawlAttached;
 	// WalkSurface spends whole pixels, and at a walking speed a frame is worth less than one, so
 	// the remainder is carried rather than truncated away -- otherwise the serpent never moves.
@@ -70,6 +91,93 @@ public class Serpent : TrailCurve
 		crawlAttached = false;
 		crawlSolidLeft = SolidLeft;
 		SeedBody();
+	}
+
+	bool Solid(Point2 at)
+	{
+		var probe = new RectInt(at.X, at.Y, 1, 1);
+		var actor = Game.OverlapsFirst(probe, Masks.Solid);
+		return Game.OverlapsRoomCollision(probe) || (actor != null && actor != this);
+	}
+
+	// Somewhere the head could stand: clear itself, with something solid immediately beneath.
+	bool TryFindLanding(int x, int fromY, out Point2 landing)
+	{
+		for (var y = fromY - LandingRise; y <= fromY + LandingDrop; y++)
+		{
+			var at = new Point2(x, y);
+			if (Solid(at) || !Solid(at + new Point2(0, 1)))
+				continue;
+			landing = at;
+			return true;
+		}
+		landing = default;
+		return false;
+	}
+
+	// Leaps only from a level run along the top of something: the surface normal points down into
+	// solid, the heading is horizontal, and walking on would drop away. Anything else -- a wall, a
+	// ceiling, a slope that merely steepens -- keeps crawling.
+	bool TryBeginLeap()
+	{
+		if (MaxGap < MinGap || crawlHeading.Y != 0 || crawlHeading.X == 0)
+			return false;
+		if (Game.SurfaceNormal(crawlHeading, crawlSolidLeft).Y < 0.5f)
+			return false;
+
+		// A lip is the ground running out ahead. Asking the surface walk what it would do is the
+		// tempting test and the wrong one: at a convex corner it carries a few pixels out over the
+		// void and stops rather than turning down the face, so it never reports a descent.
+		var direction = Math.Sign(crawlHeading.X);
+		var lip = false;
+		for (var d = 1; d <= LookAhead && !lip; d++)
+			lip = !Solid(crawlAt + new Point2(direction * d, 1));
+		if (!lip)
+			return false;
+
+		for (var gap = MinGap; gap <= (int)MaxGap; gap++)
+		{
+			if (!TryFindLanding(crawlAt.X + direction * gap, crawlAt.Y, out var landing))
+				continue;
+
+			// Launch from the true edge, not from wherever the look-ahead first noticed the drop,
+			// or it takes off short and the gap reads wider than it is.
+			var launch = crawlAt;
+			while (Math.Abs(launch.X - crawlAt.X) < LookAhead && Solid(launch + new Point2(direction, 1)))
+				launch.X += direction;
+
+			leaping = true;
+			leapDirection = direction;
+			leapFrom = launch;
+			leapTo = landing;
+			leapAt = 0;
+			leapSpan = Vector2.Distance(leapFrom, leapTo);
+			leapControl = (leapFrom + leapTo) * 0.5f - Vector2.UnitY * (LeapArc + leapSpan * 0.15f);
+			return true;
+		}
+		return false;
+	}
+
+	void Leap()
+	{
+		leapAt += Speed * Time.Delta / MathF.Max(1, leapSpan);
+		var t = MathF.Min(1, leapAt);
+		MoveHead(Calc.Bezier(leapFrom, leapControl, leapTo, t));
+		if (t < 1)
+			return;
+
+		leaping = false;
+		crawlAttached = false;
+		if (!TryAttach((Point2)leapTo))
+			return;
+
+		// Attaching derives the heading from the surface alone, which can face back the way it
+		// came; carrying the leap's direction through keeps it travelling onward.
+		if (Math.Sign(crawlHeading.X) == -leapDirection)
+		{
+			crawlHeading = new Point2(-crawlHeading.X, -crawlHeading.Y);
+			crawlSolidLeft = !crawlSolidLeft;
+		}
 	}
 
 	// A trail has no shape until the head has travelled, so a serpent that has just been placed
@@ -128,9 +236,14 @@ public class Serpent : TrailCurve
 
 	// Finds the nearest surface and faces along it. Retried each frame until it takes, so a
 	// serpent dropped near a ledge in the editor settles onto it rather than sitting in the air.
-	bool TryAttach()
+	bool TryAttach() => TryAttach(crawlAttached ? crawlAt : Position);
+
+	// Takes the point to probe from explicitly: after a leap the search has to start where it
+	// landed, and clearing crawlAttached to force a fresh attach would otherwise send it back to
+	// the position it was authored at.
+	bool TryAttach(Point2 from)
 	{
-		var at = crawlAttached ? crawlAt : Position;
+		var at = from;
 		var toward = Vector2.UnitY;
 		if (!Game.SnapToSurface(ref at, ref toward, AttachProbe))
 			return false;
@@ -145,6 +258,12 @@ public class Serpent : TrailCurve
 
 	void Crawl()
 	{
+		if (leaping)
+		{
+			Leap();
+			return;
+		}
+
 		if (!crawlAttached && !TryAttach())
 		{
 #if DEBUG
@@ -157,11 +276,16 @@ public class Serpent : TrailCurve
 			return;
 		}
 
-		crawlBudget += Speed * Time.Delta;
+		crawlBudget = MathF.Min(crawlBudget + Speed * Time.Delta, MaxStepPerFrame);
 		var pixels = (int)crawlBudget;
 		if (pixels <= 0)
 			return;
 		crawlBudget -= pixels;
+
+		// Checked before walking: one step further and the boundary has already turned down the
+		// inside of the pit, and the lip -- along with the direction of travel -- is gone.
+		if (TryBeginLeap())
+			return;
 
 		if (Game.WalkSurface(ref crawlAt, ref crawlHeading, crawlSolidLeft, pixels) == 0)
 		{

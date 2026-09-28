@@ -24,12 +24,14 @@ public class TrailCurve : CurveRibbon
 	// Arc length of path kept behind the head.
 	[I(8, 512)] public float TrailLength = 96;
 
-	// How strongly the body holds the path the head took. At 1 it holds it exactly, the way a
-	// snake's body follows its own track, and no simulation runs at all. Below 1 each point also
-	// falls, collides and carries momentum, so the body sags where nothing holds it up, gets
-	// knocked off its track when hit, and -- at 0 -- stops being a creature and becomes a rope
-	// that collapses and drapes over the terrain.
+	// How strongly an *unsupported* part of the body holds the path the head took. Anything with
+	// something under it holds its track regardless, so this only shows where the body spans a
+	// gap or hangs off a lip: at 1 nothing ever sags and no simulation runs at all, lower lets a
+	// span droop between its ends, and 0 makes it a rope that falls outright -- which is also
+	// what a dead one should do.
 	[InspectorGroup("Physics"), I(0, 1)] public float Grip = 1;
+	// How far under a point to look for something holding it up.
+	[I(1, 32)] public float SupportProbe = 3;
 	[I(0, 2000)] public float Gravity = 260;
 	// Pull toward the point's place on the track, in px/s^2 per px of error.
 	[I(0, 400)] public float GripStiffness = 90;
@@ -38,6 +40,7 @@ public class TrailCurve : CurveRibbon
 
 	readonly List<Vector2> body = [];
 	readonly List<Vector2> bodyPrev = [];
+	readonly List<float> bodyGrip = [];
 	float lastDelta = 1f / 60f;
 
 	readonly List<Vector2> points = [];
@@ -71,6 +74,7 @@ public class TrailCurve : CurveRibbon
 	{
 		body.Clear();
 		bodyPrev.Clear();
+		bodyGrip.Clear();
 	}
 
 	// The point this far back along the path from the head.
@@ -126,22 +130,52 @@ public class TrailCurve : CurveRibbon
 			bodyPrev.Add(seed);
 		}
 
+		// Support is read once a frame rather than per sub-step: it is a property of the terrain
+		// under the body, which does not move between sub-steps, and each probe is a query over
+		// the solid actors.
+		UpdateSupport();
 		for (var steps = new Verlet.Steps(Time.Delta, ref lastDelta); steps.Next(out var dt, out var scale);)
 			SimulateBodyStep(dt, scale, spacing);
 		version++;
 	}
 
+	// Grip per point: 1 wherever something is holding that part of the body up, falling away to
+	// Grip where nothing is. Looking straight down rather than along the surface means a serpent
+	// on a ceiling counts as unsupported -- it holds on by grip alone, and a limp one drops off,
+	// which is the behaviour worth having.
+	void UpdateSupport()
+	{
+		var reach = (int)MathF.Max(1, SupportProbe);
+		while (bodyGrip.Count > body.Count) bodyGrip.RemoveAt(bodyGrip.Count - 1);
+		while (bodyGrip.Count < body.Count) bodyGrip.Add(Grip);
+
+		for (var i = 0; i < body.Count; i++)
+		{
+			var at = (Point2)body[i];
+			var under = new RectInt(at.X, at.Y + 1, 1, reach);
+			var solid = Game.OverlapsFirst(under, Masks.Solid);
+			bodyGrip[i] = Game.OverlapsRoomCollision(under) || (solid != null && solid != this) ? 1 : Grip;
+		}
+
+		// Switching hard at the lip of a gap kinks the body; easing the support along the length
+		// lets the span sag into the gap the way one that is actually hanging does.
+		for (var pass = 0; pass < SupportSmoothing; pass++)
+			for (var i = 1; i < bodyGrip.Count - 1; i++)
+				bodyGrip[i] = (bodyGrip[i - 1] + bodyGrip[i] * 2 + bodyGrip[i + 1]) * 0.25f;
+	}
+
+	const int SupportSmoothing = 2;
+
 	void SimulateBodyStep(float dt, float displacementScale, float spacing)
 	{
 		var damp = Verlet.Damping(BodyDamping, dt);
-		var gravity = new Vector2(0, Gravity * (1 - Grip));
-		var stiffness = GripStiffness * Grip;
 
 		// The head is driven outright -- it is wherever the AI put it.
 		body[0] = bodyPrev[0] = Head;
 		for (var i = 1; i < body.Count; i++)
 		{
-			var accel = gravity + (PathAt(i * spacing) - body[i]) * stiffness;
+			var grip = bodyGrip[i];
+			var accel = new Vector2(0, Gravity * (1 - grip)) + (PathAt(i * spacing) - body[i]) * (GripStiffness * grip);
 			Verlet.Integrate(ref CollectionsMarshal.AsSpan(body)[i], ref CollectionsMarshal.AsSpan(bodyPrev)[i],
 				accel, dt, displacementScale, damp);
 		}
