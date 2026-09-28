@@ -114,7 +114,7 @@
     {
       "Id": "62ab6bb5614b35e8",
       "Type": "CurveRibbon",
-      "Position": [249, 89],
+      "Position": [246, 89],
       "Points": [[112, 0],[88, -40],[8, -48],[-8, 32],[-8, 136]
       ],
       "Roundness": 1,
@@ -152,6 +152,32 @@
       "LightColor": "79ECFF",
       "Radius": 83.905,
       "DrawSprite": false
+    },
+    {
+      "Id": "23672d36c9c9d94b",
+      "Type": "CurveRibbon",
+      "Position": [163, 136],
+      "BranchWidth": 0.05,
+      "Layer": "Foreground",
+      "SurfaceOverride": "curve-root",
+      "Roundness": 1,
+      "Bulge": 2.718,
+      "Grow": 0.282,
+      "Collision": "Solid",
+      "WobbleIntensity": 10.258,
+      "Points": [[240, -24],[112, -24],[72, -40],[8, -32],[-48, -40],[-64, 16]
+      ],
+      "Width": 32.231,
+      "BranchSpacing": 13.538,
+      "BranchLength": 16.06,
+      "WobbleFrequency": 0.846
+    },
+    {
+      "Id": "8ec4ffef0afdf87e",
+      "Type": "CurveControl",
+      "Position": [258, 116],
+      "mode": "PlayerPosition",
+      "TargetActorId": "23672d36c9c9d94b"
     }
   ]
 }
