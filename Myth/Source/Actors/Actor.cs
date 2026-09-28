@@ -793,6 +793,7 @@ public class Actor
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual bool HasWorldDistortion => false;
 	public virtual void RenderWorldDistortion(Batcher batcher) { }
+	public virtual void StirPixelSort(PixelSortCanvas canvas) { }
 	protected static Color EncodeWorldDistortion(Vector2 direction, float strength)
 	{
 		var encoded = direction * 0.5f + Vector2.One * 0.5f;

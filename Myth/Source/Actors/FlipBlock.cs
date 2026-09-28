@@ -19,7 +19,7 @@ class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 	[I(0, 1)] public float Telegraph = 0.4f;
 	public string Material = "metal-dual";
 
-	static float GhostAlpha => 0.3f.T();
+	static float GhostAlpha => 0.6f.T();
 	static Color WarningColor => new(0xff9d5c);
 	static Color GhostGlowColor => new(0x79cfff);
 
@@ -137,6 +137,16 @@ class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 	}
 
 	void RenderMaterial(Batcher batcher, bool normals, Color color) => this.Render(batcher, normals, color);
+
+	// A ghosted block is not-quite-real, so it is sorted: it starts dripping apart just before it
+	// goes and pulls itself back together as its return approaches.
+	public override void StirPixelSort(PixelSortCanvas canvas)
+	{
+		const float drip = 8;
+		var unreal = solid ? charge * 0.5f : 1 - charge;
+		canvas.Rect(new Rect(Position.X, Position.Y, Size.X, Size.Y + drip),
+			new(PixelSortLayer.Frame, PixelSortDirection.Down, unreal, Reach: drip, RelaxRate: 160 * (1 - unreal), Steps: 8));
+	}
 
 	// Only a solid block casts a shadow, occludes light, dithers into the tile field or reflects.
 	public bool CastsShadow => Visible && solid;

@@ -868,8 +868,22 @@ public abstract partial class Pawn
 		}
 	}
 
+	// The ground a pawn has burrowed through is churned: its path sorts vertically behind it,
+	// harder the faster it went, and settles back once it has passed.
+	static float BurrowChurnLife => 1.2f;
+	static float BurrowChurnWidth => 10f;
+	static float BurrowChurnReach => 20f;
+	readonly PixelSortTrail burrowChurn = new();
+
+	public override void StirPixelSort(PixelSortCanvas canvas)
+		=> burrowChurn.Stir(canvas, BurrowChurnLife, BurrowChurnWidth,
+			new(PixelSortLayer.Frame, default, 1, Reach: BurrowChurnReach, RelaxRate: 40));
+
 	protected void UpdateBurrowAlways()
 	{
+		burrowChurn.Advance(Time.Delta);
+		if (State == States.Burrow)
+			burrowChurn.Record(Position, PixelSortDirection.Down, Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0.35f, 1), spacing: 2);
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);

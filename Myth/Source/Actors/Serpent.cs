@@ -1,5 +1,6 @@
 using System.Numerics;
 using Foster.Framework;
+using Kit;
 
 namespace Myth;
 
@@ -42,6 +43,23 @@ public class Serpent : TrailCurve
 	// How high the arc bows above the straight line between the lip and the landing.
 	[I(0, 64)] public float LeapArc = 14;
 
+	// The hold at the lip before it commits: the head rears, quivers and gapes, which is the
+	// player's warning that a lunge is coming. An alarmed serpent spends less time deciding.
+	[I(0, 2)] public float LeapWindup = 0.45f;
+	// A leap is a lunge, faster than the crawl that led up to it.
+	static float LeapSpeedup => 2.4f;
+
+	// How much its pace wanders around Speed, and how quickly: surges, dawdles, near-stops.
+	[InspectorGroup("Temperament"), I(0, 1)] public float Wander = 0.6f;
+	[I(0, 4)] public float WanderRate = 0.7f;
+	// Within this of the head the player is noticed: it freezes and hisses, then carries on
+	// agitated -- quicker, twitchier, eye on the player -- until they have been gone a while.
+	[I(0, 200)] public float NoticeRadius = 64;
+	[I(0, 2)] public float StartlePause = 0.5f;
+	static float AlarmSpeedup => 0.8f;
+	static float AlarmRise => 3f;
+	static float AlarmFall => 0.4f;
+
 	// How far ahead to look for the ground running out, and the most pixels of surface one frame
 	// may cover -- a long frame (loading, a breakpoint) would otherwise bank enough budget to
 	// walk the head clean across the room in a single step.
@@ -73,6 +91,15 @@ public class Serpent : TrailCurve
 	float cursor;
 	int heading = 1;
 
+	// Own clock, so two serpents placed side by side do not wander in step.
+	float life;
+	uint seed;
+	// 0..1: how worked up it is about the player. Drives pace, jitter, windup, gape and gaze.
+	float alarm;
+	float startle, windup;
+	bool noticed;
+	Vector2? lookAt;
+
 	public Serpent()
 	{
 		Style = SerpentStyle;
@@ -87,6 +114,10 @@ public class Serpent : TrailCurve
 	{
 		base.Added();
 		cursor = 0;
+		seed = (uint)Position.GetHashCode();
+		life = alarm = startle = windup = 0;
+		noticed = false;
+		lookAt = null;
 		BuildRoute();
 		crawlAttached = false;
 		crawlSolidLeft = SolidLeft;
@@ -153,6 +184,7 @@ public class Serpent : TrailCurve
 			leapAt = 0;
 			leapSpan = Vector2.Distance(leapFrom, leapTo);
 			leapControl = (leapFrom + leapTo) * 0.5f - Vector2.UnitY * (LeapArc + leapSpan * 0.15f);
+			windup = WindupDuration;
 			return true;
 		}
 		return false;
@@ -160,7 +192,7 @@ public class Serpent : TrailCurve
 
 	void Leap()
 	{
-		leapAt += Speed * Time.Delta / MathF.Max(1, leapSpan);
+		leapAt += Speed * LeapSpeedup * Time.Delta / MathF.Max(1, leapSpan);
 		var t = MathF.Min(1, leapAt);
 		MoveHead(Calc.Bezier(leapFrom, leapControl, leapTo, t));
 		if (t < 1)
@@ -260,7 +292,10 @@ public class Serpent : TrailCurve
 	{
 		if (leaping)
 		{
-			Leap();
+			if (windup > 0)
+				windup -= Time.Delta;
+			else
+				Leap();
 			return;
 		}
 
@@ -276,7 +311,7 @@ public class Serpent : TrailCurve
 			return;
 		}
 
-		crawlBudget = MathF.Min(crawlBudget + Speed * Time.Delta, MaxStepPerFrame);
+		crawlBudget = MathF.Min(crawlBudget + Speed * Pace() * Time.Delta, MaxStepPerFrame);
 		var pixels = (int)crawlBudget;
 		if (pixels <= 0)
 			return;
@@ -328,20 +363,30 @@ public class Serpent : TrailCurve
 	}
 
 	// The ribbon tapers from the head back, which gives the body its shape but nothing to read as
-	// a face. The head is drawn on top of it: a blunt skull a little ahead of the spine's first
-	// edge, with eyes set into it, both oriented along the direction the head is travelling.
-	// Authorable, because the body's look comes from the style's surface (or a SurfaceOverride)
-	// and the head has to be matched to it by hand -- a green head on a brown root body is the
-	// default's fault, not the author's.
+	// a face. The head is drawn on top of it in profile: a skull and a snout along the direction of
+	// travel, the jaw hinged on the belly side and a single eye on the back. Authorable, because
+	// the body's look comes from the style's surface (or a SurfaceOverride) and the head has to be
+	// matched to it by hand.
 	[InspectorGroup("Head")] public Color HeadFill = new(0x5d8443);
 	public Color HeadShade = new(0x31492e);
 	public Color EyeFill = new(0xe8f0c0);
 	public Color EyePupil = new(0x1a2416);
+	public Color Tongue = new(0xc0404a);
 
 	public override void Render(Batcher batcher)
 	{
 		base.Render(batcher);
 		DrawHead(batcher);
+	}
+
+	// The side the belly faces: into whatever it crawls on -- a leap keeps the belly it launched
+	// with -- or down, for a serpent walking a path.
+	Vector2 Belly(Vector2 forward)
+	{
+		if (Motion == Motions.Crawl && crawlAttached)
+			return crawlSolidLeft ? forward.TurnLeft() : forward.TurnRight();
+		var down = forward.TurnRight();
+		return down.Y >= 0 ? down : -down;
 	}
 
 	void DrawHead(Batcher batcher)
@@ -350,29 +395,87 @@ public class Serpent : TrailCurve
 		if (forward.LengthSquared() < 0.0001f)
 			return;
 		forward = Vector2.Normalize(forward);
-		var side = forward.TurnRight();
-		var at = Head - (Vector2)Position;
+		var belly = Belly(forward);
 		var radius = Width * 0.8f;
 
-		batcher.Circle(at + forward * radius * 0.3f, radius, 12, HeadShade);
-		batcher.Circle(at + forward * radius * 0.42f, radius * 0.78f, 12, HeadFill);
+		// Rearing is shared by the leap's windup and the startle: the head lifts off its belly and
+		// trembles, harder the closer the lunge is.
+		var coil = leaping && windup > 0 ? 1 - windup / MathF.Max(0.01f, WindupDuration) : 0;
+		var rear = MathF.Max(coil, startle / MathF.Max(0.01f, StartlePause));
+		var tremble = MathF.Sin(life * 70) * coil * 0.7f;
+		var at = Head - (Vector2)Position - belly * (radius * 0.45f * rear + tremble);
 
-		var eye = at + forward * radius * 0.3f;
-		DrawEye(batcher, eye + side * radius * 0.42f, forward, radius);
-		DrawEye(batcher, eye - side * radius * 0.42f, forward, radius);
+		var gape = MathF.Max(MathF.Max(coil, rear) * 0.7f, alarm * 0.12f);
+		var hinge = at - forward * radius * 0.3f + belly * radius * 0.3f;
+		var jaw = hinge + (forward * MathF.Cos(gape) + belly * MathF.Sin(gape)) * radius * 1.35f;
+		var snout = at + forward * radius * 1.2f;
+
+		batcher.Triangle(hinge, snout, jaw, EyePupil);
+		batcher.Triangle(hinge + belly * radius * 0.35f, hinge - belly * radius * 0.1f, jaw, HeadShade);
+		batcher.Circle(at, radius * 0.8f, 12, HeadShade);
+		batcher.Circle(at + forward * radius * 0.7f, radius * 0.5f, 10, HeadShade);
+		batcher.Circle(at - belly * radius * 0.12f, radius * 0.6f, 12, HeadFill);
+		batcher.Circle(at + forward * radius * 0.7f - belly * radius * 0.08f, radius * 0.36f, 10, HeadFill);
+
+		// Tasting the air: an alarmed serpent flicks its tongue, in short bursts, while its mouth is shut.
+		if (alarm > 0.2f && gape < 0.3f && SmoothNoise.Signed(life * 6, seed ^ 0x85ebca6bu) > 0.3f)
+		{
+			var tip = snout + forward * radius * (0.6f + 0.5f * alarm);
+			batcher.Line(snout, tip, 1, Tongue);
+			batcher.Line(tip, tip + (forward - belly) * 1.5f, 1, Tongue);
+			batcher.Line(tip, tip + (forward + belly) * 1.5f, 1, Tongue);
+		}
+
+		var gaze = lookAt is { } target && alarm > 0.05f && (target - Head).LengthSquared() > 1
+			? Vector2.Normalize(Vector2.Lerp(forward, Vector2.Normalize(target - Head), alarm))
+			: forward;
+		DrawEye(batcher, at + forward * radius * 0.35f - belly * radius * 0.3f, gaze, radius * (1 + alarm * 0.25f));
 	}
 
 	// At this scale an eye is two or three pixels across, so it is a dark bead with one lit pixel
-	// in it; a white sclera at the same size just reads as a hole punched in the head.
-	void DrawEye(Batcher batcher, Vector2 centre, Vector2 forward, float radius)
+	// in it; the glint sits toward whatever the eye is looking at.
+	void DrawEye(Batcher batcher, Vector2 centre, Vector2 gaze, float radius)
 	{
 		batcher.Circle(centre, MathF.Max(1.2f, radius * 0.24f), 8, EyePupil);
-		var glint = centre + forward * 0.6f - new Vector2(0.5f);
+		var glint = centre + gaze * 0.6f - new Vector2(0.5f);
 		batcher.Rect(new Rect(glint.X, glint.Y, 1, 1), EyeFill);
+	}
+
+	float WindupDuration => LeapWindup * (1 - alarm * 0.6f);
+
+	// A multiplier on Speed. Two octaves of noise so it both drifts and flickers; alarm speeds the
+	// noise up as well as the serpent, so an agitated one reads as twitchy rather than just fast.
+	float Pace()
+	{
+		if (startle > 0)
+			return 0;
+		var t = life * WanderRate * (1 + alarm);
+		var wander = SmoothNoise.Signed(t, seed) * 0.75f + SmoothNoise.Signed(t * 3.1f, seed ^ 0x9e3779b9u) * 0.25f;
+		return MathF.Max(0.05f, 1 + Wander * wander) * (1 + alarm * AlarmSpeedup);
+	}
+
+	void Sense()
+	{
+		life += Time.Delta;
+		startle = MathF.Max(0, startle - Time.Delta);
+
+		var player = Game.GetFirst<Player>();
+		lookAt = player != null ? (player.Hitbox.Rect + player.Position).CenterF : null;
+		var distance = lookAt is { } target ? Vector2.Distance(target, Head) : float.MaxValue;
+		// Forgets further out than it notices, so a player hovering at the edge does not
+		// startle it every other frame.
+		var near = distance < NoticeRadius * (noticed ? 1.4f : 1);
+		if (near && !noticed && !leaping)
+			startle = StartlePause;
+		noticed = near;
+		alarm = Calc.Approach(alarm, near ? 1 : 0, Time.Delta * (near ? AlarmRise : AlarmFall));
 	}
 
 	public override void Update()
 	{
+		if (Time.Delta > 0)
+			Sense();
+
 		if (Motion == Motions.Crawl)
 		{
 			if (Time.Delta > 0)
@@ -387,7 +490,7 @@ public class Serpent : TrailCurve
 		var path = routeLength;
 		if (path > 0.001f && Time.Delta > 0)
 		{
-			cursor += Speed * Time.Delta * heading;
+			cursor += Speed * Pace() * Time.Delta * heading;
 			if (Loop)
 			{
 				// A circuit whose ends do not meet teleports the head; TrailCurve restarts the

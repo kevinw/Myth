@@ -31,6 +31,7 @@ public sealed partial class GameView
 			atlasWanderOffset += AtlasWanderSpeed * Calc.Lerp(AtlasWanderInitialSpeed, 1, ramp) * Time.Delta;
 		}
 		PrepareRenderingList();
+		GatherPixelSortStrokes();
 		game.VisibleWorldBounds = new Rect(RenderCamera, new Vector2(Screen.Width, Screen.Height) / zoomLevel);
 		NeuralTextureActor.DecodeVisible(Actors, game.VisibleWorldBounds);
 		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
@@ -51,6 +52,8 @@ public sealed partial class GameView
 				hasBackgroundColorField = DrawRoomColorField(ColorField, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
+			using (GraphicsDevice.DebugGroup("Myth/background pixel sort"))
+				ApplyPixelSort(BackgroundScreen, PixelSortLayer.Background);
 			using (GraphicsDevice.DebugGroup("Myth/foreground color field"))
 				hasForegroundColorField = DrawRoomColorField(ColorField, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
@@ -163,6 +166,8 @@ public sealed partial class GameView
 			}
 			else if (debugView == DebugView.None)
 			{
+				using (GraphicsDevice.DebugGroup("Myth/frame pixel sort"))
+					ApplyPixelSort(output, PixelSortLayer.Frame);
 				DrawCutsceneOverlay(output);
 				if (PerfToggles.Glitch)
 				{
@@ -2615,6 +2620,7 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? tileFieldStampMaterial;
 	readonly ReloadableMaterial? tileFieldDebugMaterial;
 	readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	readonly ReloadableMaterial? pixelSortMaterial;
 	readonly ReloadableMaterial? airFlashMaterial;
 	readonly ReloadableMaterial? worldDistortionMaterial;
 #if !MYTHSHIP

@@ -154,11 +154,14 @@ public partial class Manager
 			"none" => new PawnInput(0, 0, false, false, false),
 			"left" => new PawnInput(-1, 0, false, false, false),
 			"right" => new PawnInput(1, 0, false, false, false),
+			"dash-left" => new PawnInput(-1, 0, false, false, true, true),
+			"dash-right" => new PawnInput(1, 0, false, false, true, true),
+			"jump-right" => new PawnInput(1, 0, true, true, false),
 			_ => player.ScriptedInput,
 		};
-		return argument is "off" or "none" or "left" or "right"
+		return argument is "off" or "none" or "left" or "right" or "dash-left" or "dash-right" or "jump-right"
 			? $"input: {argument}"
-			: $"error: unknown input '{argument}' (off, none, left, right)";
+			: $"error: unknown input '{argument}' (off, none, left, right, dash-left, dash-right, jump-right)";
 	}
 
 	// Pumped every frame from Manager.Update; dev work that has to tick lives here.
