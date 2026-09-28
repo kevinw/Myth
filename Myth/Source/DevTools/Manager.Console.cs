@@ -372,6 +372,13 @@ public partial class Manager
 		game?.DisplayMessage($"Head slide: {PerfToggles.HeadSlide}");
 	}
 
+	[ConsoleCommand("pixelsort_stir")]
+	void TogglePixelSortStir(string _)
+	{
+		GameView.ShowPixelSortStir = !GameView.ShowPixelSortStir;
+		game?.DisplayMessage($"Pixel sort stir: {(GameView.ShowPixelSortStir ? "On" : "Off")}");
+	}
+
 	[ConsoleCommand("reveal_map")]
 	void RevealMap(string _)
 	{

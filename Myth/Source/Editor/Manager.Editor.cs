@@ -2334,6 +2334,10 @@ public partial class Manager
 			var count = PointPathPointCount(points);
 			var origin = PointPathOrigin(room, actor);
 			var selected = actorIndex == selectedRoomActorIndex;
+			// A ribbon draws itself, so its spline is clutter over the top of it until you are
+			// actually editing the thing; an invisible path (a BurrowLine) still needs showing.
+			if (!selected && IsCurveRibbonActor(actor))
+				continue;
 			var typeName = ActorSpecs.GetTypeName(actor);
 			var color = typeName == nameof(BurrowLine) ? new Color(0x54e6c1) : new Color(0xffb454);
 			var weight = lineWeight * (selected ? 3 : 2);

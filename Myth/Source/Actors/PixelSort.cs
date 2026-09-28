@@ -33,7 +33,11 @@ public record struct PixelSortStyle(
 	float Reach = 24,
 	// Pixels per second the displaced ones slide home.
 	float RelaxRate = 40,
-	int Steps = 6);
+	int Steps = 6,
+	// Fraction of a line stroke's half-width whose gate ramps away to nothing at the outer edge.
+	// Gate is a per-pass swap chance, so the ramp dithers itself: the sort crumbles out into the
+	// untouched picture instead of ending on a straight edge.
+	float Feather = 0);
 
 public sealed class PixelSortCanvas
 {
@@ -177,6 +181,11 @@ public sealed partial class GameView
 	// How fast pixels outside any stroke -- a wake the player has left behind -- slide home.
 	static float PixelSortHomeRate => 60f;
 
+	// `pixelsort_stir` in the console: paints each layer's gate field back over the scene in red,
+	// so you can see the strokes themselves -- their shape, their feathered edges and where they
+	// overlap -- instead of inferring them from the streaks they leave.
+	internal static bool ShowPixelSortStir;
+
 	readonly PixelSortCanvas pixelSortCanvas = new();
 	readonly PixelSortField[] pixelSortFields = [new(), new()];
 
@@ -247,17 +256,24 @@ public sealed partial class GameView
 			0, 0, 0, 0,
 		]);
 		DrawPixelSortPass(field.Front, Vector2.Zero, zoomLevel, scene, material);
+
+		if (ShowPixelSortStir)
+			DrawPixelSortPass(field.StirA, Vector2.Zero, zoomLevel, scene, null, PixelSortStirDebugBlend);
 	}
 
 	// Each stroke is drawn twice, once per stir texture, each colour channel carrying one of its
-	// settings; see PixelSort.hlsl for the packing. Later strokes overwrite earlier ones.
+	// settings; see PixelSort.hlsl for the packing. Strokes take the strongest of whatever they
+	// overlap (Max), not the last drawn -- a feathered edge would otherwise cut a notch out of
+	// the neighbour it laps over, which reads worse than the hard edge it is there to soften.
+	// (Where two strokes with different relax rates or directions meet, the overlap takes the
+	// higher of each; along one trail they barely differ.)
 	void DrawPixelSortStir(PixelSortField field, List<PixelSortCanvas.Stroke> strokes, Point2 origin)
 	{
 		for (var pass = 0; pass < 2; pass++)
 		{
 			var target = pass == 0 ? field.StirA! : field.StirB!;
 			target.Clear(Color.Transparent);
-			Batcher.PushBlend(ColorFieldCopyBlend);
+			Batcher.PushBlend(PixelSortStirBlend);
 			Batcher.PushMatrix(-origin);
 			foreach (var stroke in strokes)
 			{
@@ -265,8 +281,12 @@ public sealed partial class GameView
 				var color = pass == 0
 					? new Color(style.Gate, style.BandLow, style.BandHigh, 1)
 					: new Color(style.Reach / 255f, style.RelaxRate / 255f, (int)style.Direction / 3f, 1);
+				// Only the gate fades out across the feather: the rest of the packing has to stay
+				// intact out there (a zeroed band or reach would stop the sort dead on a line of
+				// its own, which is the edge we are trying to lose).
+				var edge = pass == 0 ? color with { R = 0 } : color;
 				if (stroke.IsLine)
-					Batcher.Line(stroke.From, stroke.To, stroke.Width, color);
+					StirLine(stroke.From, stroke.To, stroke.Width, style.Feather, color, edge);
 				else
 					Batcher.Rect(stroke.Rect, color);
 			}
@@ -277,12 +297,29 @@ public sealed partial class GameView
 		}
 	}
 
+	// A full-strength core with a band either side of it ramping to `edge` at the outer rim.
+	void StirLine(Vector2 from, Vector2 to, float width, float feather, Color color, Color edge)
+	{
+		if (feather <= 0)
+		{
+			Batcher.Line(from, to, width, color);
+			return;
+		}
+
+		var normal = (to - from).Normalized();
+		var perp = new Vector2(-normal.Y, normal.X) * width * 0.5f;
+		var core = perp * (1 - Math.Clamp(feather, 0, 1));
+		Batcher.Quad(from + core, from - core, to - core, to + core, color);
+		Batcher.Quad(from + perp, from + core, to + core, to + perp, edge, color, color, edge);
+		Batcher.Quad(from - core, from - perp, to - perp, to - core, color, edge, edge, color);
+	}
+
 	static readonly TextureSampler PixelSortSampler = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
 
-	void DrawPixelSortPass(Texture texture, Vector2 position, float scale, Target destination, Material? material)
+	void DrawPixelSortPass(Texture texture, Vector2 position, float scale, Target destination, Material? material, BlendMode? blend = null)
 	{
 		Batcher.PushSampler(PixelSortSampler);
-		Batcher.PushBlend(ColorFieldCopyBlend);
+		Batcher.PushBlend(blend ?? ColorFieldCopyBlend);
 		if (material != null)
 			Batcher.PushMaterial(material);
 		Batcher.Image(texture, position, Vector2.Zero, Vector2.One * scale, 0, Color.White);

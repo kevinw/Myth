@@ -2552,6 +2552,13 @@ public sealed partial class GameView
 	static Vector2 RenderTargetShakeReferenceSize => new(6016, 3384);
 	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
 	static readonly BlendMode ColorFieldCopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
+	// Stir strokes keep the strongest of whatever they overlap; see DrawPixelSortStir.
+	static readonly BlendMode PixelSortStirBlend = new(BlendOp.Max, BlendFactor.One, BlendFactor.One);
+	// Adds a stir field's gate into the red channel alone, leaving the picture underneath readable.
+	static readonly BlendMode PixelSortStirDebugBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.One,
+		BlendOp.Add, BlendFactor.Zero, BlendFactor.One,
+		BlendMask.Red, Color.White);
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,

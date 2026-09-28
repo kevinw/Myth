@@ -25,6 +25,7 @@ public partial class Manager
 	readonly bool[] midiClutched = new bool[8];
 	readonly string?[] midiFaderTargets = new string?[8];
 	InputDevice? midiInput;
+	Task<InputDevice?>? midiConnecting;
 	string midiDeviceStatus = "Searching for nanoKONTROL2";
 	string? midiLearnParameter;
 	string? midiTargetId;
@@ -53,10 +54,18 @@ public partial class Manager
 			midiDeviceStatus = "MIDI input is supported on macOS and Windows";
 			return;
 		}
-		if (midiInput == null && ++midiReconnectFrames >= 120)
+		if (midiInput == null && midiConnecting == null && ++midiReconnectFrames >= 120)
 		{
 			midiReconnectFrames = 0;
-			ConnectMidiInput();
+			midiConnecting = Task.Run(ConnectMidiInput);
+		}
+		if (midiConnecting is { IsCompleted: true } connected)
+		{
+			midiConnecting = null;
+			// The mappings land here rather than in the connect itself: midiLearned belongs to the
+			// game thread, which is the only one that reads it.
+			if ((midiInput = connected.Result) != null)
+				LoadMidiMappings();
 		}
 
 		if (midiGestureActive && Stopwatch.GetElapsedTime(midiLastEdit).TotalSeconds > 0.45)
@@ -120,8 +129,14 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	void ConnectMidiInput()
+	// Runs off the game thread: the first call opens the OS MIDI session, which blocks for long
+	// enough to be a visible hitch on the frame it lands on, and with no controller plugged in it
+	// is paid again every couple of seconds forever. Events already arrive on the driver's own
+	// thread and queue up, so nothing here needs to be the game thread -- the device is handed
+	// back for it to adopt instead.
+	InputDevice? ConnectMidiInput()
 	{
+		InputDevice? found = null;
 		try
 		{
 			if (OperatingSystem.IsMacOS() && !midiWatchingDevices)
@@ -132,14 +147,13 @@ public partial class Manager
 			}
 			foreach (var device in InputDevice.GetAll())
 			{
-				if (midiInput == null && device.Name.Contains("nanoKONTROL2", StringComparison.OrdinalIgnoreCase))
+				if (found == null && device.Name.Contains("nanoKONTROL2", StringComparison.OrdinalIgnoreCase))
 				{
-					midiInput = device;
-					midiInput.EventReceived += OnMidiEvent;
-					midiInput.ErrorOccurred += OnMidiError;
-					midiInput.StartEventsListening();
+					found = device;
+					device.EventReceived += OnMidiEvent;
+					device.ErrorOccurred += OnMidiError;
+					device.StartEventsListening();
 					midiDeviceStatus = device.Name;
-					LoadMidiMappings();
 				}
 				else
 					device.Dispose();
@@ -148,8 +162,10 @@ public partial class Manager
 		catch (Exception error)
 		{
 			midiDeviceStatus = $"MIDI: {error.Message}";
-			DisposeMidiInput();
+			found?.Dispose();
+			found = null;
 		}
+		return found;
 	}
 
 	void OnMidiEvent(object? sender, MidiEventReceivedEventArgs e)
@@ -177,6 +193,10 @@ public partial class Manager
 
 	void DisposeMidiEditing()
 	{
+		// Adopt an in-flight connection rather than leaving its device open behind us.
+		if (midiConnecting != null && midiConnecting.Wait(TimeSpan.FromSeconds(1)))
+			midiInput ??= midiConnecting.Result;
+		midiConnecting = null;
 		DisposeMidiInput();
 		if (!midiWatchingDevices) return;
 		DevicesWatcher.Instance.DeviceAdded -= OnMidiDeviceAdded;

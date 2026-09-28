@@ -870,20 +870,34 @@ public abstract partial class Pawn
 
 	// The ground a pawn has burrowed through is churned: its path sorts vertically behind it,
 	// harder the faster it went, and settles back once it has passed.
-	static float BurrowChurnLife => 1.2f;
-	static float BurrowChurnWidth => 10f;
-	static float BurrowChurnReach => 20f;
+	// Streaks run out of the surface (burrowToward points into it) rather than always downward,
+	// so the churn belongs to the tunnel wall instead of reading as a screen-space filter.
+	static PixelSortDirection ChurnDirection(Vector2 toward)
+		=> MathF.Abs(toward.X) > MathF.Abs(toward.Y)
+			? toward.X > 0 ? PixelSortDirection.Left : PixelSortDirection.Right
+			: toward.Y > 0 ? PixelSortDirection.Up : PixelSortDirection.Down;
+
 	readonly PixelSortTrail burrowChurn = new();
 
 	public override void StirPixelSort(PixelSortCanvas canvas)
-		=> burrowChurn.Stir(canvas, BurrowChurnLife, BurrowChurnWidth,
-			new(PixelSortLayer.Frame, default, 1, Reach: BurrowChurnReach, RelaxRate: 40));
+	{
+		const float BurrowChurnLife = 0.8f;
+		const float BurrowChurnWidth = 6f;
+		const float BurrowChurnReach = 17f;
+		const float BurrowChurnFeather = 0.55f;
+		burrowChurn.Stir(canvas, BurrowChurnLife, BurrowChurnWidth,
+			new(PixelSortLayer.Frame, default, 1, Reach: BurrowChurnReach, RelaxRate: 40,
+				Feather: BurrowChurnFeather));
+	}
 
 	protected void UpdateBurrowAlways()
 	{
 		burrowChurn.Advance(Time.Delta);
 		if (State == States.Burrow)
-			burrowChurn.Record(Position, PixelSortDirection.Down, Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0.35f, 1), spacing: 2);
+		{
+			const float ChurnStrength = 0.6f;
+			burrowChurn.Record(Position, ChurnDirection(burrowToward), strength: Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0.35f, 1) * ChurnStrength, spacing: 2);
+		}
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
