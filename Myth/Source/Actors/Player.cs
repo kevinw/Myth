@@ -2287,9 +2287,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	{
 		if (Facing == Signs.Negative)
 			it.X = -(it.X + it.Width);
-			
+
 		var hitSomething = AttackThisHitBoxThisFrame(it + Position);
-		
+
 		if (hitSomething && canPogo)
 		{
 			Velocity.Y = -125f;

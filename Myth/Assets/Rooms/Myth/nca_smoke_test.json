@@ -1,9 +1,9 @@
 {
-  "position": [-206, -50],
+  "position": [-217, -46],
   "size": [46, 23],
   "ambientColor": "777777",
   "lightNoise": 0.234,
-  "reverb": 0.636,
+  "reverb": 0.628,
   "ditherStrength": 0.06,
   "legend": {
     "P": "dirt"
@@ -30,8 +30,8 @@
     "00PPPP0000000000000000000000000000000000000000",
     "00PPPP0000000000000000000000000000000000000000",
     "00PPPP0000000000000000000000000000000000000000",
-    "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-    "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+    "PPPPPPPPPPPP000PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
+    "PPPPPPPPPPPP000PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
   ],
   "actors": [
     {
@@ -124,6 +124,12 @@
       "Id": "d7f15bfc298352c8",
       "Type": "LinkedDoor",
       "Position": [284, 80]
+    },
+    {
+      "Id": "004ebd0199381d87",
+      "Type": "Jumpthru",
+      "Position": [104, 173],
+      "Size": [18, 8]
     }
   ]
 }
