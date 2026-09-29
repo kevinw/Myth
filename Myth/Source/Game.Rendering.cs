@@ -907,6 +907,8 @@ public sealed partial class GameView
 		{
 			DitherMask.Clear(Color.White); // full dither amount = the composite leaves light alone
 		}
+		using (GraphicsDevice.DebugGroup("Myth/actor lighting"))
+			DrawActorLighting();
 
 		var aoStrength = 0.0f;
 		if (buildAo)
@@ -1131,6 +1133,7 @@ public sealed partial class GameView
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[12] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[13] = new(ActorLighting, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
@@ -1474,6 +1477,35 @@ public sealed partial class GameView
 
 	static float DitherAmountForActor(Actor actor)
 		=> actor.LightingDithered ? 1.0f : ActorDitherAmount;
+
+	float LightResponseForActor(Actor actor)
+		=> actor.UsesAuthoredColor ? Manager.Visuals.AuthoredColorResponse : 0;
+
+	// Same silhouette trick as the dither mask: stamp a per-actor scalar into one channel and
+	// let the composite read it back per pixel.
+	void DrawActorLighting()
+	{
+		ActorLighting.Clear(Color.Black);
+		Batcher.PushBlend(ActorLightingBlend);
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+
+			var response = LightResponseForActor(actor);
+			if (response <= 0)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderShadow(Batcher, new Color(response, response, response, 1.0f));
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.PopBlend();
+		Batcher.Render(ActorLighting);
+		Batcher.Clear();
+	}
 
 	void DrawParticleSolidMask()
 	{
@@ -2390,6 +2422,9 @@ public sealed partial class GameView
 		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16Float, "AoBlurScratch"));
 		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
+		// Per-actor share of lighting that keeps the sprite's authored palette instead of taking
+		// the room's hue. Cleared to black, so an actor that never opts in lights exactly as before.
+		ActorLighting = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ActorLighting"));
 		// The lit scene before the rolloff. Keeping it lets the tonemap and the glow extraction
 		// both read one buffer, so the composite's work is done once and neither re-derives it.
 		LitScene = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "LitScene"));
@@ -2648,6 +2683,10 @@ public sealed partial class GameView
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendMask.Red | BlendMask.Green | BlendMask.Alpha, Color.White);
+	static readonly BlendMode ActorLightingBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Red, Color.White);
 	static readonly BlendMode DitherBufferBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
@@ -2686,6 +2725,7 @@ public sealed partial class GameView
 	// which happened to work only because the lighting compute ran before the pass that wrote
 	// it -- reordering those two calls silently fed dither amounts in as normal.z.
 	Target DitherMask { get; set; } = null!;
+	Target ActorLighting { get; set; } = null!;
 	Target LitScene { get; set; } = null!;
 	Target BloomMask { get; set; } = null!;
 	Target BloomBlurScratch { get; set; } = null!;

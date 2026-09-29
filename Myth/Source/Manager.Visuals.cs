@@ -55,6 +55,9 @@ sealed class VisualTuning
 	// own gain so a readable character rim doesn't drag every tile bevel up with it.
 	public float NormalRimGain = 1.6f;
 	public float NormalRimSharpness = 2.0f;
+	// How far actors that opt in (UsesAuthoredColor) hold their own palette against the room's
+	// light colour. 0 is ordinary multiplicative lighting; 1 responds to light amount only.
+	public float AuthoredColorResponse = 0.7f;
 	public float RimLightStrength = 0.18f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
@@ -170,6 +173,7 @@ public partial class Manager
 			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
 			VisualRow("Silhouette Rim", ref Visuals.NormalRimGain, VisualDefaults.NormalRimGain, 0, 6);
 			VisualRow("Rim Sharpness", ref Visuals.NormalRimSharpness, VisualDefaults.NormalRimSharpness, 0.25f, 8);
+			VisualRow("Authored Color", ref Visuals.AuthoredColorResponse, VisualDefaults.AuthoredColorResponse, 0, 1);
 			// Not the silhouette rim above: this one lifts *dark* pixels toward the light colour.
 			VisualRow("Dark Lift", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);

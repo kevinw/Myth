@@ -68,6 +68,9 @@ SamplerState ActorTileFieldSampler : register(s11, space2);
 Texture2D DitherMaskTexture : register(t12, space2);
 SamplerState DitherMaskSampler : register(s12, space2);
 
+Texture2D ActorLightingTexture : register(t13, space2);
+SamplerState ActorLightingSampler : register(s13, space2);
+
 struct VsInput
 {
     float2 position : TEXCOORD0;
@@ -343,13 +346,26 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 // product before the tonemap so the layer rolls off once, on one curve, instead of the
 // multiply and the fog each clipping on their own.
 float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
-    float4 tile_field, float dither_mask, float normal_slope, float detail_priority, float3 additive)
+    float4 tile_field, float dither_mask, float normal_slope, float detail_priority, float3 additive,
+    float light_response)
 {
     light.rgb *= TonemapSettings.x;
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
+
+    // Multiplying by a coloured light rotates the surface's hue toward the room -- pink under a
+    // blue lamp arrives as lavender, and no tonemap can undo a hue that was already turned
+    // before it looked. So for actors that opt in, respond to how *much* light there is without
+    // taking its colour. normal_slope exempts the silhouette, where the cutout normals lean and
+    // the real coloured light is exactly what should show: authored interior, lit rim.
+    if (light_response > 0.0)
+    {
+        float level = max(max(light.r, light.g), light.b);
+        color = lerp(color, scene.rgb * level, light_response * (1.0 - normal_slope));
+    }
+
     color = lerp(color, emissive.rgb, emissive.a);
     return float4(color + additive, scene.a);
 }
@@ -371,6 +387,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
+    float light_response = ActorLightingTexture.Sample(ActorLightingSampler, sample).r;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float2 world_pixel = TextureSizeCamera.zw + art_pixel + 0.5;
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
@@ -409,7 +426,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
         background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority,
-        SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
+        SporeFogTexture.Sample(SporeFogSampler, sample).rgb, light_response);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
@@ -420,7 +437,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
         dither_mask,
         normal_slope,
         0.5,
-        0.0);
+        0.0,
+        light_response);
     // Stays HDR: TonemapResolve turns this into a displayable pixel and, in the same breath,
     // into the glow that the part above 1 should have become.
     return foreground + background * (1.0 - foreground.a);

@@ -793,6 +793,9 @@ public class Actor
 	// emissive goes brighter than white instead of pinning there, which is what lets a lamp
 	// read as hotter than a lit wall. Costs a batch break, so only actors that override pay.
 	public virtual float EmissiveBrightness => 1;
+	// Opts this actor into keeping its authored palette under coloured light (see the composite's
+	// light_response): the silhouette still takes the real light, the interior stays itself.
+	public virtual bool UsesAuthoredColor => false;
 	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual bool HasWorldDistortion => false;

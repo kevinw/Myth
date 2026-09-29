@@ -2532,6 +2532,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 		RenderBlink(batcher);
 	}
 
+	public override bool UsesAuthoredColor => true;
+
 	public override void RenderNormals(Batcher batcher)
 	{
 		if (!BurrowHidesSprite)
