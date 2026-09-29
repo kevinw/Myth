@@ -25,6 +25,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
     float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
+    float4 TonemapSettings; // x = exposure, y = knee, z = desaturate
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -63,6 +64,9 @@ SamplerState SporeFogSampler : register(s10, space2);
 
 Texture2D ActorTileFieldTexture : register(t11, space2);
 SamplerState ActorTileFieldSampler : register(s11, space2);
+
+Texture2D DitherMaskTexture : register(t12, space2);
+SamplerState DitherMaskSampler : register(s12, space2);
 
 struct VsInput
 {
@@ -269,6 +273,28 @@ float2 glitch_dither_position(float2 position, float4 tile_field)
     return cell + offset;
 }
 
+// Soft-knee rolloff: exactly identity below the knee, asymptotic to 1 above it, so the
+// mid-tones we've already dialed in stay untouched while overbright light compresses
+// instead of clipping. Knee at 1 degenerates to a plain clamp.
+float tonemap_scalar(float value)
+{
+    float knee = TonemapSettings.y;
+    if (value <= knee)
+        return value;
+    float headroom = max(1.0 - knee, 0.0001);
+    return knee + headroom * (1.0 - exp(-(value - knee) / headroom));
+}
+
+// Rescales all three channels by one factor, so channel ratios -- and with them hue and
+// saturation -- survive the rolloff: a fully lit pink brightens toward pink, never toward
+// white. Desaturate dials back toward the old per-channel clip when whiteout is wanted.
+float3 tonemap_color(float3 color)
+{
+    float peak = max(max(color.r, color.g), color.b);
+    float3 preserved = peak > 0.0001 ? color * (tonemap_scalar(peak) / peak) : color;
+    return lerp(preserved, saturate(color), TonemapSettings.z);
+}
+
 float ellipse_distance(float2 position, float2 origin, float2 axis, float long_radius, float short_radius)
 {
     axis = normalize(axis);
@@ -310,7 +336,7 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
     threshold = saturate(threshold + 0.5 - detail_priority);
-    float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
+    float dithered_intensity = tonemap_scalar(intensity) < threshold ? 0.0 : 1.0;
 
 #if 1
     // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
@@ -322,7 +348,7 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     {
         float result_intensity = max(max(result.r, result.g), result.b);
         float steps = NormalDitherSettings.y - 1.0;
-        float quantized = floor(saturate(result_intensity) * steps + threshold) / steps;
+        float quantized = floor(tonemap_scalar(result_intensity) * steps + threshold) / steps;
         result *= lerp(1.0, quantized / max(result_intensity, 0.0001), normal_slope);
     }
 
@@ -335,15 +361,19 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 #endif
 }
 
+// `additive` is light added after the surface multiply (spore fog today). It joins the
+// product before the tonemap so the layer rolls off once, on one curve, instead of the
+// multiply and the fog each clipping on their own.
 float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
-    float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
+    float4 tile_field, float dither_mask, float normal_slope, float detail_priority, float3 additive)
 {
+    light.rgb *= TonemapSettings.x;
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
     color = lerp(color, emissive.rgb, emissive.a);
-    return float4(saturate(color), scene.a);
+    return float4(tonemap_color(color + additive), scene.a);
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
@@ -362,7 +392,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
-    float dither_mask = normal_data.b;
+    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float2 world_pixel = TextureSizeCamera.zw + art_pixel + 0.5;
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
@@ -400,8 +430,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     }
 
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
-        background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
-    background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
+        background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority,
+        SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
@@ -411,6 +441,10 @@ float4 fragment_main(VsOutput input) : SV_Target0
         tile_field,
         dither_mask,
         normal_slope,
-        0.5);
+        0.5,
+        0.0);
+    // Both layers left light_scene already in range and ForegroundScreen is premultiplied,
+    // so this sum can't meaningfully exceed 1 -- a clamp is enough, a second rolloff here
+    // would only dull what the layers already tonemapped.
     return saturate(foreground + background * (1.0 - foreground.a));
 }

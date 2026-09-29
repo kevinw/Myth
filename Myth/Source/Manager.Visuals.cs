@@ -34,6 +34,14 @@ sealed class VisualTuning
 	public float SpriteShadowMinLength = 4.0f;
 	public float SpriteShadowMaxLength = 28.0f;
 	public float ShadowBias = 0.5f;
+	// Light is HDR (float16 masks) but the frame is 8-bit, so the composite rolls the product
+	// off instead of clipping it per-channel -- a clip collapses channel ratios and turns a lit
+	// pink white. Exposure buys the headroom that makes "brighter" readable at all: land normally
+	// lit surfaces under the knee and lights have somewhere to push into.
+	public float Exposure = 1.0f;
+	public float TonemapKnee = 0.7f;
+	// 0 keeps hue and saturation through the rolloff, 1 is the old per-channel clip.
+	public float TonemapDesaturate = 0.0f;
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
@@ -151,6 +159,15 @@ public partial class Manager
 			VisualRow("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
 			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
+			PopID();
+		}
+
+		if (CollapsingHeader("Tonemap", ImGuiTreeNodeFlags.DefaultOpen))
+		{
+			PushID("Tonemap");
+			VisualRow("Exposure", ref Visuals.Exposure, VisualDefaults.Exposure, 0, 4);
+			VisualRow("Knee", ref Visuals.TonemapKnee, VisualDefaults.TonemapKnee, 0, 1);
+			VisualRow("Desaturate", ref Visuals.TonemapDesaturate, VisualDefaults.TonemapDesaturate, 0, 1);
 			PopID();
 		}
 

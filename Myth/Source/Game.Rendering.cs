@@ -129,7 +129,7 @@ public sealed partial class GameView
 			using (GraphicsDevice.DebugGroup("Myth/dither mask debug"))
 			{
 				DrawDitherMask();
-				output = DrawFieldDebug(NormalBuffer, 2);
+				output = DrawFieldDebug(DitherMask, 0);
 			}
 		}
 		else
@@ -891,6 +891,10 @@ public sealed partial class GameView
 			using (GraphicsDevice.DebugGroup("Myth/dither mask"))
 				DrawDitherMask();
 		}
+		else
+		{
+			DitherMask.Clear(Color.White); // full dither amount = the composite leaves light alone
+		}
 
 		var aoStrength = 0.0f;
 		if (buildAo)
@@ -1108,10 +1112,11 @@ public sealed partial class GameView
 		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[12] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[28 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1137,6 +1142,10 @@ public sealed partial class GameView
 		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		uniforms[i++] = Manager.Visuals.Exposure;
+		uniforms[i++] = Manager.Visuals.TonemapKnee;
+		uniforms[i++] = Manager.Visuals.TonemapDesaturate;
+		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 
@@ -1383,6 +1392,7 @@ public sealed partial class GameView
 
 	void DrawDitherMask()
 	{
+		DitherMask.Clear(Color.White);
 		Batcher.PushBlend(DitherBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
@@ -1400,7 +1410,7 @@ public sealed partial class GameView
 		}
 		Batcher.PopMatrix();
 		Batcher.PopBlend();
-		Batcher.Render(NormalBuffer);
+		Batcher.Render(DitherMask);
 		Batcher.Clear();
 	}
 
@@ -2298,7 +2308,7 @@ public sealed partial class GameView
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask", TextureFormat.R16G16B16A16Float));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask", TextureFormat.R16G16B16A16Float));
-		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
+		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask", TextureFormat.R16G16B16A16Float));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
 		InversionSnapshot = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "InversionSnapshot"));
@@ -2314,9 +2324,12 @@ public sealed partial class GameView
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
 		ReflectionMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ReflectionMask"));
-		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
-		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoBlurScratch"));
+		// Half-float, not R8: this is a two-pass Gaussian whose result multiplies into the light,
+		// so an 8 bit intermediate banded the blur and printed those bands on every lit tile.
+		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16Float, "AoMask"));
+		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16Float, "AoBlurScratch"));
 		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
+		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
 	}
 
 	Target Track(Target target)
@@ -2570,7 +2583,7 @@ public sealed partial class GameView
 	static readonly BlendMode DitherBufferBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
-		BlendMask.Blue, Color.White);
+		BlendMask.Red, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
 	static Vector2 AtlasWanderSpeed => new(13.0f, 7.0f);
@@ -2601,6 +2614,10 @@ public sealed partial class GameView
 	Target InversionSnapshotScratch { get; set; } = null!;
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
+	// Per-actor dither amount, one channel of its own. It used to ride in NormalBuffer's blue,
+	// which happened to work only because the lighting compute ran before the pass that wrote
+	// it -- reordering those two calls silently fed dither amounts in as normal.z.
+	Target DitherMask { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target ActorTileField { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
