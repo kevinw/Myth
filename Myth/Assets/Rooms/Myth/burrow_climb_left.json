@@ -377,6 +377,25 @@
       "Size": [64, 40],
       "triggerType": "WhenPlayerTouches",
       "Text": "Lots of improbable ropes around here."
+    },
+    {
+      "Id": "5de52db9cc8663b9",
+      "Type": "Prop",
+      "Position": [208, 732],
+      "SpriteName": "Props/computer_terminal_sm"
+    },
+    {
+      "Id": "ebccb9cc4b5117cf",
+      "Type": "InspectPoint",
+      "Position": [217, 752],
+      "RevealsMapTargets": "boss",
+      "Text": "LOG_321: I can't get past him. Marking his last known location."
+    },
+    {
+      "Id": "929d16c54cc1815a",
+      "Type": "Rope",
+      "Position": [203, 242],
+      "Size": [8, 358]
     }
   ]
 }

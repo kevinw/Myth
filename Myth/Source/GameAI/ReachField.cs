@@ -64,6 +64,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	// reaching a takeoff. Every other localizer already forgives drift; StandNear walks exact pixels.
 	public static int DriftTolerance => 3;
 	static int TouchSearchRadius => 200;
+	// How far the target has to move before a re-solve: further while it's in the air, where solving searches moves.
+	static int ResolveDistance => 4;
+	static int AirborneResolveDistance => 12;
 	static int RidePhaseSpacing => 12;
 	static int BoardReach => 160;
 	static readonly bool LogBuilds = Environment.GetEnvironmentVariable("LOG_REACH") == "1";
@@ -97,6 +100,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	int[] touchFrame = []; // > 0 where the target is reached partway through the node's best move
 	int[] incomingStart = [];
 	int[] incoming = [];
+	int[] fill = [];
+	bool solvedMidMove; // nothing stood in the last target, so it was reached partway through moves
 	readonly PriorityQueue<int, float> queue = new();
 	int sweeps;
 
@@ -111,8 +116,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	// Following a moving target only re-solves once it has moved a few px.
 	public void SolveFor(RectInt target)
 	{
+		var tolerance = solvedMidMove ? AirborneResolveDistance : ResolveDistance;
 		if (solved && Target is { } solvedFor && solvedFor.Size == target.Size &&
-			Math.Abs(solvedFor.X - target.X) < 4 && Math.Abs(solvedFor.Y - target.Y) < 4)
+			Math.Abs(solvedFor.X - target.X) < tolerance && Math.Abs(solvedFor.Y - target.Y) < tolerance)
 			return;
 		Solve(target);
 		Target = target;
@@ -202,13 +208,16 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				slice = Stopwatch.GetTimestamp();
 			}
 
-		incomingStart = new int[Nodes.Count + 1];
-		incoming = new int[Edges.Count];
+		if (incomingStart.Length < Nodes.Count + 1)
+			(incomingStart, fill) = (new int[Nodes.Count + 1], new int[Nodes.Count]);
+		if (incoming.Length < Edges.Count)
+			incoming = new int[Edges.Count];
+		Array.Clear(incomingStart, 0, Nodes.Count + 1);
 		foreach (var edge in Edges)
 			incomingStart[edge.To + 1]++;
 		for (var i = 0; i < Nodes.Count; i++)
 			incomingStart[i + 1] += incomingStart[i];
-		var fill = incomingStart[..^1];
+		Array.Copy(incomingStart, fill, Nodes.Count);
 		for (var e = 0; e < Edges.Count; e++)
 			incoming[fill[Edges[e].To]++] = e;
 		solved = false;
@@ -979,16 +988,22 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				Seed(i, 0, -1, 0);
 
 		// Nothing stands in it (a goal hanging in the air): reach it mid-move instead.
-		if (queue.Count == 0)
+		solvedMidMove = queue.Count == 0;
+		if (solvedMidMove)
 			for (var e = 0; e < Edges.Count; e++)
 			{
 				var edge = Edges[e];
 				if (edge.Move < 0 || Vector2.DistanceSquared(edge.Start, target.Center) > TouchSearchRadius * TouchSearchRadius ||
-					!MayTouch(edge, target))
+					TouchFrame(edge, target) is not (var frame and > 0))
 					continue;
-				var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, target);
-				if (sweep.TouchFrame > 0 && sweep.TouchFrame <= sweep.Frame)
-					Seed(edge.From, sweep.TouchFrame * ReachMoves.Dt + JumpPenalty, e, sweep.TouchFrame);
+				// Past a bonk the recording only bounds the path, so sweep it for the real touch.
+				if (edge.Bonk > 0 && frame >= edge.Bonk)
+				{
+					var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, target);
+					frame = sweep.TouchFrame <= sweep.Frame ? sweep.TouchFrame : -1;
+				}
+				if (frame > 0)
+					Seed(edge.From, frame * ReachMoves.Dt + JumpPenalty, e, frame);
 			}
 
 		while (queue.TryDequeue(out var node, out var reached))
@@ -1011,25 +1026,37 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		}
 	}
 
-	// Could this edge's move put the body in the target, judging by the recording alone? A sweep over the raster
-	// costs many times a look at the offsets, so this stands in front of one: the reach of the whole recording
+	// The first frame this edge's move puts the body in the target, or -1, judging by the recording alone: up to
+	// where the edge ends, the sweep that made it followed the recording exactly. The reach of the whole recording
 	// first, then frame by frame. Past a bonk the path leaves the recording -- its X still follows it, but its Y
 	// runs from the bonk on down to wherever the edge ended.
-	bool MayTouch(Edge edge, RectInt target)
+	int TouchFrame(Edge edge, RectInt target)
 	{
 		var offsets = Moves[edge.Move].Offsets;
 		var landing = Body + Nodes[edge.To].Position;
 		if (!(Moves[edge.Move].Reach + edge.Start).Conflate(landing).Overlaps(target))
-			return false;
+			return -1;
 		var bonked = edge.Bonk > 0 && edge.Bonk < offsets.Length;
 		var falling = bonked ? (Body + edge.Start + offsets[edge.Bonk]).Conflate(landing) : default;
 		for (var k = 1; k <= edge.Frames && k < offsets.Length; k++)
 		{
 			var at = Body + edge.Start + offsets[k];
 			if (target.Overlaps(bonked && k >= edge.Bonk ? new RectInt(at.X, falling.Y, at.Width, falling.Height) : at))
-				return true;
+				return k;
 		}
-		return false;
+		return -1;
+	}
+
+	// A target in the air reaches down to the floor below it, if that's within maxDrop: it's about to land there.
+	public RectInt DownToFloor(RectInt target, int maxDrop)
+	{
+		for (var drop = 0; drop <= maxDrop; drop++)
+		{
+			var row = new RectInt(target.X, target.Bottom + drop, target.Width, 1);
+			if (Solid(row) || jumpthru.Any(row))
+				return target with { Height = target.Height + drop };
+		}
+		return target;
 	}
 
 	void Seed(int node, float at, int edge, int frame)
@@ -1152,7 +1179,8 @@ public sealed class ReachSense(ReachBody body)
 	// Moves tried and missed this room visit, by where they started: they cost more from then on.
 	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
 
-	public void Update(Game game, Room room, RectInt target)
+	// floorReach > 0 stretches an airborne target down to the floor that far below it.
+	public void Update(Game game, Room room, RectInt target, int floorReach = 0)
 	{
 		moves ??= ReachMoves.For(game, body);
 		if (room != this.room)
@@ -1191,6 +1219,6 @@ public sealed class ReachSense(ReachBody body)
 				(Field, next) = (next, Field);
 			}
 		}
-		Field?.SolveFor(target);
+		Field?.SolveFor(floorReach > 0 ? Field.DownToFloor(target, floorReach) : target);
 	}
 }

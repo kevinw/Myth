@@ -121,15 +121,17 @@ public partial class Game
 	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
 	internal readonly ReachSense reach = new(ReachBody.Bud);
+	// Bud heads for the floor under a jumping player, if it's this close below.
+	static int PlayerFloorReach => 64;
 
 	void UpdateReachField()
 	{
 		if (room == null || debugView != DebugView.ReachField && GetFirst<Bud>() == null)
 			return;
-		RectInt? target = GymTarget is { } goal ? (goal.Hitbox.Rect + goal.Position).Inflate(1)
-			: GetFirst<Player>() is { } player ? player.Hitbox.Rect + player.Position : null;
-		if (target is { } rect)
-			reach.Update(this, room, rect);
+		if (GymTarget is { } goal)
+			reach.Update(this, room, (goal.Hitbox.Rect + goal.Position).Inflate(1));
+		else if (GetFirst<Player>() is { } player)
+			reach.Update(this, room, player.Hitbox.Rect + player.Position, PlayerFloorReach);
 	}
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
