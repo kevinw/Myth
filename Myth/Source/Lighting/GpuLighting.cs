@@ -90,6 +90,8 @@ sealed class GpuLighting : IDisposable
 		public float SporeFogPointStrength;
 		public float SporeFogSunStrength;
 		public Vector4 SporeFogVolumeData;
+		public float NormalRimGain;
+		public float NormalRimSharpness;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
@@ -297,6 +299,8 @@ sealed class GpuLighting : IDisposable
 			SporeFogPointStrength = visuals.SporeFogPointStrength,
 			SporeFogSunStrength = visuals.SporeFogSunStrength,
 			SporeFogVolumeData = new(sporeNoise != null ? sporeFogVolumeCount : 0, 0, 0, 0),
+			NormalRimGain = visuals.NormalRimGain,
+			NormalRimSharpness = visuals.NormalRimSharpness,
 		});
 		new ComputeCommand(maskShader!)
 		{

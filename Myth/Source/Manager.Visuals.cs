@@ -48,6 +48,10 @@ sealed class VisualTuning
 	public float BloomRadius = 6.0f;
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
+	// Light picked out along a sprite's silhouette, where the cutout normals lean outward. Its
+	// own gain so a readable character rim doesn't drag every tile bevel up with it.
+	public float NormalRimGain = 1.6f;
+	public float NormalRimSharpness = 2.0f;
 	public float RimLightStrength = 0.18f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
@@ -161,7 +165,10 @@ public partial class Manager
 			VisualToggle("Noise", ref PerfToggles.LightingNoise);
 			VisualRow("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1);
 			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
-			VisualRow("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
+			VisualRow("Silhouette Rim", ref Visuals.NormalRimGain, VisualDefaults.NormalRimGain, 0, 6);
+			VisualRow("Rim Sharpness", ref Visuals.NormalRimSharpness, VisualDefaults.NormalRimSharpness, 0.25f, 8);
+			// Not the silhouette rim above: this one lifts *dark* pixels toward the light colour.
+			VisualRow("Dark Lift", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
 			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
 			PopID();

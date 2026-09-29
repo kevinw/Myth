@@ -3282,10 +3282,20 @@ public static partial class Assets
 			room.RebuildGeometry();
 	}
 
+	// How far the normal leans out at the silhouette, and how many pixels in from the edge the
+	// lean reaches. A one pixel ring reads as nothing at this resolution: the radius is what
+	// turns these into a rim you can actually light. Baked into the atlas, so changing either
+	// needs a content rebuild rather than showing up under dotnet watch.
+	static float SilhouetteBend => 1.6f;
+	static int SilhouetteRadius => 3;
+
+	// Flat-cutout normals for a sprite that authored neither a normals nor a height layer: the
+	// interior stays exactly forward-facing and only the silhouette leans outward, so lighting
+	// picks out the shape's edge without embossing the artwork's own brightness.
 	static Image GenerateNormalMap(Image source)
 	{
 		var normal = new Image(source.Width, source.Height);
-		const float bend = 1.25f;
+		var radius = Math.Max(1, SilhouetteRadius);
 
 		for (var y = 0; y < source.Height; y++)
 			for (var x = 0; x < source.Width; x++)
@@ -3294,9 +3304,21 @@ public static partial class Assets
 				if (alpha <= 0)
 					continue;
 
-				var sx = AlphaAt(source, x - 1, y) - AlphaAt(source, x + 1, y);
-				var sy = AlphaAt(source, x, y - 1) - AlphaAt(source, x, y + 1);
-				var n = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
+				// Central differences at widening offsets, weighted 1/r so the nearest ring
+				// dominates and the lean tapers off as the pixel sits deeper inside the shape.
+				// Weights are normalized, so radius changes the rim's width and not its strength.
+				float sx = 0, sy = 0, weightSum = 0;
+				for (var r = 1; r <= radius; r++)
+				{
+					var weight = 1f / r;
+					sx += (AlphaAt(source, x - r, y) - AlphaAt(source, x + r, y)) * weight;
+					sy += (AlphaAt(source, x, y - r) - AlphaAt(source, x, y + r)) * weight;
+					weightSum += weight;
+				}
+				sx /= weightSum;
+				sy /= weightSum;
+
+				var n = Vector3.Normalize(new Vector3(sx * SilhouetteBend, sy * SilhouetteBend, 1));
 				normal[x, y] = new Color(
 					n.X * 0.5f + 0.5f,
 					n.Y * 0.5f + 0.5f,

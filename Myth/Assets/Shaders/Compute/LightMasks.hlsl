@@ -76,12 +76,19 @@ cbuffer Params : register(b0, space2)
     float SporeFogPointStrength;
     float SporeFogSunStrength;
     float4 SporeFogVolumeData;
+    float NormalRimGain;
+    float NormalRimSharpness;
 };
 
 float normal_response(float3 normal, float normalStrength, float3 lightDirection)
 {
     float diffuse = saturate(dot(normal, normalize(lightDirection)));
-    return lerp(1.0, NormalLightFloor + diffuse * NormalLightGain, normalStrength);
+    // A cutout sprite's normal is flat forward everywhere except the silhouette, so the tilt
+    // length is a rim mask that costs nothing to read. Gated by the diffuse term as well, so
+    // the rim lands on the side the light is actually on instead of ringing the whole shape.
+    float grazing = saturate(length(normal.xy));
+    float rim = pow(grazing, max(NormalRimSharpness, 0.01)) * diffuse * NormalRimGain;
+    return lerp(1.0, NormalLightFloor + diffuse * NormalLightGain + rim, normalStrength);
 }
 
 float box_distance(float2 localPosition, float2 halfSize)
