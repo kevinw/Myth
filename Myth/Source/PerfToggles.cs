@@ -7,6 +7,7 @@ internal static class PerfToggles
 	internal static bool Lighting = true;
 	internal static bool DitherAndTileField = true;
 	internal static bool NormalBuffer = true;
+	internal static bool Bloom = true;
 	internal static bool Emissive = true;
 	internal static bool Glitch = true;
 	internal static bool Crt = Environment.GetEnvironmentVariable("TMP_CRT") != "0";
@@ -31,6 +32,7 @@ internal static class PerfToggles
 		LightingNoise = false;
 		AmbientOcclusion = false;
 		SoftShadows = false;
+		Bloom = false;
 		BudAIEnabled = false;
 	}
 
@@ -57,6 +59,7 @@ internal static class PerfToggles
 			() => Set(ref LightingNoise, nameof(LightingNoise)),
 			() => Set(ref NormalBuffer, nameof(NormalBuffer)),
 			() => Set(ref AmbientOcclusion, nameof(AmbientOcclusion)),
+			() => Set(ref Bloom, nameof(Bloom)),
 			() => {
 				if (reveal) {
 					if (game.Manager.Visuals.DitherStrength != 1.0f) {

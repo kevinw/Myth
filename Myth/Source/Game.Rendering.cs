@@ -656,6 +656,17 @@ public sealed partial class GameView
 		return true;
 	}
 
+	// Decal props already own the material slot; a decal that also wants an overbright emissive
+	// would need the two shaders merged, which nothing asks for yet.
+	bool PushEmissiveIntensityMaterial(Actor actor)
+	{
+		if (emissiveIntensityMaterial == null || actor.EmissiveBrightness == 1)
+			return false;
+		emissiveIntensityMaterial.Material.Fragment.SetUniformBuffer([actor.EmissiveBrightness, 0, 0, 0]);
+		Batcher.PushMaterial(emissiveIntensityMaterial.Material);
+		return true;
+	}
+
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
@@ -672,11 +683,12 @@ public sealed partial class GameView
 
 			Batcher.PushMatrix(actor.Position);
 			var decal = PushPropDecalMaterial(actor);
+			var overbright = !decal && PushEmissiveIntensityMaterial(actor);
 			Batcher.PushBlend(EmissiveOccluderBlend);
 			actor.RenderEmissiveOccluder(Batcher);
 			Batcher.PopBlend();
 			actor.RenderEmissive(Batcher);
-			if (decal)
+			if (decal || overbright)
 				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
@@ -905,6 +917,12 @@ public sealed partial class GameView
 		}
 
 		CompositeLighting(aoStrength);
+		ResolveLitScene(Screen, extract: false);
+		if (PerfToggles.Bloom && Manager.Visuals.BloomStrength > 0 && tonemapResolveMaterial != null)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/bloom"))
+				ApplyBloom();
+		}
 
 		if (PerfToggles.LightingNoise)
 			ApplyLightingNoise(Screen);
@@ -1100,7 +1118,7 @@ public sealed partial class GameView
 	{
 		var material = lightingCompositeMaterial!.Material;
 
-		Screen.Clear(Color.Transparent);
+		LitScene.Clear(Color.Transparent);
 		material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[3] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
@@ -1118,8 +1136,8 @@ public sealed partial class GameView
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
 		Span<float> uniforms = stackalloc float[28 + DitherAnchorFloatCount];
 		var i = 0;
-		uniforms[i++] = Screen.Width;
-		uniforms[i++] = Screen.Height;
+		uniforms[i++] = LitScene.Width;
+		uniforms[i++] = LitScene.Height;
 		uniforms[i++] = renderCamera.X;
 		uniforms[i++] = renderCamera.Y;
 		uniforms[i++] = CurrentDitherEnabled() ? 1.0f : 0.0f;
@@ -1154,6 +1172,45 @@ public sealed partial class GameView
 		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopMaterial();
 		Batcher.PopSampler();
+		Batcher.Render(LitScene);
+		Batcher.Clear();
+	}
+
+	// LitScene -> Screen, or LitScene -> BloomMask when extracting the part that didn't fit.
+	void ResolveLitScene(Target destination, bool extract)
+	{
+		destination.Clear(Color.Transparent);
+		if (tonemapResolveMaterial == null)
+			return;
+		tonemapResolveMaterial.Material.Fragment.SetUniformBuffer([
+			Manager.Visuals.TonemapKnee,
+			Manager.Visuals.TonemapDesaturate,
+			extract ? 1.0f : 0.0f,
+			Manager.Visuals.BloomStrength,
+		]);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(tonemapResolveMaterial.Material);
+		Batcher.Image(LitScene, LitScene.Bounds.Center, LitScene.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(destination);
+		Batcher.Clear();
+	}
+
+	// Light too bright for the frame becomes glow instead of a bleached surface. The threshold
+	// is the tonemap knee itself -- whatever the rolloff discarded is exactly what scatters --
+	// so there is no second threshold to keep in step with the curve.
+	void ApplyBloom()
+	{
+		ResolveLitScene(BloomMask, extract: true);
+		var radius = Manager.Visuals.BloomRadius;
+		RunBlurPass(BloomMask, BloomBlurScratch, new Vector2(1, 0), radius, sourceAlpha: false, color: true);
+		RunBlurPass(BloomBlurScratch, BloomMask, new Vector2(0, 1), radius, sourceAlpha: false, color: true);
+		Batcher.PushBlend(BloomAddBlend);
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(BloomMask, BloomMask.Bounds.Center, BloomMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.PopBlend();
 		Batcher.Render(Screen);
 		Batcher.Clear();
 	}
@@ -1200,14 +1257,15 @@ public sealed partial class GameView
 		RunBlurPass(AoBlurScratch, AoMask, new Vector2(0, 1), radius, sourceAlpha: false);
 	}
 
-	void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha)
+	void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha,
+		bool color = false)
 	{
 		destination.Clear(Color.Transparent);
 		blurMaterial!.Material.Fragment.SetUniformBuffer([
 			direction.X,
 			direction.Y,
 			radius,
-			0,
+			color ? 1.0f : 0.0f,
 			1.0f / source.Width,
 			1.0f / source.Height,
 			0,
@@ -2304,8 +2362,10 @@ public sealed partial class GameView
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
 		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
-		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
-		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
+		// Half-float: an emissive is a light source, so it has to be able to sit above white.
+		// At 8 bit the brightest possible emissive was exactly a white wall.
+		BackgroundEmissive = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "BackgroundEmissive"));
+		ForegroundEmissive = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask", TextureFormat.R16G16B16A16Float));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask", TextureFormat.R16G16B16A16Float));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask", TextureFormat.R16G16B16A16Float));
@@ -2330,6 +2390,11 @@ public sealed partial class GameView
 		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16Float, "AoBlurScratch"));
 		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
+		// The lit scene before the rolloff. Keeping it lets the tonemap and the glow extraction
+		// both read one buffer, so the composite's work is done once and neither re-derives it.
+		LitScene = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "LitScene"));
+		BloomMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "BloomMask"));
+		BloomBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R16G16B16A16Float, "BloomBlurScratch"));
 	}
 
 	Target Track(Target target)
@@ -2563,6 +2628,9 @@ public sealed partial class GameView
 	// --- view state moved from Game.cs (fields/consts/caches) ---
 	// Fullscreen tuning display: 3008x1692 logical points at 2x backing scale.
 	static Vector2 RenderTargetShakeReferenceSize => new(6016, 3384);
+	// Glow is light in the air, not a surface: it adds on top of the resolved frame and is
+	// allowed to clip there, which is what "blown out" should look like.
+	static readonly BlendMode BloomAddBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.One);
 	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
 	static readonly BlendMode ColorFieldCopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	// Stir strokes keep the strongest of whatever they overlap; see DrawPixelSortStir.
@@ -2618,6 +2686,9 @@ public sealed partial class GameView
 	// which happened to work only because the lighting compute ran before the pass that wrote
 	// it -- reordering those two calls silently fed dither amounts in as normal.z.
 	Target DitherMask { get; set; } = null!;
+	Target LitScene { get; set; } = null!;
+	Target BloomMask { get; set; } = null!;
+	Target BloomBlurScratch { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target ActorTileField { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
@@ -2640,6 +2711,8 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? atlasWanderMaterial;
 	readonly ReloadableMaterial? colorFieldMaterial;
 	readonly ReloadableMaterial? lightingCompositeMaterial;
+	readonly ReloadableMaterial? emissiveIntensityMaterial;
+	readonly ReloadableMaterial? tonemapResolveMaterial;
 	readonly ReloadableMaterial? reflectionDistortMaterial;
 	readonly ReloadableMaterial? tileFieldStampMaterial;
 	readonly ReloadableMaterial? tileFieldDebugMaterial;

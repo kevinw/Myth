@@ -233,11 +233,17 @@ public class Light : Actor, IHitByHitbox
 			base.RenderNormals(batcher);
 	}
 
+	// The flicker wobble used to be clamped to 1 -- it could only dim, because the emissive
+	// buffer was 8 bit. It rides the brightness instead now, so a flaring light overshoots
+	// white and the tonemap rolls it back rather than the buffer truncating it.
+	public override float EmissiveBrightness => DrawSprite && Enabled
+		? Math.Clamp(1 + (RenderScale / FlickerBaseScale - 1) * 1.5f, 0, 2)
+		: 1;
+
 	public override void RenderEmissive(Batcher batcher)
 	{
 		if (DrawSprite && Enabled)
-			RenderSpriteSubtexture(batcher, SubtextureType.Emissive,
-				Color.White * Math.Clamp(1 + (RenderScale / FlickerBaseScale - 1) * 1.5f, 0, 1));
+			RenderSpriteSubtexture(batcher, SubtextureType.Emissive, Color.White);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)

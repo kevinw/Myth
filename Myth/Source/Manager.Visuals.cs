@@ -42,6 +42,10 @@ sealed class VisualTuning
 	public float TonemapKnee = 0.7f;
 	// 0 keeps hue and saturation through the rolloff, 1 is the old per-channel clip.
 	public float TonemapDesaturate = 0.0f;
+	// What the rolloff discarded, scattered back as glow. The knee is the threshold, so this is
+	// only how much of the overflow returns, not where glow starts.
+	public float BloomStrength = 0.6f;
+	public float BloomRadius = 6.0f;
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
@@ -103,6 +107,7 @@ public partial class Manager
 				PerfToggles.Crt = true;
 				PerfToggles.AmbientOcclusion = true;
 				PerfToggles.SoftShadows = true;
+				PerfToggles.Bloom = true;
 			}
 		}
 		SameLine();
@@ -168,6 +173,9 @@ public partial class Manager
 			VisualRow("Exposure", ref Visuals.Exposure, VisualDefaults.Exposure, 0, 4);
 			VisualRow("Knee", ref Visuals.TonemapKnee, VisualDefaults.TonemapKnee, 0, 1);
 			VisualRow("Desaturate", ref Visuals.TonemapDesaturate, VisualDefaults.TonemapDesaturate, 0, 1);
+			VisualToggle("Bloom", ref PerfToggles.Bloom);
+			VisualRow("Bloom Strength", ref Visuals.BloomStrength, VisualDefaults.BloomStrength, 0, 3);
+			VisualRow("Bloom Radius", ref Visuals.BloomRadius, VisualDefaults.BloomRadius, 0, 32);
 			PopID();
 		}
 

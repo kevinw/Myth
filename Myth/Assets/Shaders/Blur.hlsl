@@ -7,7 +7,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
-    float4 BlurParams;   // xy = direction (1,0) or (0,1), z = radius in pixels, w unused
+    float4 BlurParams;   // xy = direction (1,0) or (0,1), z = radius in pixels, w = blur rgba (else the masked scalar)
     float4 TexelSize;    // xy = 1 / textureSize
     float4 ChannelMask;  // dotted with the sample to extract the source value
 };
@@ -45,9 +45,12 @@ VsOutput vertex_main(VsInput input)
 // requested radius, giving a tweakable blur width without a variable loop.
 #define BLUR_TAPS 8
 
-float fetch(float2 uv)
+// A blur is linear, so collapsing to the masked scalar before or after the taps is the same
+// value -- doing it here keeps one code path for the single-channel masks and for rgba bloom.
+float4 fetch(float2 uv)
 {
-    return dot(Texture.Sample(Sampler, target_uv(uv)), ChannelMask);
+    float4 sampled = Texture.Sample(Sampler, target_uv(uv));
+    return lerp(dot(sampled, ChannelMask).xxxx, sampled, BlurParams.w);
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
@@ -60,7 +63,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float sigma = max(radius * 0.5, 0.0001);
     float two_sigma_sq = 2.0 * sigma * sigma;
 
-    float sum = fetch(input.tex_coord);
+    float4 sum = fetch(input.tex_coord);
     float weight_sum = 1.0;
 
     [unroll]
@@ -72,6 +75,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
         weight_sum += 2.0 * w;
     }
 
-    float value = sum / weight_sum;
-    return float4(value, value, value, value) * input.color;
+    return (sum / weight_sum) * input.color;
 }

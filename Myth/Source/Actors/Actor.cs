@@ -789,6 +789,10 @@ public class Actor
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
 	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
+	// Scales this actor's emissive on its way into the (float16) emissive buffer. Above 1 the
+	// emissive goes brighter than white instead of pinning there, which is what lets a lamp
+	// read as hotter than a lit wall. Costs a batch break, so only actors that override pay.
+	public virtual float EmissiveBrightness => 1;
 	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual bool HasWorldDistortion => false;
