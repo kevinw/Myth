@@ -251,11 +251,11 @@ public sealed partial class GameView
 				crt!.Material.Fragment.SetUniformBuffer([
 					output.Width,
 					output.Height,
-					Manager.Visuals.CrtBloomAmount,
+					Manager.Visuals.CrtFlashGlowAmount,
 					Manager.Visuals.CrtVignetteAmount,
 					Manager.Visuals.CrtRgbOffset,
 					game.fx.blooming,
-					Manager.Visuals.CrtBloomThreshold,
+					Manager.Visuals.CrtFlashGlowThreshold,
 					Manager.Visuals.CrtScanlineStrength,
 					zoomLevel,
 					composite != null ? compositeScale : scale,

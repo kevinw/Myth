@@ -42,11 +42,11 @@ cbuffer VertexUniformBlock : register(b0, space1)
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
     float2 TextureSize;
-    float BloomAmount;
+    float FlashGlowAmount;
     float VignetteAmount;
     float RgbOffset;
-    float ExtraGlow;
-    float BloomThreshold;
+    float FlashAmount; // fx.blooming: zero except during the one-shot screen flash
+    float FlashGlowThreshold;
     float ScanlineStrength;
     float Zoom;
     float PixelScale;   // output pixels per frame pixel
@@ -368,8 +368,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     glow /= 4.5;
 
 
-    float brightness = max(max(glow.r, glow.g), glow.b) + ExtraGlow;
-    color += glow * smoothstep(BloomThreshold, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0) * CrtEffects;
+    float brightness = max(max(glow.r, glow.g), glow.b) + FlashAmount;
+    color += glow * smoothstep(FlashGlowThreshold, 1.0, brightness) * FlashGlowAmount * (FlashAmount * 3.0) * CrtEffects;
 
 #if defined(CRT_PHOSPHOR_DOTS) || defined(CRT_ALIEN) || defined(PIXEL_GLAZE) || defined(PIXEL_TAPESTRY)
     float2 pixel = uv * artSize;

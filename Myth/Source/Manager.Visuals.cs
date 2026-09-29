@@ -16,8 +16,11 @@ enum PixelScaler { None, Scale2x, SuperEagle, Mmpx, Xbr }
 
 sealed class VisualTuning
 {
-	public float CrtBloomAmount = 0.09f;
-	public float CrtBloomThreshold = 0.35f;
+	// Not ambient glow: the whole term is scaled by fx.blooming, which only leaves zero for the
+	// ~0.1s after fx.Bloom() is called. This is how hot the one-shot screen flash blows out, and
+	// it contributes nothing to an ordinary frame.
+	public float CrtFlashGlowAmount = 0.09f;
+	public float CrtFlashGlowThreshold = 0.35f;
 	public float CrtVignetteAmount = 0.06f;
 	// In output pixels: the fringe is a property of the display, not of the art.
 	public float CrtRgbOffset = 1.5f;
@@ -125,9 +128,9 @@ public partial class Manager
 			VisualRow("RGB Separation", ref Visuals.CrtRgbOffset, VisualDefaults.CrtRgbOffset, 0, 6);
 			VisualRow("Scanlines", ref Visuals.CrtScanlineStrength, VisualDefaults.CrtScanlineStrength, 0, 0.4f);
 			VisualRow("Vignette", ref Visuals.CrtVignetteAmount, VisualDefaults.CrtVignetteAmount, 0, 0.5f);
-			VisualRow("Bloom Response", ref Visuals.CrtBloomAmount, VisualDefaults.CrtBloomAmount, 0, 0.5f);
-			VisualRow("Bloom Threshold", ref Visuals.CrtBloomThreshold, VisualDefaults.CrtBloomThreshold, 0, 1);
-			if (Button("Preview Bloom", new Vector2(-1, 0)))
+			VisualRow("Flash Glow", ref Visuals.CrtFlashGlowAmount, VisualDefaults.CrtFlashGlowAmount, 0, 0.5f);
+			VisualRow("Flash Threshold", ref Visuals.CrtFlashGlowThreshold, VisualDefaults.CrtFlashGlowThreshold, 0, 1);
+			if (Button("Preview Flash", new Vector2(-1, 0)))
 				game?.fx.Bloom();
 			PopID();
 		}
