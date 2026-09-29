@@ -133,19 +133,19 @@
       "Type": "NeuralTextureActor",
       "Position": [200, 72],
       "SimulationScale": 1.7211704,
-      "FlowOrigin": [-1517.184, -661.184],
       "FlowSize": [74.368, 74.368],
-      "DetailOrigin": [48.0, 48.0],
-      "Size": [96, 96],
+      "Size": [120, 96],
       "FireRate": 0.765,
       "StepsPerSecond": 59.991,
       "Contrast": 2.115,
       "Brightness": -0.376,
       "Tint": "7E7E7E",
-      "PaintedMask": "806265e1e49b66ce.png",
       "EdgeTrim": 1,
       "Saturation": 0.679,
-      "WeightsFile": "ink_circular.bin"
+      "WeightsFile": "ink_circular.bin",
+      "FlowOrigin": [-1517.184, -661.184],
+      "DetailOrigin": [48, 48],
+      "PaintedMask": "f4036e78a49157f7.png"
     }
   ]
 }

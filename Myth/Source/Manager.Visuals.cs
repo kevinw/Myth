@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Foster.Editor;
 using ImGuiNET;
 using static ImGuiNET.ImGui;
 #endif
@@ -100,16 +101,20 @@ public partial class Manager
 		SameLine();
 		if (Button("Copy Values as C#"))
 			Input.SetClipboardString(VisualTuningAsCSharp());
+		SameLine();
+		Checkbox("Values", ref Knobs.AlwaysShowValues);
 
 		if (CollapsingHeader("CRT", ImGuiTreeNodeFlags.DefaultOpen))
 		{
 			PushID("Crt");
 			VisualToggle("Enabled", ref PerfToggles.Crt);
-			VisualRow("RGB Separation", ref Visuals.CrtRgbOffset, VisualDefaults.CrtRgbOffset, 0, 6);
-			VisualRow("Scanlines", ref Visuals.CrtScanlineStrength, VisualDefaults.CrtScanlineStrength, 0, 0.4f);
-			VisualRow("Vignette", ref Visuals.CrtVignetteAmount, VisualDefaults.CrtVignetteAmount, 0, 0.5f);
-			VisualRow("Bloom Response", ref Visuals.CrtBloomAmount, VisualDefaults.CrtBloomAmount, 0, 0.5f);
-			VisualRow("Bloom Threshold", ref Visuals.CrtBloomThreshold, VisualDefaults.CrtBloomThreshold, 0, 1);
+			Knobs.BeginFlow();
+			VisualKnob("RGB Separation", ref Visuals.CrtRgbOffset, VisualDefaults.CrtRgbOffset, 0, 6);
+			VisualKnob("Scanlines", ref Visuals.CrtScanlineStrength, VisualDefaults.CrtScanlineStrength, 0, 0.4f);
+			VisualKnob("Vignette", ref Visuals.CrtVignetteAmount, VisualDefaults.CrtVignetteAmount, 0, 0.5f);
+			VisualKnob("Bloom Response", ref Visuals.CrtBloomAmount, VisualDefaults.CrtBloomAmount, 0, 0.5f);
+			VisualKnob("Bloom Threshold", ref Visuals.CrtBloomThreshold, VisualDefaults.CrtBloomThreshold, 0, 1);
+			Knobs.EndFlow();
 			if (Button("Preview Bloom", new Vector2(-1, 0)))
 				game?.fx.Bloom();
 			PopID();
@@ -124,7 +129,9 @@ public partial class Manager
 			changed |= VisualResetButton(VisualDefaults.PixelScaler, ref scaler);
 			if (changed)
 				SetVisual(ref Visuals.PixelScaler, scaler);
-			VisualRow("Color Tolerance", ref Visuals.PixelScalerTolerance, VisualDefaults.PixelScalerTolerance, 0, 0.3f);
+			Knobs.BeginFlow();
+			VisualKnob("Color Tolerance", ref Visuals.PixelScalerTolerance, VisualDefaults.PixelScalerTolerance, 0, 0.3f);
+			Knobs.EndFlow();
 			PopID();
 		}
 
@@ -132,10 +139,12 @@ public partial class Manager
 		{
 			PushID("Ao");
 			VisualToggle("Enabled", ref PerfToggles.AmbientOcclusion);
-			VisualRow("Strength", ref Visuals.AmbientOcclusionStrength, VisualDefaults.AmbientOcclusionStrength, 0, 4);
-			VisualRow("Blur", ref Visuals.AmbientOcclusionBlur, VisualDefaults.AmbientOcclusionBlur, 0, 32);
-			VisualRow("Offset (px)", ref Visuals.AmbientOcclusionOffset, VisualDefaults.AmbientOcclusionOffset, -16, 16);
-			VisualRow("Min Visibility", ref Visuals.AmbientOcclusionMinVisibility, VisualDefaults.AmbientOcclusionMinVisibility, 0, 1);
+			Knobs.BeginFlow();
+			VisualKnob("Strength", ref Visuals.AmbientOcclusionStrength, VisualDefaults.AmbientOcclusionStrength, 0, 4);
+			VisualKnob("Blur", ref Visuals.AmbientOcclusionBlur, VisualDefaults.AmbientOcclusionBlur, 0, 32);
+			VisualKnob("Offset (px)", ref Visuals.AmbientOcclusionOffset, VisualDefaults.AmbientOcclusionOffset, -16, 16);
+			VisualKnob("Min Visibility", ref Visuals.AmbientOcclusionMinVisibility, VisualDefaults.AmbientOcclusionMinVisibility, 0, 1);
+			Knobs.EndFlow();
 			PopID();
 		}
 
@@ -146,11 +155,13 @@ public partial class Manager
 			VisualToggle("Normal Maps", ref PerfToggles.NormalBuffer);
 			VisualToggle("Emissive", ref PerfToggles.Emissive);
 			VisualToggle("Noise", ref PerfToggles.LightingNoise);
-			VisualRow("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1);
-			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
-			VisualRow("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
-			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
-			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
+			Knobs.BeginFlow();
+			VisualKnob("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1);
+			VisualKnob("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
+			VisualKnob("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
+			VisualKnob("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
+			VisualKnob("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
+			Knobs.EndFlow();
 			PopID();
 		}
 
@@ -158,75 +169,62 @@ public partial class Manager
 		{
 			PushID("Shadows");
 			VisualToggle("Soft Shadows", ref PerfToggles.SoftShadows);
-			VisualRow("Sun Softness", ref Visuals.SunShadowSoftness, VisualDefaults.SunShadowSoftness, 0, 8);
-			VisualRow("Sprite Strength", ref Visuals.SpriteShadowStrength, VisualDefaults.SpriteShadowStrength, 0, 1);
-			VisualRow("Sprite Min Length", ref Visuals.SpriteShadowMinLength, VisualDefaults.SpriteShadowMinLength, 0, 64);
-			VisualRow("Sprite Max Length", ref Visuals.SpriteShadowMaxLength, VisualDefaults.SpriteShadowMaxLength, 0, 64);
+			Knobs.BeginFlow();
+			VisualKnob("Sun Softness", ref Visuals.SunShadowSoftness, VisualDefaults.SunShadowSoftness, 0, 8);
+			VisualKnob("Sprite Strength", ref Visuals.SpriteShadowStrength, VisualDefaults.SpriteShadowStrength, 0, 1);
+			VisualKnob("Sprite Min Length", ref Visuals.SpriteShadowMinLength, VisualDefaults.SpriteShadowMinLength, 0, 64);
+			VisualKnob("Sprite Max Length", ref Visuals.SpriteShadowMaxLength, VisualDefaults.SpriteShadowMaxLength, 0, 64);
+			VisualKnob("Bias", ref Visuals.ShadowBias, VisualDefaults.ShadowBias, 0, 4);
+			Knobs.EndFlow();
 			Visuals.SpriteShadowMaxLength = Math.Max(Visuals.SpriteShadowMinLength, Visuals.SpriteShadowMaxLength);
-			if (TreeNode("Advanced"))
-			{
-				VisualRow("Bias", ref Visuals.ShadowBias, VisualDefaults.ShadowBias, 0, 4);
-				TreePop();
-			}
 			PopID();
 		}
 
 		if (CollapsingHeader("Spore Fog"))
 		{
 			PushID("SporeFog");
-			VisualRow("Scale", ref Visuals.SporeFogScale, VisualDefaults.SporeFogScale, 0.001f, 0.1f);
-			VisualRow("Drift", ref Visuals.SporeFogDrift, VisualDefaults.SporeFogDrift, -10, 10);
-			VisualRow("Contrast", ref Visuals.SporeFogContrast, VisualDefaults.SporeFogContrast, 0.1f, 5);
-			VisualRow("Point Response", ref Visuals.SporeFogPointStrength, VisualDefaults.SporeFogPointStrength, 0, 2);
-			VisualRow("Sun Response", ref Visuals.SporeFogSunStrength, VisualDefaults.SporeFogSunStrength, 0, 2);
+			Knobs.BeginFlow();
+			VisualKnob("Scale", ref Visuals.SporeFogScale, VisualDefaults.SporeFogScale, 0.001f, 0.1f);
+			VisualKnob("Drift", ref Visuals.SporeFogDrift, VisualDefaults.SporeFogDrift, -10, 10);
+			VisualKnob("Contrast", ref Visuals.SporeFogContrast, VisualDefaults.SporeFogContrast, 0.1f, 5);
+			VisualKnob("Point Response", ref Visuals.SporeFogPointStrength, VisualDefaults.SporeFogPointStrength, 0, 2);
+			VisualKnob("Sun Response", ref Visuals.SporeFogSunStrength, VisualDefaults.SporeFogSunStrength, 0, 2);
+			Knobs.EndFlow();
 			PopID();
 		}
 
 		if (CollapsingHeader("Effects"))
 		{
 			PushID("Effects");
-			VisualRow("World Distortion", ref Visuals.WorldDistortionPixels, VisualDefaults.WorldDistortionPixels, 0, 12);
+			Knobs.BeginFlow();
+			VisualKnob("World Distortion", ref Visuals.WorldDistortionPixels, VisualDefaults.WorldDistortionPixels, 0, 12);
+			Knobs.EndFlow();
 			PopID();
 		}
 
 		End();
 	}
 
-	// Every row edits a copy so the undo scope captures the pre-gesture state before the field moves.
+	// Every control edits a copy so the undo scope captures the pre-gesture state before the field moves.
 	// The scope stays pending until EditorUI sees no active ImGui item, making a whole drag one entry.
-	void VisualRow(string label, ref float value, float reset, float min, float max)
+	void VisualKnob(string label, ref float value, float reset, float min, float max)
 	{
-		BeginPropertyRow(label, hasTrailingButton: true);
-		PushID(label);
 		var edited = value;
-		var changed = SliderFloat("##Value", ref edited, min, max);
-		changed |= VisualResetButton(reset, ref edited);
-		PopID();
-		if (changed)
+		if (Knobs.Knob(label, ref edited, min, max, reset))
 			SetVisual(ref value, edited);
 	}
 
-	void VisualRow(string label, ref int value, int reset, int min, int max)
+	void VisualKnob(string label, ref int value, int reset, int min, int max)
 	{
-		BeginPropertyRow(label, hasTrailingButton: true);
-		PushID(label);
 		var edited = value;
-		var changed = SliderInt("##Value", ref edited, min, max);
-		changed |= VisualResetButton(reset, ref edited);
-		PopID();
-		if (changed)
+		if (Knobs.Knob(label, ref edited, min, max, reset))
 			SetVisual(ref value, edited);
 	}
 
-	void VisualRow(string label, ref Vector2 value, Vector2 reset, float min, float max)
+	void VisualKnob(string label, ref Vector2 value, Vector2 reset, float min, float max)
 	{
-		BeginPropertyRow(label, hasTrailingButton: true);
-		PushID(label);
 		var edited = value;
-		var changed = SliderFloat2("##Value", ref edited, min, max);
-		changed |= VisualResetButton(reset, ref edited);
-		PopID();
-		if (changed)
+		if (Knobs.XYPad(label, ref edited, min, max, reset))
 			SetVisual(ref value, edited);
 	}
 

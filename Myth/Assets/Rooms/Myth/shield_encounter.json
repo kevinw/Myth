@@ -83,7 +83,8 @@
       "Type": "Light",
       "Position": [185, 52],
       "FlickerFrequency": 0.65,
-      "Height": 11.7
+      "Height": 11.7,
+      "Intensity": 1.508
     },
     {
       "Id": "915ac1bee41e797d",

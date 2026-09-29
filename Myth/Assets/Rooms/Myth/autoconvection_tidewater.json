@@ -91,6 +91,16 @@
       "Height": 5.05,
       "Radius": 100,
       "Intensity": 0.8
+    },
+    {
+      "Id": "f922f671aca83280",
+      "Type": "CurveRibbon",
+      "Position": [160, 92],
+      "Tint": "A2A2A2",
+      "Width": 10.542,
+      "BranchLength": 16.835,
+      "Points": [[-24, -88],[-16, -16],[-32, -16],[-40, 8]
+      ]
     }
   ]
 }

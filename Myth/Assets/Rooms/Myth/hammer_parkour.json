@@ -252,7 +252,7 @@
     {
       "Id": "a8614fe56feaf8e3",
       "Type": "PixelSortRegion",
-      "Position": [20, 80],
+      "Position": [26, 82],
       "Size": [56, 56],
       "Layer": "Frame",
       "Direction": "Up",

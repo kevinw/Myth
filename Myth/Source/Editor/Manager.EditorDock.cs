@@ -170,6 +170,8 @@ public partial class Manager
 			EditorDockHostImGui("##EditorDockHost", "EditorDock", EditorDockRect, ref editorDockId, rightSide: true);
 		if (centreVisible)
 			EditorCenterDockImGui();
+		else
+			gameViewHovered = false;
 
 		KeepHiddenDockRegionsAlive(paletteVisible, toolVisible, centreVisible);
 	}

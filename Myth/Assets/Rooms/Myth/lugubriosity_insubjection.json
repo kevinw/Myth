@@ -2,8 +2,8 @@
   "position": [120, -53],
   "size": [40, 30],
   "backdropColor": "290E43",
-  "ambientColor": "4A4A4A",
-  "lightNoise": 0.568,
+  "ambientColor": "363636",
+  "lightNoise": 0.051,
   "sporeFogStrength": 0.125,
   "reverb": 0.212,
   "musicMuffle": 0.515,
@@ -97,8 +97,8 @@
       "Position": [96, 143],
       "FlickerIntensity": 0.02,
       "Height": 10.014,
-      "Intensity": 1.044,
-      "Radius": 161.459
+      "Radius": 161.459,
+      "Intensity": 1.731
     },
     {
       "Id": "0c32b548d90da209",
@@ -106,8 +106,8 @@
       "Position": [208, 143],
       "FlickerIntensity": 0.02,
       "Height": 14.367,
-      "Intensity": 0.961,
-      "Radius": 149.127
+      "Radius": 149.127,
+      "Intensity": 2.087
     },
     {
       "Id": "d0dd85cebbf835fe",

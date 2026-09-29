@@ -335,6 +335,18 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 #endif
 }
 
+// Identity below the knee, then rolls the brightest channel off toward the ceiling, preserving hue.
+float3 light_shoulder(float3 light)
+{
+    const float knee = 0.9;
+    const float ceiling = 1.3;
+    float peak = max(light.r, max(light.g, light.b));
+    if (peak <= knee)
+        return light;
+    float over = (peak - knee) / (ceiling - knee);
+    return light * (knee + (ceiling - knee) * over / (1.0 + over)) / peak;
+}
+
 float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
     float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
 {
@@ -402,9 +414,13 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
         background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
     background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
+    float4 foreground_light = ForegroundLightTexture.Sample(ForegroundLightSampler, sample);
+#if 1
+    foreground_light.rgb = light_shoulder(foreground_light.rgb);
+#endif
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
-        ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
+        foreground_light,
         ForegroundEmissiveTexture.Sample(ForegroundEmissiveSampler, sample),
         world_pixel,
         pattern_pixel,
