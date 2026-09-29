@@ -71,7 +71,9 @@ public class Serpent : TrailCurve
 	const int LandingDrop = 28;
 
 	Point2 crawlAt, crawlHeading;
+#if DEBUG
 	bool warnedUnattached;
+#endif
 
 	bool leaping;
 	Vector2 leapFrom, leapControl, leapTo;
