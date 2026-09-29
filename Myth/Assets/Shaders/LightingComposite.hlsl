@@ -26,6 +26,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
     float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
     float4 TonemapSettings; // x = exposure, y = knee, z = desaturate
+    float4 DitherRange; // xy = light range the pattern spans, z = dither contrast on dark art
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -287,8 +288,9 @@ float ellipse_distance(float2 position, float2 origin, float2 axis, float long_r
 }
 
 float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field,
-    float dither_mask, float normal_slope, float detail_priority)
+    float dither_mask, float normal_slope, float detail_priority, out float dither_on)
 {
+    dither_on = 0.0;
     if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0 && NormalDitherSettings.y <= 1.0)
         return light;
 
@@ -317,7 +319,15 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
     threshold = saturate(threshold + 0.5 - detail_priority);
-    float dithered_intensity = tonemap_scalar(intensity, TonemapSettings.y) < threshold ? 0.0 : 1.0;
+    // Thresholds spread over roughly 0.06..0.94, so a pattern only appears where the light lands
+    // inside that spread: at a tenth of it a handful of cells clear and read as sparse dots, and
+    // near the top they all clear and read as flat. Mapping the light's own range onto the spread
+    // is what keeps the pattern alive in a dark room -- it changes which cells flip, not how
+    // bright anything is.
+    float probe = saturate((tonemap_scalar(intensity, TonemapSettings.y) - DitherRange.x)
+        / max(DitherRange.y - DitherRange.x, 0.0001));
+    float dithered_intensity = probe < threshold ? 0.0 : 1.0;
+    dither_on = dithered_intensity;
 
 #if 1
     // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
@@ -350,10 +360,19 @@ float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pix
     float light_response)
 {
     light.rgb *= TonemapSettings.x;
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
+    float dither_on;
+    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority, dither_on);
     float brightness = max(max(scene.r, scene.g), scene.b);
-    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
-    float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
+
+    // Dark art has no multiplicative contrast to give -- scene.rgb * light can't separate cells
+    // when scene.rgb is near zero -- so anything printed on it has to be added. `lift` is the
+    // flat shadow floor. `chunk` adds only where the dither says on, so all of it prints as
+    // pattern, where the lift rides the dithered light and so floods ~85% and patterns ~15%.
+    // Same visible chunk for a fraction of the average brightening.
+    float dark_gate = light.a * saturate(1.0 - brightness * 2.2);
+    float lift = dark_gate * NormalDitherSettings.w;
+    float chunk = dither_on * dark_gate * DitherRange.z * dither_mask;
+    float3 color = scene.rgb * light.rgb + light.rgb * (lift + chunk);
 
     // Multiplying by a coloured light rotates the surface's hue toward the room -- pink under a
     // blue lamp arrives as lavender, and no tonemap can undo a hue that was already turned

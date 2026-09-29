@@ -1137,7 +1137,7 @@ public sealed partial class GameView
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[28 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[32 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = LitScene.Width;
 		uniforms[i++] = LitScene.Height;
@@ -1162,10 +1162,14 @@ public sealed partial class GameView
 		uniforms[i++] = CurrentDitherSlopeBoost();
 		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
-		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		uniforms[i++] = Manager.Visuals.ShadowLift;
 		uniforms[i++] = Manager.Visuals.Exposure;
 		uniforms[i++] = Manager.Visuals.TonemapKnee;
 		uniforms[i++] = Manager.Visuals.TonemapDesaturate;
+		uniforms[i++] = 0;
+		uniforms[i++] = Manager.Visuals.DitherLow;
+		uniforms[i++] = Manager.Visuals.DitherHigh;
+		uniforms[i++] = Manager.Visuals.DitherContrast;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);

@@ -58,7 +58,18 @@ sealed class VisualTuning
 	// How far actors that opt in (UsesAuthoredColor) hold their own palette against the room's
 	// light colour. 0 is ordinary multiplicative lighting; 1 responds to light amount only.
 	public float AuthoredColorResponse = 0.7f;
-	public float RimLightStrength = 0.05f;
+	// Flat floor under dark-albedo pixels, in the light's colour. Its sibling below prints the
+	// dither pattern there instead of flooding it; keeping them apart is what lets shadows stay
+	// deep while the dither still reads.
+	public float ShadowLift = 0.05f;
+	public float DitherContrast = 0.06f;
+	// The light range the dither pattern spans. Thresholds sit in ~0.06..0.94 and the pattern is
+	// loudest where about half the cells clear, so narrowing this moves that peak -- but it
+	// overshoots easily: measured, 0..0.65 flipped so many cells on that the pattern went quieter
+	// than the identity range while still costing brightness. Identity by default; narrow it per
+	// room only where a room's light genuinely sits too low to reach the spread.
+	public float DitherLow = 0.0f;
+	public float DitherHigh = 1.0f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
 	public float SporeFogScale = 1.0f / 80.0f;
@@ -174,8 +185,13 @@ public partial class Manager
 			VisualRow("Silhouette Rim", ref Visuals.NormalRimGain, VisualDefaults.NormalRimGain, 0, 6);
 			VisualRow("Rim Sharpness", ref Visuals.NormalRimSharpness, VisualDefaults.NormalRimSharpness, 0.25f, 8);
 			VisualRow("Authored Color", ref Visuals.AuthoredColorResponse, VisualDefaults.AuthoredColorResponse, 0, 1);
-			// Not the silhouette rim above: this one lifts *dark* pixels toward the light colour.
-			VisualRow("Dark Lift", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
+			// Not the silhouette rim above: these act on *dark* pixels, where multiplying cannot
+			// separate anything and contrast has to be added.
+			VisualRow("Shadow Lift", ref Visuals.ShadowLift, VisualDefaults.ShadowLift, 0, 0.5f);
+			VisualRow("Dither Contrast", ref Visuals.DitherContrast, VisualDefaults.DitherContrast, 0, 0.5f);
+			VisualRow("Dither Low", ref Visuals.DitherLow, VisualDefaults.DitherLow, 0, 1);
+			VisualRow("Dither High", ref Visuals.DitherHigh, VisualDefaults.DitherHigh, 0, 1);
+			Visuals.DitherHigh = Math.Max(Visuals.DitherLow + 0.01f, Visuals.DitherHigh);
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
 			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
 			PopID();
