@@ -69,7 +69,6 @@ public class Room
 	public const float DefaultLightingDitherScale = 1.0f;
 	public const float DefaultLightingDitherStrength = 0.155f;
 	public const float DefaultNormalDitherSlopeBoost = 0.0f;
-	public const bool DefaultNormalDitherQuantization = false;
 	public static readonly Color DefaultSunColor = new(1.0f, 0.9f, 0.72f, 1.0f);
 	public static readonly Vector2 DefaultSunDirection = Vector2.Normalize(new Vector2(1, 1));
 
@@ -167,7 +166,6 @@ public class Room
 	public float LightingDitherScale = DefaultLightingDitherScale;
 	public float LightingDitherStrength = DefaultLightingDitherStrength;
 	public float NormalDitherSlopeBoost = DefaultNormalDitherSlopeBoost;
-	public bool NormalDitherQuantization = DefaultNormalDitherQuantization;
 	/// Camera magnification while this room is active; the transition into the room eases to it.
 	[I(1, 4)] public float Zoom = DefaultZoom;
 	public bool BurrowInverts;
@@ -217,7 +215,6 @@ public class Room
 			LightingDitherScale = LightingDitherScale,
 			LightingDitherStrength = LightingDitherStrength,
 			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
-			NormalDitherQuantization = NormalDitherQuantization,
 			Zoom = Zoom,
 			BurrowInverts = BurrowInverts,
 			BudSpawn = BudSpawn,
@@ -307,7 +304,6 @@ public class Room
 		LightingDitherScale = JsonUtil.ReadFloat(json, "ditherScale", DefaultLightingDitherScale);
 		LightingDitherStrength = JsonUtil.ReadFloat(json, "ditherStrength", DefaultLightingDitherStrength);
 		NormalDitherSlopeBoost = JsonUtil.ReadFloat(json, "ditherSlopeBoost", DefaultNormalDitherSlopeBoost);
-		NormalDitherQuantization = JsonUtil.ReadBool(json, "ditherQuantization", DefaultNormalDitherQuantization);
 		Zoom = Math.Clamp(JsonUtil.ReadFloat(json, "zoom", DefaultZoom), 1.0f, 4.0f);
 		BurrowInverts = JsonUtil.ReadBool(json, nameof(BurrowInverts));
 		BudSpawn = Enum.TryParse<BudSpawnFlags>(JsonUtil.ReadString(json, nameof(BudSpawn)), true, out var budSpawn) ? budSpawn : BudSpawnFlags.None;
@@ -1634,8 +1630,6 @@ public class Room
 			writer.WriteNumber("ditherStrength", LightingDitherStrength);
 		if (NormalDitherSlopeBoost != DefaultNormalDitherSlopeBoost)
 			writer.WriteNumber("ditherSlopeBoost", NormalDitherSlopeBoost);
-		if (NormalDitherQuantization != DefaultNormalDitherQuantization)
-			writer.WriteBoolean("ditherQuantization", NormalDitherQuantization);
 		if (Zoom != DefaultZoom)
 			writer.WriteNumber("zoom", Zoom);
 		if (BurrowInverts)

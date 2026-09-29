@@ -901,39 +901,10 @@ public sealed partial class GameView
 		}
 
 		CompositeLighting(aoStrength);
-
-		if (PerfToggles.LightingNoise)
-			ApplyLightingNoise(Screen);
-
 		return Screen;
 	}
 
-	void ApplyLightingNoise(Target target)
-	{
-		if (Assets.LightingNoise == null)
-			return;
-
-		// Tile to cover the whole target, not a fixed 320x180: the editor renders zoomed-out
-		// views into larger-than-screen targets (RenderWorldView), so derive the tiled quad's
-		// extent from the target itself. PushMatrix scales by zoomLevel, so divide it back out
-		// (a no-op at zoomLevel 1, matching in-game).
-		var renderCamera = RenderCamera;
-		var worldWidth = target.Width / zoomLevel;
-		var worldHeight = target.Height / zoomLevel;
-		Batcher.PushMatrix(Matrix3x2.CreateScale(zoomLevel));
-		Batcher.PushBlend(BlendMode.Multiply);
-		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
-		Batcher.Image(
-			Assets.LightingNoise,
-			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, worldWidth, worldHeight),
-			Vector2.Zero,
-			Color.White * CurrentLightNoise());
-		Batcher.PopSampler();
-		Batcher.PopBlend();
-		Batcher.PopMatrix();
-		Batcher.Render(target);
-		Batcher.Clear();
-	}
+	static Vector2 LightNoiseDrift => new(5, 0);
 
 	Target ApplyPixelSortGlitch(Target input)
 	{
@@ -1108,10 +1079,12 @@ public sealed partial class GameView
 		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var noise = PerfToggles.LightingNoise ? Assets.LightingNoise : null;
+		material.Fragment.Samplers[12] = new(noise ?? (Texture)ActorTileField, new(TextureFilter.Nearest, TextureWrap.Repeat));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[32 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1134,9 +1107,19 @@ public sealed partial class GameView
 		uniforms[i++] = aoOffset.Y;
 		uniforms[i++] = Manager.Visuals.AmbientOcclusionMinVisibility;
 		uniforms[i++] = CurrentDitherSlopeBoost();
-		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
+		uniforms[i++] = 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		var noiseSize = noise != null ? new Vector2(noise.Width, noise.Height) : Vector2.One;
+		var noiseOffset = Time.SecondsF * LightNoiseDrift / noiseSize;
+		uniforms[i++] = noise != null ? CurrentLightNoise() : 0;
+		uniforms[i++] = Manager.Visuals.LightNoisePivot;
+		uniforms[i++] = 0;
+		uniforms[i++] = 0;
+		uniforms[i++] = 1 / noiseSize.X;
+		uniforms[i++] = 1 / noiseSize.Y;
+		uniforms[i++] = noiseOffset.X - MathF.Floor(noiseOffset.X);
+		uniforms[i++] = noiseOffset.Y - MathF.Floor(noiseOffset.Y);
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 
@@ -1806,14 +1789,6 @@ public sealed partial class GameView
 			return room?.NormalDitherSlopeBoost ?? Room.DefaultNormalDitherSlopeBoost;
 
 		return float.Lerp(room!.NormalDitherSlopeBoost, nextRoom.NormalDitherSlopeBoost, Ease.Cube.InOut(nextRoomEase));
-	}
-
-	bool CurrentDitherQuantization()
-	{
-		if (nextRoom == null)
-			return room?.NormalDitherQuantization ?? Room.DefaultNormalDitherQuantization;
-
-		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? room!.NormalDitherQuantization : nextRoom.NormalDitherQuantization;
 	}
 
 	Color CurrentSunColor()

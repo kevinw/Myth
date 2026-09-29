@@ -1739,15 +1739,6 @@ public partial class Manager
 			changed = true;
 		}
 
-		var ditherQuantization = room.NormalDitherQuantization;
-		BeginPropertyRow("Quantization");
-		if (Checkbox("##RoomDitherQuantization", ref ditherQuantization))
-		{
-			using (CaptureRoomUndo("Edit Room Dither", room))
-				room.NormalDitherQuantization = ditherQuantization;
-			changed = true;
-		}
-
 		if (changed)
 		{
 			editorGameDirty = true;
@@ -1773,7 +1764,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.SporeFogColor, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization, room.Zoom);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.SporeFogColor, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.Zoom);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1796,7 +1787,6 @@ public partial class Manager
 		room.LightingDitherScale = settings.LightingDitherScale;
 		room.LightingDitherStrength = settings.LightingDitherStrength;
 		room.NormalDitherSlopeBoost = settings.NormalDitherSlopeBoost;
-		room.NormalDitherQuantization = settings.NormalDitherQuantization;
 		room.Zoom = settings.Zoom;
 		if (room.ReverbAuto)
 			room.RebuildGeometry();

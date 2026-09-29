@@ -39,7 +39,8 @@ sealed class VisualTuning
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
 	public float DitherStrength = 1.0f;
-	public int NormalDitherLevels = 4;
+	// The noise value that leaves the light unchanged: at the texture's mean, noise adds texture without shifting exposure.
+	public float LightNoisePivot = 0.48f;
 	public float SporeFogScale = 1.0f / 80.0f;
 	public Vector2 SporeFogDrift = new(2.0f, -0.5f);
 	public float SporeFogContrast = 1.8f;
@@ -160,7 +161,7 @@ public partial class Manager
 			VisualKnob("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
 			VisualKnob("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
 			VisualKnob("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
-			VisualKnob("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
+			VisualKnob("Noise Pivot", ref Visuals.LightNoisePivot, VisualDefaults.LightNoisePivot, 0, 1);
 			Knobs.EndFlow();
 			PopID();
 		}

@@ -1,6 +1,7 @@
 {
   "position": [40, -69],
   "size": [40, 34],
+  "lightNoise": 0.056,
   "sporeFogStrength": 0.097,
   "reverb": 0.347,
   "colorFields": {

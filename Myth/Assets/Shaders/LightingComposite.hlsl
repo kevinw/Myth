@@ -24,7 +24,9 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
-    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
+    float4 NormalDitherSettings; // x = slope boost, y = unused, z = actor tile field populated, w = rim strength
+    float4 LightNoiseSettings; // x = strength, y = pivot (noise value that leaves the light unchanged)
+    float4 LightNoiseTransform; // xy = uv per world pixel, zw = drift offset in uv
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -63,6 +65,9 @@ SamplerState SporeFogSampler : register(s10, space2);
 
 Texture2D ActorTileFieldTexture : register(t11, space2);
 SamplerState ActorTileFieldSampler : register(s11, space2);
+
+Texture2D LightNoiseTexture : register(t12, space2);
+SamplerState LightNoiseSampler : register(s12, space2);
 
 struct VsInput
 {
@@ -282,7 +287,7 @@ float ellipse_distance(float2 position, float2 origin, float2 axis, float long_r
 float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field,
     float dither_mask, float normal_slope, float detail_priority)
 {
-    if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0 && NormalDitherSettings.y <= 1.0)
+    if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0)
         return light;
 
     float intensity = max(max(light.r, light.g), light.b);
@@ -316,17 +321,7 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
     float scale = dithered_intensity / intensity;
     float strength = saturate((DitherSettings.x > 0.0 ? DitherSettings.z * dither_mask : 0.0) + normal_slope * NormalDitherSettings.x);
-    float3 result = light * lerp(1.0, scale, strength);
-
-    if (NormalDitherSettings.y > 1.0 && normal_slope > 0.0)
-    {
-        float result_intensity = max(max(result.r, result.g), result.b);
-        float steps = NormalDitherSettings.y - 1.0;
-        float quantized = floor(saturate(result_intensity) * steps + threshold) / steps;
-        result *= lerp(1.0, quantized / max(result_intensity, 0.0001), normal_slope);
-    }
-
-    return result;
+    return light * lerp(1.0, scale, strength);
 #else
     // This looks worse because it has less interesting behaviour in dark solid areas, but is more "physically plausible" lighting wise...
     float strength = saturate(DitherSettings.z * dither_mask);
@@ -409,6 +404,14 @@ float4 fragment_main(VsOutput input) : SV_Target0
         // is never darkened - AO only lands on actual background tiles.
         float coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).r;
         background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
+    }
+
+    // Drifting noise in the background light, centred on its pivot so it adds texture and
+    // movement without shifting exposure; the dither quantizer then breaks it into patterns.
+    if (LightNoiseSettings.x > 0.0)
+    {
+        float noise = LightNoiseTexture.Sample(LightNoiseSampler, world_pixel * LightNoiseTransform.xy - LightNoiseTransform.zw).r;
+        background_light.rgb *= max(0.0, 1.0 + LightNoiseSettings.x * (noise - LightNoiseSettings.y));
     }
 
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,

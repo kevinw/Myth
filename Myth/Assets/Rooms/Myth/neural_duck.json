@@ -4,7 +4,7 @@
   "musicArea": "Silence",
   "ambientColor": "252525",
   "ambientIntensity": 1.428,
-  "lightNoise": 0,
+  "lightNoise": 0.376,
   "reverb": 0.143,
   "ditherStrength": 0.061,
   "sun": {
