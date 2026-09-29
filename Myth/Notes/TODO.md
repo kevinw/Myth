@@ -1,3 +1,4 @@
+- idea: YOU place the save points. you have a limited amount. secret mechanic to tunnel into them to warp.
 - do some automated research on https://steamdb.info/charts/?tagid=1628&sort=peak
 - try picking an mid jump attack direction by doing an actor scan (could be gated by time...) to address a particular T&P pain point
 scripting console: Roslyn CSharpScript (Microsoft.CodeAnalysis.CSharp.Scripting) with the live Game as host object -- evaluate C# against the running room to poke actors, spawn things, run one-off measurements. No EnC needed, so it's a fraction of the machinery of live code reload and probably scratches most of the same itch.

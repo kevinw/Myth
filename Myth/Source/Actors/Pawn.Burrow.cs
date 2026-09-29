@@ -42,10 +42,6 @@ public abstract partial class Pawn
 	static float BudBurrowDotRadius => 2.25f;
 	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
-	static float BurrowRumbleIdle => 0.025f;
-	static float BurrowRumbleSpeed => 0.04f;
-	static float BurrowRumbleClimb => 0.015f;
-	static float BurrowRumblePulse => 0.025f;
 	static float BurrowRumblePulseStep => 0.0125f;
 	static float BurrowRumbleDuration => 0.05f;
 	static float BurrowStuckPulseSpeed => 3.5f;
@@ -879,16 +875,8 @@ public abstract partial class Pawn
 
 	readonly PixelSortTrail burrowChurn = new();
 
-	public override void StirPixelSort(PixelSortCanvas canvas)
-	{
-		const float BurrowChurnLife = 0.8f;
-		const float BurrowChurnWidth = 6f;
-		const float BurrowChurnReach = 17f;
-		const float BurrowChurnFeather = 0.55f;
-		burrowChurn.Stir(canvas, BurrowChurnLife, BurrowChurnWidth,
-			new(PixelSortLayer.Frame, default, 1, Reach: BurrowChurnReach, RelaxRate: 40,
-				Feather: BurrowChurnFeather));
-	}
+	public override void StirPixelSort(PixelSortCanvas canvas) =>
+		burrowChurn.Stir(canvas, life: 0.8f, width: 6f, new(PixelSortLayer.Frame, default, 1, Reach: 17f, RelaxRate: 40, Feather: 0.55f));
 
 	protected void UpdateBurrowAlways()
 	{
@@ -929,6 +917,7 @@ public abstract partial class Pawn
 	{
 		if (input.AttackPressed)
 		{
+			// TODO: limit to 3 per burrow or something
 			Game.Create<BurrowBomb>(Position);
 		}
 	}
@@ -941,6 +930,11 @@ public abstract partial class Pawn
 		if (RumbleControllerIndex is null)
 			return;
 
+		const float BurrowRumbleIdle = 0.025f;
+		const float BurrowRumbleSpeed = 0.04f;
+		const float BurrowRumbleClimb = 0.015f;
+		const float BurrowRumblePulse = 0.025f;
+		
 		var speed = Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0, 1);
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		var low = BurrowRumbleIdle + speed * BurrowRumbleSpeed + climb * BurrowRumbleClimb;
