@@ -53,12 +53,12 @@ sealed class VisualTuning
 	public float NormalLightGain = 2.15f;
 	// Light picked out along a sprite's silhouette, where the cutout normals lean outward. Its
 	// own gain so a readable character rim doesn't drag every tile bevel up with it.
-	public float NormalRimGain = 1.6f;
-	public float NormalRimSharpness = 2.0f;
+	public float NormalRimGain = 3.5f;
+	public float NormalRimSharpness = 3.5f;
 	// How far actors that opt in (UsesAuthoredColor) hold their own palette against the room's
 	// light colour. 0 is ordinary multiplicative lighting; 1 responds to light amount only.
 	public float AuthoredColorResponse = 0.7f;
-	public float RimLightStrength = 0.18f;
+	public float RimLightStrength = 0.05f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
 	public float SporeFogScale = 1.0f / 80.0f;
