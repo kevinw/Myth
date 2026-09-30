@@ -8,8 +8,11 @@ namespace Myth;
 public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runup, bool crawl, int groundedFrames, Point2[] offsets, PawnInput[] inputs, RectInt body)
 {
 	// Jump: from standing, after running Runup px. WalkOff: run Runup px off a ledge. Fall: drop from rest in
-	// the air. Kick: kick off a wall on the Dir side.
-	public enum Kinds { Jump, WalkOff, Fall, Kick }
+	// the air. Kick: kick off a wall on the Dir side. Rise and Dig are burrows, which the room shapes, so only
+	// their input is recorded: hop in place, land holding jump to dive in, then hold Dir along the surface, with
+	// Steer (the vertical input) until the burrow has turned that way, to take a line's branch. Rise lets go partway up a wall on the Dir side and keeps holding into it: its
+	// Offsets are the launch the pop gives, up to its top. Dig stops and pops out where it is.
+	public enum Kinds { Jump, WalkOff, Fall, Kick, Rise, Dig }
 
 	public readonly Kinds Kind = kind;
 	public readonly int Dir = dir;
@@ -23,14 +26,15 @@ public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runu
 	public readonly Point2[] Offsets = offsets;
 	public readonly PawnInput[] Inputs = inputs;
 	// Everywhere the body goes along the whole recording, relative to the start.
+	public bool Burrows => Kind is Kinds.Rise or Kinds.Dig;
 	public readonly RectInt Reach = offsets.Aggregate(body, (reach, offset) => reach.Conflate(body + offset));
 }
 
 // The shape and speed of whoever is moving: its standing and crouching hitboxes, and its ground/air speed
 // multiplier. Moves are recorded per body, since a bigger or slower pawn jumps differently.
-public readonly record struct ReachBody(RectInt Stand, RectInt Duck, float Speed = 1)
+public readonly record struct ReachBody(RectInt Stand, RectInt Duck, float Speed = 1, PawnAbilities Abilities = PawnAbilities.None)
 {
-	public static ReachBody Bud => new(new(-4, -12, 8, 12), new(-4, -6, 8, 6));
+	public static ReachBody Bud => new(new(-4, -12, 8, 12), new(-4, -6, 8, 6), Abilities: PawnAbilities.Burrow);
 }
 
 public static class ReachMoves
@@ -81,6 +85,16 @@ public static class ReachMoves
 			foreach (var steer in (ReadOnlySpan<int>)[-side, 0, side])
 				if (RecordKick(game, body, side, hold, steer) is { } kick)
 					moves.Add(kick);
+			if (body.Abilities.Has(PawnAbilities.Burrow))
+				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
+				{
+					var rise = RecordRise(game, body, dir);
+					foreach (var steer in (ReadOnlySpan<int>)[0, -1, 1])
+					{
+						moves.Add(new(ReachMove.Kinds.Rise, dir, steer, 0, false, 0, rise, [], body.Stand));
+						moves.Add(new(ReachMove.Kinds.Dig, dir, steer, 0, false, 0, [Point2.Zero], [], body.Stand));
+					}
+				}
 		});
 		return moves;
 	}
@@ -121,10 +135,7 @@ public static class ReachMoves
 
 	static ReachMove? RecordKick(Game game, ReachBody body, int side, float hold, int steer)
 	{
-		var wall = side > 0
-			? new RectInt(SimOrigin.X + body.Stand.Right, SimOrigin.Y - 400, 8, 800)
-			: new RectInt(SimOrigin.X + body.Stand.Left - 8, SimOrigin.Y - 400, 8, 800);
-		var pawn = new SimPawn(game, body, wall);
+		var pawn = new SimPawn(game, body, WallBeside(body, side));
 		var move = Run(pawn, ReachMove.Kinds.Kick, side, steer, frame => frame == 0
 			? new(side, 0, JumpPressed: true, JumpDown: true, DashPressed: false)
 			: new(steer, 0, JumpPressed: false, JumpDown: frame * Dt < hold, DashPressed: false, AllowWallJump: false));
@@ -133,6 +144,27 @@ public static class ReachMoves
 		Console.WriteLine($"[ReachMoves] kick off side {side} didn't push away; skipped");
 		return null;
 	}
+
+	static Point2[] RecordRise(Game game, ReachBody body, int side)
+	{
+		var pawn = new SimPawn(game, body, WallBeside(body, side));
+		pawn.PopUpWall();
+		pawn.Input = new(side, 0, false, false, false, AllowWallJump: false);
+		var offsets = new List<Point2> { Point2.Zero };
+		for (var frame = 0; frame < MaxFrames; frame++)
+		{
+			pawn.Game.AdvanceReplayClock(Dt);
+			pawn.Update();
+			if (pawn.Position.Y - SimOrigin.Y > offsets[^1].Y)
+				break;
+			offsets.Add(pawn.Position - SimOrigin);
+		}
+		return [.. offsets];
+	}
+
+	static RectInt WallBeside(ReachBody body, int side) => side > 0
+		? new(SimOrigin.X + body.Stand.Right, SimOrigin.Y - 400, 8, 800)
+		: new(SimOrigin.X + body.Stand.Left - 8, SimOrigin.Y - 400, 8, 800);
 
 	// Removes the floor (or wall) once the body leaves it, so it can't catch the rest of the path.
 	static ReachMove Run(SimPawn pawn, ReachMove.Kinds kind, int dir, int steer, Func<int, PawnInput> input, int runup = -1, bool crawl = false)
@@ -188,5 +220,13 @@ public static class ReachMoves
 		}
 
 		public override PawnInput GetInput() => Input;
+
+		// As PopOutOfBurrow leaves a climb up a wall. The frame of the pop takes gravity without moving.
+		public void PopUpWall()
+		{
+			Velocity = new(0, BurrowWallSlideLaunch + Gravity * JumpHoldGravityMultiplier * Dt);
+			jumpTimer = BurrowPopTime - Dt;
+			jumpCutImmune = true;
+		}
 	}
 }

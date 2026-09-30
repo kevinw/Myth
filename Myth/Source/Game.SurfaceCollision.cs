@@ -5,6 +5,33 @@ namespace Myth;
 
 public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Distance, Actor? Actor, Room.SlopeTile? Slope, RectInt? Rect, Vector2 Correction);
 
+// Where a burrow is and which way it's going: along a surface, or along a BurrowLine.
+public struct BurrowCursor
+{
+	public Point2 Heading;    // world travel direction along the surface
+	public bool SolidLeft;    // walk handedness (= orbit direction); only flips on a fresh press
+	public Vector2 Toward;    // surface normal (into solid) at the burrow point
+	public BurrowLine? Line;
+	public BurrowLine? LineExit; // the line just left, not to be re-entered until clear of its end
+	public int Segment;
+	public float T;
+	public int Direction;
+	public Vector2 LineHeading;
+	public bool Blocked;      // at a line's end inside solid, with no surface to take and no room to pop out
+
+	public readonly Vector2 Travel => Line != null ? LineHeading : Heading;
+
+	// Climbing slows it: a straight-up heading runs at BurrowClimbSpeedMultiplier, a 45° slope lands in
+	// between on its own (the cardinal walker alternates up/flat steps), and descending counts as flat.
+	public readonly float CruiseSpeed(bool dashing)
+		=> Pawn.BurrowMaxSpeed * (dashing ? Pawn.DashBurrowSpeedMultiplier : 1f) * (Line?.SpeedScale ?? 1f) *
+			(1f - (1f - Pawn.BurrowClimbSpeedMultiplier) * MathF.Max(0, -Travel.Y));
+}
+
+// How a stretch of burrow travel ended, where it's the traveller's to settle: a surface it can't go further
+// along, a door it went through, a switch it has stopped on, or a line that ran out with no junction to take.
+public enum BurrowTravel { Moving, DeadEnd, Door, Switch, LineEnd }
+
 public partial class Game
 {
 	internal static float BurrowLineAttachDistance => 3;
@@ -12,9 +39,113 @@ public partial class Game
 	static readonly List<Vector2> surfaceTraceForward = [];
 	static readonly List<Vector2> surfaceTraceBack = [];
 	static readonly bool burrowTraceEnabled = Environment.GetEnvironmentVariable("MYTH_BURROW_TRACE") is { Length: > 0 } value && value != "0";
-	internal bool BurrowTraceEnabled => burrowTraceEnabled;
+	internal bool BurrowTraceEnabled => burrowTraceEnabled && !BurrowTraceQuiet;
+	// Set around travel that's only being looked ahead along.
+	internal bool BurrowTraceQuiet;
 	internal void TraceBurrow(string message)
 		=> Console.WriteLine($"[Burrow t={Time.Seconds:0.000} room={CurrentRoom?.Id ?? "?"}] {message}");
+
+	// A burrow's travel, `pixels` of it: onto a line whose end it has come to, along the surface or the line,
+	// and through the line's junctions by the held `intent`. `doors` takes the game through a burrow door.
+	public BurrowTravel TravelBurrow(ref Point2 at, ref BurrowCursor burrow, int pixels, Vector2 intent, bool doors, out float remaining)
+	{
+		remaining = pixels;
+		if (burrow.Line == null && TryEnterBurrowLine(at, burrow.Heading, burrow.LineExit, BurrowLineAttachDistance, intent,
+			out var enteredLine, out burrow.Segment, out burrow.T, out burrow.Direction, out var entryPoint, out burrow.LineHeading))
+		{
+			burrow.Line = enteredLine;
+			at = (Point2)entryPoint;
+			burrow.LineExit = null;
+			if (BurrowTraceEnabled)
+				TraceBurrow(
+					$"line entered id={burrow.Line?.ActorId ?? "?"} position={at} segment={burrow.Segment} t={burrow.T:0.###} direction={burrow.Direction} heading={burrow.LineHeading}");
+		}
+
+		if (burrow.Line == null)
+		{
+			var moved = WalkSurface(ref at, ref burrow.Heading, burrow.SolidLeft, pixels);
+			burrow.Toward = SurfaceNormal(burrow.Heading, burrow.SolidLeft);
+			return moved == 0 ? BurrowTravel.DeadEnd : BurrowTravel.Moving;
+		}
+
+		for (var junctions = 0; junctions < BurrowLine.MaxJunctionTransfers; junctions++)
+		{
+			var exitedLine = burrow.Line.Advance(ref burrow.Segment, ref burrow.T, burrow.Direction,
+				remaining, out var linePoint, out burrow.LineHeading, out remaining, out var junctionPointIndex);
+			at = (Point2)linePoint;
+			if (!exitedLine)
+				break;
+
+			if (BurrowTraceEnabled)
+				TraceBurrow(
+					$"line endpoint reached id={burrow.Line.ActorId ?? "?"} position={at} heading={burrow.LineHeading} intent={intent}");
+			if (doors && junctionPointIndex >= 0 && burrow.Line.IsDoorPoint(junctionPointIndex) &&
+				TransitionToBurrowDoor(burrow.Line, junctionPointIndex, out var doorLine, out var doorPoint))
+			{
+				burrow.Line = doorLine;
+				burrow.Segment = doorPoint == 0 ? 0 : burrow.Line.Points.Length - 2;
+				burrow.T = doorPoint == 0 ? 0 : 1;
+				burrow.Direction = doorPoint == 0 ? 1 : -1;
+				burrow.LineHeading = burrow.Line.SegmentHeading(burrow.Segment, burrow.Direction);
+				at = (Point2)burrow.Line.WorldPoint(doorPoint);
+				burrow.LineExit = null;
+				burrow.Blocked = false;
+				if (BurrowTraceEnabled)
+					TraceBurrow(
+						$"line sublayer handoff id={burrow.Line.ActorId ?? "?"} position={at} heading={burrow.LineHeading}");
+				return BurrowTravel.Door;
+			}
+			if (junctionPointIndex >= 0 && burrow.Line.IsSwitchPoint(junctionPointIndex))
+				return BurrowTravel.Switch;
+			if (junctionPointIndex < 0 || !TryContinueBurrowLine(burrow.Line, junctionPointIndex,
+				burrow.Segment, burrow.Direction, burrow.LineHeading, intent,
+				out var nextLine, out burrow.Segment, out burrow.T, out burrow.Direction,
+				out var junctionPoint, out burrow.LineHeading))
+				return BurrowTravel.LineEnd;
+
+			var previousLineId = burrow.Line.ActorId ?? "?";
+			burrow.Line = nextLine!;
+			at = (Point2)junctionPoint;
+			burrow.Blocked = false;
+			if (BurrowTraceEnabled)
+				TraceBurrow(
+					$"line junction {previousLineId} -> {burrow.Line.ActorId ?? "?"} position={at} heading={burrow.LineHeading} remaining={remaining:0.##}");
+			if (remaining <= 0)
+				break;
+		}
+		return BurrowTravel.Moving;
+	}
+
+	// Off the end of its line and onto the surface there, if there is one.
+	public bool AttachBurrow(ref Point2 at, ref BurrowCursor burrow, Vector2 intent)
+	{
+		if (!TryAttachBurrowSurface(at, burrow.LineHeading, intent, Pawn.BurrowAttachProbe,
+			out var surfacePosition, out var surfaceHeading, out var surfaceSolidLeft, out var surfaceToward))
+			return false;
+
+		var exitedLineId = burrow.Line?.ActorId ?? "?";
+		burrow.LineExit = burrow.Line;
+		burrow.Line = null;
+		at = surfacePosition;
+		burrow.Heading = surfaceHeading;
+		burrow.SolidLeft = surfaceSolidLeft;
+		burrow.Toward = surfaceToward;
+		burrow.Blocked = false;
+		if (BurrowTraceEnabled)
+			TraceBurrow(
+				$"line attached to surface id={exitedLineId} position={at} heading={burrow.Heading} solidLeft={burrow.SolidLeft} normal={burrow.Toward}");
+		return true;
+	}
+
+	internal void ReleaseBurrowLineExit(ref BurrowCursor burrow, Point2 at)
+	{
+		if (burrow.LineExit == null || burrow.LineExit.NearEndpoint(at, 4))
+			return;
+		if (BurrowTraceEnabled)
+			TraceBurrow(
+				$"line re-entry guard cleared id={burrow.LineExit.ActorId ?? "?"} position={at}");
+		burrow.LineExit = null;
+	}
 
 	// Trace the route the burrow movement would take from an existing surface state, including
 	// transfers onto authored BurrowLines before the boundary walker chooses its next solid edge.

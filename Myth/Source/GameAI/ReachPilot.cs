@@ -13,7 +13,7 @@ public readonly record struct ReachManner(float WindupMin, float WindupMax, floa
 // up to, for the pawn to show however suits it.
 public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 {
-	public enum Phases { Idle, Walking, Winding, Timing, Moving, Riding, Climbing, Swimming, Stuck }
+	public enum Phases { Idle, Walking, Winding, Timing, Moving, Burrowing, Riding, Climbing, Swimming, Stuck }
 
 	static int StrayTolerance => 3;
 	static float ArriveGain => 8f;
@@ -25,6 +25,10 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	static float MissRisk => 0.25f;
 	static int LandingGrace => 6;
 	static float TimingRecheck => 0.25f;
+	// A burrow going faster than a pixel a frame can step over the spot it lets go at: a gap this small that
+	// has started growing again counts as there.
+	static int BurrowPassTolerance => 8;
+	static float BurrowPatience => 6f;
 
 	public string Label { get; private set; } = "";
 	public Phases Phase { get; private set; }
@@ -53,6 +57,10 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	bool release;   // a drop through a jumpthru or off a rope starts with down+jump
 	bool released;
 	float strokeTimer;
+	bool dug;       // a burrow has dived in
+	bool dugOut;    // and reached the spot it lets go at
+	int burrowGap;
+	bool steered;   // and turned the way its Steer asked
 
 	public void Cancel() => move = -1;
 
@@ -100,6 +108,8 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	{
 		input = default;
 		var recorded = field.Moves[move];
+		if (recorded.Burrows)
+			return Burrow(recorded, out input);
 		if (release)
 		{
 			release = false;
@@ -157,10 +167,57 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 		checkStray = !fromRope;
 		release = field.Moves[move].Kind == ReachMove.Kinds.Fall && (fromRope || owner.IsGrounded);
 		released = false;
+		dug = dugOut = steered = false;
+		burrowGap = int.MaxValue;
 		Label = field.Moves[move].Kind.ToString();
 		Phase = Phases.Moving;
 		Heading = intended.Position;
 		return Continue(field, out var input) ? input : default;
+	}
+
+	// A burrow's three stretches: the hop that lands holding jump to dive in; the dig, holding the move's input
+	// until the burrow point is where the edge lets go (a Rise lets go of jump there and pops on up the wall, a
+	// Dig lets go of the direction, coasts to a stop and pops out in place); then the pop, held into the wall
+	// for a Rise until it tops out or lands.
+	bool Burrow(ReachMove dig, out PawnInput input)
+	{
+		input = default;
+		var first = lastFrame < 0;
+		lastFrame = 0;
+		moveTime += owner.Time.Delta;
+		if (moveTime > BurrowPatience)
+			return false;
+		var rising = dig.Kind == ReachMove.Kinds.Rise;
+		if (owner.State == Pawn.States.Burrow)
+		{
+			var off = owner.Position - moveStart;
+			var gap = Math.Max(Math.Abs(off.X), Math.Abs(off.Y));
+			dugOut |= gap <= 1 || gap > burrowGap && burrowGap <= BurrowPassTolerance;
+			burrowGap = gap;
+			dug = true;
+			steered |= owner.BurrowTravelHeading.Y * dig.Steer > 0.5f;
+			Label = "burrow";
+			Phase = Phases.Burrowing;
+			input = dugOut && !rising
+				? new(0, 0, false, JumpDown: owner.BurrowSpeed > 0, false)
+				: new(dig.Dir, steered ? 0 : dig.Steer, false, JumpDown: !dugOut, false);
+			return true;
+		}
+		if (!dug)
+		{
+			if (!first && owner.IsGrounded)
+				return false;
+			Label = "dive";
+			input = new(0, 0, JumpPressed: first, JumpDown: true, false, AllowWallJump: false);
+			return true;
+		}
+		if (owner.IsGrounded || owner.InWater ||
+			intended.Kind == ReachField.NodeKind.Wall && (owner.Position.Y <= intended.Position.Y + 1 || owner.Velocity.Y > 0))
+			return false;
+		Label = "pop";
+		Phase = Phases.Moving;
+		input = new(rising ? dig.Dir : 0, 0, false, false, false, AllowWallJump: false);
+		return true;
 	}
 
 	bool Arrived()

@@ -37,7 +37,7 @@ public abstract partial class Pawn
 
 	void UpdateQuantumTunnel(Vector2 intent)
 	{
-		quantumArmed = QuantumTunnelEnabled && burrowLine == null && !burrowOrbiting
+		quantumArmed = QuantumTunnelEnabled && burrow.Line == null && !burrowOrbiting
 			&& burrowSpeed <= QuantumStillSpeed && HoldingIntoSurface(intent) && TryFindQuantumExit(out quantumExit);
 
 		quantumCharge = Calc.Approach(quantumCharge, quantumArmed ? 1 : 0,
@@ -46,7 +46,7 @@ public abstract partial class Pawn
 		// The far line doubles as the check that there is a surface to arrive on: if the trace
 		// can't walk that boundary there's nothing to see and nothing to cross to.
 		quantumGlowPoints.Clear();
-		if (quantumCharge > 0 && !Game.TraceBurrowPathFromState(quantumExit, burrowHeading, !burrowSolidLeft, null,
+		if (quantumCharge > 0 && !Game.TraceBurrowPathFromState(quantumExit, burrow.Heading, !burrow.SolidLeft, null,
 			BurrowGlowArc * burrowSpreadScale * Calc.Lerp(QuantumSeedGlow, 1f, quantumCharge), quantumGlowPoints))
 			(quantumCharge, quantumArmed) = (0, false);
 		else if (quantumCharge >= 1)
@@ -54,16 +54,16 @@ public abstract partial class Pawn
 	}
 
 	bool HoldingIntoSurface(Vector2 intent)
-		=> intent.LengthSquared() > 0.25f && Vector2.Dot(Vector2.Normalize(intent), burrowToward) >= QuantumIntoWallDot;
+		=> intent.LengthSquared() > 0.25f && Vector2.Dot(Vector2.Normalize(intent), burrow.Toward) >= QuantumIntoWallDot;
 
 	// Straight through the solid under the burrow point: at most a tile of it, open on the far
 	// side. Actor solids count, so a one-tile platform or a phased-in flip block is tunnelable too.
 	bool TryFindQuantumExit(out Point2 exit)
 	{
 		var thickness = 0;
-		while (thickness <= QuantumMaxThickness && Game.BurrowLineSolidAt((Vector2)Position + burrowToward * (thickness + 0.5f)))
+		while (thickness <= QuantumMaxThickness && Game.BurrowLineSolidAt((Vector2)Position + burrow.Toward * (thickness + 0.5f)))
 			thickness++;
-		exit = Position + (burrowToward * thickness).RoundToPoint2();
+		exit = Position + (burrow.Toward * thickness).RoundToPoint2();
 		return thickness > 0 && thickness <= QuantumMaxThickness;
 	}
 
@@ -72,23 +72,23 @@ public abstract partial class Pawn
 	void TunnelThroughWall()
 	{
 		var entry = (Vector2)Position;
-		var entryOutward = -burrowToward;
+		var entryOutward = -burrow.Toward;
 		Position = quantumExit;
-		burrowToward = -burrowToward;
-		burrowSolidLeft = !burrowSolidLeft;
-		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+		burrow.Toward = -burrow.Toward;
+		burrow.SolidLeft = !burrow.SolidLeft;
+		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrow.Toward);
 		burrowSpeed = 0;
 		burrowMoveRemainder = 0;
-		burrowExitBlocked = false;
+		burrow.Blocked = false;
 		quantumCharge = 0;
 		burrowPulseTimer = BurrowPulseTime;
 		quantumFlashTimer = QuantumFlashTime;
 		quantumFlashFrom = entry + entryOutward * QuantumFlashOvershoot;
 		quantumFlashTo = (Vector2)Position - entryOutward * QuantumFlashOvershoot;
 		if (Game.BurrowTraceEnabled)
-			Game.TraceBurrow($"quantum tunnel {entry} -> {Position} normal={burrowToward} solidLeft={burrowSolidLeft}");
+			Game.TraceBurrow($"quantum tunnel {entry} -> {Position} normal={burrow.Toward} solidLeft={burrow.SolidLeft}");
 		EmitQuantumSparks(entry, entryOutward);
-		EmitQuantumSparks(Position, -burrowToward);
+		EmitQuantumSparks(Position, -burrow.Toward);
 		UpdateBurrowShift();
 		AudioEvent("player/burrow_tunnel"); // wants its own event; missing ones are logged once
 		AudioEvent("player/burrow_start");

@@ -10,31 +10,32 @@ public abstract partial class Pawn
 	static float BurrowUpgradeSeconds => 0.5f; // each BurrowUpgrade pickup adds this much burrow time
 
 	// Max burrow time, derived from the collected BurrowUpgrade pickups (no summed save state).
-	internal float MaxBurrowDuration => BurrowDuration + Game.PickupCount(PickupKind.BurrowUpgrade) * BurrowUpgradeSeconds;
+	internal float MaxBurrowDuration => BurrowDurationFor(Game);
+	internal static float BurrowDurationFor(Game game) => BurrowDuration + game.PickupCount(PickupKind.BurrowUpgrade) * BurrowUpgradeSeconds;
 
 	// HUD readouts for the stamina bar: capacity drives its width, while fill stays depleted and
 	// dimmed after a burrow until the existing CanBurrow gate says the ability has re-armed.
 	internal float BurrowCapacitySeconds => MaxBurrowDuration;
 	internal float BurrowFill => burrowHudFill;
 	internal float BurrowBarOpacity => burrowHudSpent ? 0.5f : 1f;
-	static float BurrowMaxSpeed => 150f;
-	static float DashBurrowSpeedMultiplier => 1.3f;
-	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
-	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
+	internal static float BurrowMaxSpeed => 150f;
+	internal static float DashBurrowSpeedMultiplier => 1.3f;
+	internal static float BurrowAccel => 500f;            // ease up to speed instead of snapping
+	internal static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
 	static float BurrowJunctionSeekDistance => 8f;
 	static int BurrowTorchFlickerRadius => 4;
 	static float BurrowSwitchMagnetDistance => 7f;
 	static float BurrowSwitchMagnetSpeed => 42f;
-	static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
+	internal static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
 													 // The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
 	static float BurrowPopForce => JumpForce * 1.18f;
-	static float BurrowPopTime => JumpTime * 0.9f;
-	static float BurrowWallSlideLaunch => JumpForce * 1.2f; // strong upward velocity when a wall climb pops into a slide
+	protected static float BurrowPopTime => JumpTime * 0.9f;
+	protected static float BurrowWallSlideLaunch => JumpForce * 1.2f; // strong upward velocity when a wall climb pops into a slide
 	const int BurrowSubmergeDepth = 4;
 	const int BurrowJumpthruSubmergeDepth = 0; // thin one-way platforms: ride on top, don't sink through
-	const int BurrowAttachProbe = 8;
+	internal const int BurrowAttachProbe = 8;
 	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
 	static float BurrowGlowWeight => 1.5f;
 	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
@@ -60,23 +61,15 @@ public abstract partial class Pawn
 	protected float burrowHudFill = 1;
 	protected bool burrowHudSpent;
 	protected Bud? burrowPassenger;
-	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
-	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
+	BurrowCursor burrow = new() { Heading = new(1, 0), Toward = Vector2.UnitY };
 	Vector2 burrowIntent;
 	Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
 	bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
 	bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
 	protected Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
-	Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
 	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	float burrowSpeed;                  // current travel speed; eases via accel/friction
 	bool burrowOnJumpthru;              // current surface is a one-way platform (ride on top, no submerge)
-	BurrowLine? burrowLine;
-	BurrowLine? burrowLineExit;
-	int burrowLineSegment;
-	float burrowLineT;
-	int burrowLineDirection;
-	Vector2 burrowLineHeading;
 	Point2 burrowRoomTransitionDirection;
 	readonly List<Vector2> glowPoints = [];
 	readonly List<Vector2> burrowLineGlowBack = [];
@@ -91,16 +84,16 @@ public abstract partial class Pawn
 
 	int burrowIntervalIndex;      // which countdown interval we're in (0-based); a change fires a pulse + tick
 	float burrowPulseTimer;       // counts down after each interval boundary; flashes the line brighter
-	bool burrowExitBlocked;       // a release/timeout inside solid guide geometry cannot produce a valid player hitbox
 	float burrowSpreadScale = 1f; // eased multiplier on the glow arc length; shrinks as intervals elapse
 
 	float burrowLeapCoyote;               // time left to still pop UP after rounding a downward corner
 	Vector2 burrowLeapExitDir;            // remembered outward dir (from riding a top surface) for that leap
 	float burrowLeapTravelX;              // remembered horizontal glide so the coyote leap keeps its arc
 	static float BurrowLeapCoyoteTime => 0.12f;
-	Vector2 BurrowTravelHeading => burrowLine != null ? burrowLineHeading : burrowHeading;
+	internal float BurrowSpeed => burrowSpeed;
+	internal Vector2 BurrowTravelHeading => burrow.Travel;
 	internal bool AtBurrowLineEndpoint(BurrowLine line, int pointIndex)
-		=> State == States.Burrow && burrowLine == line &&
+		=> State == States.Burrow && burrow.Line == line &&
 			Vector2.DistanceSquared(Position, line.WorldPoint(pointIndex)) <= 0.25f;
 
 	// Only the player drags Bud along and flips the room's plane, and only the player has hands
@@ -118,8 +111,8 @@ public abstract partial class Pawn
 		if (!CanBurrow()) return false;
 
 		Hitbox = new(BurrowHitboxRect);
-		burrowToward = Vector2.UnitY;
-		if (!Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
+		burrow.Toward = Vector2.UnitY;
+		if (!Game.SnapToSurface(ref Position, ref burrow.Toward, BurrowAttachProbe))
 		{
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow($"start rejected: no surface near={Position}");
@@ -135,7 +128,7 @@ public abstract partial class Pawn
 		burrowHudSpent = false;
 		burrowIntervalIndex = 0;
 		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
-		burrowExitBlocked = false;
+		burrow.Blocked = false;
 		burrowSpreadScale = 1f;
 		burrowLeapCoyote = 0;
 		burrowEnterTimer = BurrowEnterSquishTime;
@@ -143,18 +136,18 @@ public abstract partial class Pawn
 		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
 		burrowOrbiting = false;
 		burrowReverseQueued = false;
-		burrowLine = null;
-		burrowLineExit = null;
+		burrow.Line = null;
+		burrow.LineExit = null;
 		burrowRoomTransitionDirection = Point2.Zero;
 		ResetQuantumTunnel();
 		// Complementing the room preserves the boundary in place, but moves its solid to the
 		// other side. Keep the tangent heading so the burrow continues along the same contour.
-		burrowSolidLeft = false;
-		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
+		burrow.SolidLeft = false;
+		burrow.Heading = new Point2((int)MathF.Round(burrow.Toward.Y), -(int)MathF.Round(burrow.Toward.X));
 		if (TryToggleBurrowRoomInverse())
 		{
-			burrowToward = -burrowToward;
-			burrowSolidLeft = true;
+			burrow.Toward = -burrow.Toward;
+			burrow.SolidLeft = true;
 		}
 
 		// Carry the landing's horizontal momentum into the burrow. Head the way we were
@@ -165,17 +158,17 @@ public abstract partial class Pawn
 		var entryDirection = previousVelocity.X != 0
 			? Math.Sign(previousVelocity.X)
 			: input.DashDown ? Math.Sign(horizontalInput) : 0;
-		if (entryDirection != 0 && burrowHeading.X != 0
-			&& entryDirection != Math.Sign(burrowHeading.X))
+		if (entryDirection != 0 && burrow.Heading.X != 0
+			&& entryDirection != Math.Sign(burrow.Heading.X))
 		{
-			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
-			burrowSolidLeft = !burrowSolidLeft;
+			burrow.Heading = new Point2(-burrow.Heading.X, -burrow.Heading.Y);
+			burrow.SolidLeft = !burrow.SolidLeft;
 		}
 		var maxSpeed = BurrowMaxSpeed * (input.DashDown ? DashBurrowSpeedMultiplier : 1f);
 		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), maxSpeed);
 
 		State = States.Burrow;
-		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrow.Toward);
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
 
@@ -188,7 +181,7 @@ public abstract partial class Pawn
 		AudioEvent("player/burrow_start");
 		if (Game.BurrowTraceEnabled)
 			Game.TraceBurrow(
-				$"start position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward} speed={burrowSpeed:0.##} passenger={burrowPassenger != null}");
+				$"start position={Position} heading={burrow.Heading} solidLeft={burrow.SolidLeft} normal={burrow.Toward} speed={burrowSpeed:0.##} passenger={burrowPassenger != null}");
 		return true;
 	}
 
@@ -237,11 +230,11 @@ public abstract partial class Pawn
 		{
 			burrowGlowAnchor = Position;
 		}
-		if (burrowLine != null)
-			burrowLine.Trace(burrowLineSegment, burrowLineT, burrowLineDirection,
+		if (burrow.Line != null)
+			burrow.Line.Trace(burrow.Segment, burrow.T, burrow.Direction,
 				burrowIntent, arcLength, glowPoints, burrowLineGlowBack);
 		else
-			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, burrowLineExit,
+			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrow.Heading, burrow.SolidLeft, burrow.LineExit,
 				arcLength, glowPoints, burrowIntent);
 	}
 
@@ -286,17 +279,17 @@ public abstract partial class Pawn
 	// at the top instead of getting the sideways pop off the vertical face.
 	void UpdateBurrowLeapCoyote()
 	{
-		if (burrowLine != null)
+		if (burrow.Line != null)
 		{
 			burrowLeapCoyote = Calc.Approach(burrowLeapCoyote, 0, Time.Delta);
 			return;
 		}
 
-		if (burrowToward.Y > 0.5f)
+		if (burrow.Toward.Y > 0.5f)
 		{
 			burrowLeapCoyote = BurrowLeapCoyoteTime;
-			burrowLeapExitDir = burrowToward;
-			burrowLeapTravelX = burrowHeading.X != 0 ? Math.Sign(burrowHeading.X) * burrowSpeed : 0f;
+			burrowLeapExitDir = burrow.Toward;
+			burrowLeapTravelX = burrow.Heading.X != 0 ? Math.Sign(burrow.Heading.X) * burrowSpeed : 0f;
 		}
 		else
 			burrowLeapCoyote = Calc.Approach(burrowLeapCoyote, 0, Time.Delta);
@@ -306,7 +299,7 @@ public abstract partial class Pawn
 	{
 		if (PerfToggles.HeadSlide) return;
 		var depth = burrowOnJumpthru ? BurrowJumpthruSubmergeDepth : BurrowSubmergeDepth;
-		Shift = State == States.Burrow ? burrowToward * depth : new();
+		Shift = State == States.Burrow ? burrow.Toward * depth : new();
 	}
 
 	static float BurrowCooldown => 0.25f;
@@ -333,7 +326,7 @@ public abstract partial class Pawn
 			: direction.X < 0 ? Position.X <= bounds.Left + BurrowRoomEdgeTolerance
 			: direction.Y > 0 ? Position.Y >= bounds.Bottom - BurrowRoomEdgeTolerance
 			: direction.Y < 0 && Position.Y <= bounds.Top + BurrowRoomEdgeTolerance;
-		return atEdge && Game.Transition(direction);
+		return this is Player && atEdge && Game.Transition(direction);
 	}
 
 	void UpdateBurrowRoomTransitionGuard()
@@ -361,7 +354,7 @@ public abstract partial class Pawn
 		{
 			burrowEnterTimer = Calc.Approach(burrowEnterTimer, 0, Time.Delta);
 			var t = 1f - burrowEnterTimer / BurrowEnterSquishTime;
-			var peak = SurfaceSquish(burrowToward, BurrowSquashNormal, BurrowSquashTangent);
+			var peak = SurfaceSquish(burrow.Toward, BurrowSquashNormal, BurrowSquashTangent);
 			Squish = Vector2.Lerp(Vector2.One, peak, t);
 		}
 
@@ -401,17 +394,17 @@ public abstract partial class Pawn
 			Game.TraceBurrow(
 				$"intent ignored as non-tangential intent={intent} travel={BurrowTravelHeading} projection={proj:0.##}");
 		burrowLastIntent = intent;
-		if (pressed && !burrowOrbiting && burrowSpeed <= BurrowReverseFlipSpeed && burrowLine != null &&
-			burrowLine.TryFindJunction(burrowLineSegment, burrowLineT, intent, BurrowJunctionSeekDistance,
-				burrowLineDirection, out var seekDirection, out var seekDistance))
+		if (pressed && !burrowOrbiting && burrowSpeed <= BurrowReverseFlipSpeed && burrow.Line != null &&
+			burrow.Line.TryFindJunction(burrow.Segment, burrow.T, intent, BurrowJunctionSeekDistance,
+				burrow.Direction, out var seekDirection, out var seekDistance))
 		{
-			burrowLineDirection = seekDirection;
-			burrowLineHeading = burrowLine.SegmentHeading(burrowLineSegment, seekDirection);
+			burrow.Direction = seekDirection;
+			burrow.LineHeading = burrow.Line.SegmentHeading(burrow.Segment, seekDirection);
 			burrowReverseQueued = false;
 			burrowOrbiting = true;
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow(
-					$"junction seek intent={intent} direction={seekDirection} distance={seekDistance:0.##} heading={burrowLineHeading}");
+					$"junction seek intent={intent} direction={seekDirection} distance={seekDistance:0.##} heading={burrow.LineHeading}");
 		}
 
 		var move = burrowOrbiting || dashBurrowing;
@@ -421,11 +414,9 @@ public abstract partial class Pawn
 		// slope lands in between on its own (the cardinal walker alternates up/flat steps).
 		// Descending counts as flat, so you keep momentum going down. A queued reversal
 		// targets zero speed (friction) so a direction switch decelerates before flipping.
-		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
-		var maxSpeed = BurrowMaxSpeed * (dashBurrowing ? DashBurrowSpeedMultiplier : 1f) * (burrowLine?.SpeedScale ?? 1f);
-		var targetSpeed = move && !burrowReverseQueued ? maxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
-		if (!burrowReverseQueued && burrowLine?.TryGetSwitchDistance(
-			burrowLineSegment, burrowLineT, burrowLineDirection, out var switchDistance) == true)
+		var targetSpeed = move && !burrowReverseQueued ? burrow.CruiseSpeed(dashBurrowing) : 0f;
+		if (!burrowReverseQueued && burrow.Line?.TryGetSwitchDistance(
+			burrow.Segment, burrow.T, burrow.Direction, out var switchDistance) == true)
 		{
 			if (switchDistance <= 0.01f)
 				targetSpeed = 0;
@@ -441,120 +432,53 @@ public abstract partial class Pawn
 		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
 		{
 			var oldHeading = BurrowTravelHeading;
-			if (burrowLine != null)
+			if (burrow.Line != null)
 			{
-				burrowLineDirection *= -1;
-				burrowLineHeading = -burrowLineHeading;
+				burrow.Direction *= -1;
+				burrow.LineHeading = -burrow.LineHeading;
 			}
 			else
 			{
-				burrowHeading = new(-burrowHeading.X, -burrowHeading.Y);
-				burrowSolidLeft = !burrowSolidLeft;
+				burrow.Heading = new(-burrow.Heading.X, -burrow.Heading.Y);
+				burrow.SolidLeft = !burrow.SolidLeft;
 			}
 			burrowReverseQueued = false;
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow(
-					$"reversal applied oldHeading={oldHeading} newHeading={BurrowTravelHeading} onLine={burrowLine != null}");
+					$"reversal applied oldHeading={oldHeading} newHeading={BurrowTravelHeading} onLine={burrow.Line != null}");
 		}
 
 		burrowMoveRemainder += burrowSpeed * Time.Delta;
 		var pixels = (int)burrowMoveRemainder;
 		burrowMoveRemainder -= pixels;
 		if (pixels > 0)
-		{
-			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, Game.BurrowLineAttachDistance, intent,
-				out var enteredLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
-				out var entryPoint, out burrowLineHeading))
+			switch (Game.TravelBurrow(ref Position, ref burrow, pixels, intent, this is Player, out var remaining))
 			{
-				burrowLine = enteredLine;
-				Position = (Point2)entryPoint;
-				burrowLineExit = null;
-				if (Game.BurrowTraceEnabled)
-					Game.TraceBurrow(
-						$"line entered id={burrowLine?.ActorId ?? "?"} position={Position} segment={burrowLineSegment} t={burrowLineT:0.###} direction={burrowLineDirection} heading={burrowLineHeading}");
-			}
+				case BurrowTravel.Door:
+					burrowOnJumpthru = false;
+					burrowMoveRemainder += remaining;
+					UpdateBurrowShift();
+					UpdateBurrowGlow();
+					return;
 
-			if (burrowLine != null)
-			{
-				var remaining = (float)pixels;
-				for (var junctions = 0; burrowLine != null && junctions < BurrowLine.MaxJunctionTransfers; junctions++)
-				{
-					var exitedLine = burrowLine.Advance(ref burrowLineSegment, ref burrowLineT, burrowLineDirection,
-						remaining, out var linePoint, out burrowLineHeading, out remaining, out var junctionPointIndex);
-					Position = (Point2)linePoint;
-					if (!exitedLine)
-						break;
+				case BurrowTravel.Switch:
+					burrowSpeed = 0;
+					burrowMoveRemainder = 0;
+					break;
 
-					if (Game.BurrowTraceEnabled)
-						Game.TraceBurrow(
-							$"line endpoint reached id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading} intent={intent}");
-					if (junctionPointIndex >= 0 && burrowLine.IsDoorPoint(junctionPointIndex) &&
-						Game.TransitionToBurrowDoor(burrowLine, junctionPointIndex, out var doorLine, out var doorPoint))
-					{
-						burrowLine = doorLine;
-						burrowLineSegment = doorPoint == 0 ? 0 : burrowLine.Points.Length - 2;
-						burrowLineT = doorPoint == 0 ? 0 : 1;
-						burrowLineDirection = doorPoint == 0 ? 1 : -1;
-						burrowLineHeading = burrowLine.SegmentHeading(burrowLineSegment, burrowLineDirection);
-						Position = (Point2)burrowLine.WorldPoint(doorPoint);
-						burrowLineExit = null;
-						burrowExitBlocked = false;
-						burrowOnJumpthru = false;
-						burrowMoveRemainder += remaining;
-						UpdateBurrowShift();
-						UpdateBurrowGlow();
-						if (Game.BurrowTraceEnabled)
-							Game.TraceBurrow(
-								$"line sublayer handoff id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
-						return;
-					}
-					if (junctionPointIndex >= 0 && burrowLine.IsSwitchPoint(junctionPointIndex))
-					{
-						burrowSpeed = 0;
-						burrowMoveRemainder = 0;
-						break;
-					}
-					if (junctionPointIndex >= 0 && Game.TryContinueBurrowLine(burrowLine, junctionPointIndex,
-						burrowLineSegment, burrowLineDirection, burrowLineHeading, intent,
-						out var nextLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
-						out var junctionPoint, out burrowLineHeading))
-					{
-						var previousLineId = burrowLine.ActorId ?? "?";
-						burrowLine = nextLine;
-						Position = (Point2)junctionPoint;
-						burrowExitBlocked = false;
-						if (Game.BurrowTraceEnabled)
-							Game.TraceBurrow(
-								$"line junction {previousLineId} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading} remaining={remaining:0.##}");
-						if (remaining > 0)
-							continue;
-						break;
-					}
-					if (TryBurrowRoomTransition(burrowLineHeading))
+				case BurrowTravel.LineEnd:
+					if (TryBurrowRoomTransition(burrow.LineHeading))
 					{
 						burrowMoveRemainder += remaining;
 						if (Game.BurrowTraceEnabled)
 							Game.TraceBurrow(
-								$"line crossing room edge id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+								$"line crossing room edge id={burrow.Line?.ActorId ?? "?"} position={Position} heading={burrow.LineHeading}");
 						return;
 					}
 
-					if (Game.TryAttachBurrowSurface(Position, burrowLineHeading, intent, BurrowAttachProbe,
-						out var surfacePosition, out var surfaceHeading, out var surfaceSolidLeft, out var surfaceToward))
-					{
-						var exitedLineId = burrowLine.ActorId ?? "?";
-						burrowLineExit = burrowLine;
-						burrowLine = null;
-						Position = surfacePosition;
-						burrowHeading = surfaceHeading;
-						burrowSolidLeft = surfaceSolidLeft;
-						burrowToward = surfaceToward;
-						burrowExitBlocked = false;
-						if (Game.BurrowTraceEnabled)
-							Game.TraceBurrow(
-								$"line attached to surface id={exitedLineId} position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward}");
-					}
-					else if (CanExitBurrowLine(out var exitDucking))
+					if (Game.AttachBurrow(ref Position, ref burrow, intent))
+						break;
+					if (CanExitBurrowLine(out var exitDucking))
 					{
 						if (Game.BurrowTraceEnabled)
 							Game.TraceBurrow("line has no surface: popping out");
@@ -562,51 +486,35 @@ public abstract partial class Pawn
 						PopOutOfBurrow();
 						return;
 					}
-					else
-					{
-						burrowExitBlocked = true;
-						burrowSpeed = 0;
-						burrowMoveRemainder = 0;
-						if (Game.BurrowTraceEnabled)
-							Game.TraceBurrow("line endpoint blocked: waiting for a valid exit");
-					}
+					burrow.Blocked = true;
+					burrowSpeed = 0;
+					burrowMoveRemainder = 0;
+					if (Game.BurrowTraceEnabled)
+						Game.TraceBurrow("line endpoint blocked: waiting for a valid exit");
 					break;
-				}
-			}
-			else
-			{
-				var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
-				burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
-				if (moved == 0)
-				{
+
+				case BurrowTravel.DeadEnd:
 					if (Game.BurrowTraceEnabled)
 						Game.TraceBurrow(
-							$"surface dead end position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} moving={move}");
+							$"surface dead end position={Position} heading={burrow.Heading} solidLeft={burrow.SolidLeft} moving={move}");
 					// A dead end. If we're driving into it and the surface exits the room into an
 					// adjacent one, transition and keep burrowing on the far side. Otherwise pop out;
 					// if we merely coasted here on friction, kill the glide and stay put.
 					if (move)
 					{
-						if (TryBurrowRoomTransition(burrowHeading))
+						if (TryBurrowRoomTransition(burrow.Heading))
 							return;
 						PopOutOfBurrow();
 						return;
 					}
 					burrowSpeed = 0;
 					burrowMoveRemainder = 0;
-				}
+					break;
 			}
-		}
 		FlickerTorchesAlongBurrow(previousPosition);
 
-		if (burrowLineExit != null && !burrowLineExit.NearEndpoint(Position, 4))
-		{
-			if (Game.BurrowTraceEnabled)
-				Game.TraceBurrow(
-					$"line re-entry guard cleared id={burrowLineExit.ActorId ?? "?"} position={Position}");
-			burrowLineExit = null;
-		}
-		burrowOnJumpthru = burrowLine == null && Game.SurfaceIsJumpthru(Position, burrowToward);
+		Game.ReleaseBurrowLineExit(ref burrow, Position);
+		burrowOnJumpthru = burrow.Line == null && Game.SurfaceIsJumpthru(Position, burrow.Toward);
 		UpdateBurrowLeapCoyote();
 		UpdateBurrowShift();
 		UpdateBurrowIntervals();
@@ -622,20 +530,20 @@ public abstract partial class Pawn
 			Facing = Math.Sign(input.MoveX);
 
 		// Charging a crossing holds the clock: lining one up shouldn't be the thing that ends the burrow.
-		if (burrowLine == null && !quantumArmed)
+		if (burrow.Line == null && !quantumArmed)
 			burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
 		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
-		var wantsExit = burrowLine == null && (burrowTimer <= 0 || !input.JumpDown);
-		if (burrowExitBlocked && (burrowLine == null || CanExitBurrowLine(out _)))
-			burrowExitBlocked = false;
+		var wantsExit = burrow.Line == null && (burrowTimer <= 0 || !input.JumpDown);
+		if (burrow.Blocked && (burrow.Line == null || CanExitBurrowLine(out _)))
+			burrow.Blocked = false;
 		if (wantsExit)
 		{
 			if (!CanExitBurrowLine(out var exitDucking))
 			{
-				if (!burrowExitBlocked && Game.BurrowTraceEnabled)
+				if (!burrow.Blocked && Game.BurrowTraceEnabled)
 					Game.TraceBurrow(
-						$"pop blocked inside guide id={burrowLine?.ActorId ?? "?"} position={Position}");
-				burrowExitBlocked = true;
+						$"pop blocked inside guide id={burrow.Line?.ActorId ?? "?"} position={Position}");
+				burrow.Blocked = true;
 				return;
 			}
 
@@ -660,7 +568,7 @@ public abstract partial class Pawn
 	bool CanExitBurrowLine(out bool exitDucking)
 	{
 		exitDucking = false;
-		if (burrowLine == null)
+		if (burrow.Line == null)
 			return true;
 		if (!Game.OverlapsSolid(this, StandingHitboxRect + Position))
 			return true;
@@ -675,10 +583,10 @@ public abstract partial class Pawn
 	// StopBurrow stop a burrow
 	private void PopOutOfBurrow()
 	{
-		var exitDir = burrowToward;
+		var exitDir = burrow.Toward;
 		if (Game.BurrowTraceEnabled)
 			Game.TraceBurrow(
-				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrowLine?.ActorId ?? "none"}");
+				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrow.Line?.ActorId ?? "none"}");
 
 		// Burrow-leap coyote: if we just rounded off a top surface (down a corner) within the
 		// window, pop upward as if we were still on top instead of getting the sideways pop off
@@ -690,7 +598,7 @@ public abstract partial class Pawn
 		// This is a bit of a hard coded hack: if we're exiting downwards,
 		// move the hitbox down so that its top is at the edge of the surface we
 		// are exiting from.
-		if (burrowLine == null && exitDir.Y < 0)
+		if (burrow.Line == null && exitDir.Y < 0)
 		{
 			Position = (Point2)(new Vector2(Position.X, Position.Y + StandingHitboxRect.Height));
 
@@ -710,10 +618,10 @@ public abstract partial class Pawn
 		// Climbing straight up a vertical wall pops into a wall slide instead of launching
 		// off it: drop the outward push, keep hugging the wall, and carry strong upward
 		// velocity. Feels better and sets up wall-jump / re-burrow chaining off the launch.
-		if (burrowLine == null && MathF.Abs(burrowToward.X) > MathF.Abs(burrowToward.Y) && burrowHeading.Y < 0)
+		if (burrow.Line == null && MathF.Abs(burrow.Toward.X) > MathF.Abs(burrow.Toward.Y) && burrow.Heading.Y < 0)
 		{
 			Velocity = new Vector2(0, BurrowWallSlideLaunch);
-			Facing = Math.Sign(burrowToward.X); // face into the wall so the slide reads
+			Facing = Math.Sign(burrow.Toward.X); // face into the wall so the slide reads
 			Squish = SurfaceSquish(exitDir, normalScale: 0.7f, tangentScale: 1.3f);
 		}
 		else
@@ -757,7 +665,7 @@ public abstract partial class Pawn
 		burrowHudSpent = true;
 		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
-		burrowExitBlocked = false;
+		burrow.Blocked = false;
 		burrowRoomTransitionDirection = Point2.Zero;
 		ResetQuantumTunnel();
 		UpdateBurrowShift();
@@ -791,7 +699,7 @@ public abstract partial class Pawn
 		ResetQuantumTunnel();
 
 		var incomingHeading = BurrowTravelHeading;
-		var previousLine = burrowLine;
+		var previousLine = burrow.Line;
 		var bounds = Game.Bounds;
 		var arrival = Position + direction * BurrowRoomEntryInset;
 		if (direction.X > 0) arrival.X = Math.Max(arrival.X, bounds.Left + BurrowRoomEntryInset);
@@ -802,42 +710,42 @@ public abstract partial class Pawn
 		burrowRoomTransitionDirection = direction;
 
 		if (previousLine != null && Game.TryAttachBurrowLineAcrossRoom(arrival, incomingHeading, BurrowAttachProbe,
-			out var nextLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
-			out var entryPoint, out burrowLineHeading))
+			out var nextLine, out burrow.Segment, out burrow.T, out burrow.Direction,
+			out var entryPoint, out burrow.LineHeading))
 		{
-			burrowLine = nextLine;
-			burrowLineExit = null;
+			burrow.Line = nextLine;
+			burrow.LineExit = null;
 			Position = (Point2)entryPoint;
-			burrowExitBlocked = false;
+			burrow.Blocked = false;
 			burrowOnJumpthru = false;
 			UpdateBurrowShift();
 			UpdateBurrowGlow();
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow(
-					$"line room handoff {previousLine.ActorId ?? "?"} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+					$"line room handoff {previousLine.ActorId ?? "?"} -> {burrow.Line?.ActorId ?? "?"} position={Position} heading={burrow.LineHeading}");
 			return;
 		}
 
-		burrowLine = null;
-		burrowLineExit = null;
+		burrow.Line = null;
+		burrow.LineExit = null;
 		if (Game.TryAttachBurrowSurface(arrival, incomingHeading, burrowIntent, BurrowAttachProbe,
-			out var surfacePosition, out burrowHeading, out burrowSolidLeft, out burrowToward) &&
+			out var surfacePosition, out burrow.Heading, out burrow.SolidLeft, out burrow.Toward) &&
 			bounds.Contains(surfacePosition))
 		{
 			Position = surfacePosition;
-			burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+			burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrow.Toward);
 			UpdateBurrowShift();
 			UpdateBurrowGlow();
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow(
-					$"surface room handoff position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward}");
+					$"surface room handoff position={Position} heading={burrow.Heading} solidLeft={burrow.SolidLeft} normal={burrow.Toward}");
 		}
 		else
 		{
 			// The route really ended. Pop inward from a point safely inside the destination room.
 			Position = arrival;
-			burrowHeading = direction;
-			burrowToward = -(Vector2)direction;
+			burrow.Heading = direction;
+			burrow.Toward = -(Vector2)direction;
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow($"room handoff has no line or surface; popping inward at={Position}");
 			PopOutOfBurrow();
@@ -866,7 +774,7 @@ public abstract partial class Pawn
 
 	// The ground a pawn has burrowed through is churned: its path sorts vertically behind it,
 	// harder the faster it went, and settles back once it has passed.
-	// Streaks run out of the surface (burrowToward points into it) rather than always downward,
+	// Streaks run out of the surface (burrow.Toward points into it) rather than always downward,
 	// so the churn belongs to the tunnel wall instead of reading as a screen-space filter.
 	static PixelSortDirection ChurnDirection(Vector2 toward)
 		=> MathF.Abs(toward.X) > MathF.Abs(toward.Y)
@@ -884,13 +792,13 @@ public abstract partial class Pawn
 		if (State == States.Burrow)
 		{
 			const float ChurnStrength = 0.6f;
-			burrowChurn.Record(Position, ChurnDirection(burrowToward), strength: Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0.35f, 1) * ChurnStrength, spacing: 2);
+			burrowChurn.Record(Position, ChurnDirection(burrow.Toward), strength: Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0.35f, 1) * ChurnStrength, spacing: 2);
 		}
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
 		if (State != States.Burrow && burrowGlowExitTimer <= 0)
-			burrowLine = null;
+			burrow.Line = null;
 		burrowPulseTimer = Calc.Approach(burrowPulseTimer, 0, Time.Delta);
 		quantumFlashTimer = Calc.Approach(quantumFlashTimer, 0, Time.Delta);
 	}
@@ -963,11 +871,11 @@ public abstract partial class Pawn
 		if (count <= 0)
 			return;
 
-		// Aim out of the solid (burrowToward points into it); fall back to straight up.
-		var outward = -burrowToward;
+		// Aim out of the solid (burrow.Toward points into it); fall back to straight up.
+		var outward = -burrow.Toward;
 		outward = outward.LengthSquared() > 0.0001f ? Vector2.Normalize(outward) : new Vector2(0, -1);
 		Vector2 origin;
-		if (burrowLine == null) {
+		if (burrow.Line == null) {
 			// Offset a bit by outward so the sparks appear a bit above the surface.
 			origin = (Vector2)Position + outward * 1.0f;
 		} else {
@@ -994,9 +902,9 @@ public abstract partial class Pawn
 		DrawGlowLine(batcher, quantumGlowPoints, quantumExit, origin, QuantumHueShift);
 		RenderQuantumFlash(batcher, origin);
 
-		if (State == States.Burrow && burrowLine?.TryGetSwitchNear(Position, 0.5f, out var switchPointIndex, out var switchPoint) == true)
+		if (State == States.Burrow && burrow.Line?.TryGetSwitchNear(Position, 0.5f, out var switchPointIndex, out var switchPoint) == true)
 		{
-			var fill = burrowLine.SwitchFill(switchPointIndex);
+			var fill = burrow.Line.SwitchFill(switchPointIndex);
 			var span = GlowSpan(glowPoints, burrowGlowAnchor);
 			var previous = switchPoint;
 			for (var i = 1; i <= 28; i++)
@@ -1052,7 +960,7 @@ public abstract partial class Pawn
 			pulse *= 0.5f;
 			color = Color.Lerp(color, flash, pulse);
 		}
-		if (burrowExitBlocked)
+		if (burrow.Blocked)
 		{
 			var pulse = 0.5f + 0.5f * MathF.Sin((Time.SecondsF * BurrowStuckPulseSpeed - dist * BurrowStuckPulseScale) * Calc.TAU);
 			var warning = new Color(1f, 0.08f, 0.16f, MathF.Min(1f, alpha + 0.25f));

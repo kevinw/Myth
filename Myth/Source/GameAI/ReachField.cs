@@ -31,6 +31,10 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	}
 
 	enum Step { Walked, Off, Blocked }
+	// A pixel of a burrow's path: where the burrow point is, the surface's normal into the solid, which way it's
+	// travelling and how fast it gets going there, and whether it's on a line.
+	readonly record struct Dug(Point2 At, Vector2 Toward, Vector2 Heading, float Cruise, bool OnLine);
+	record struct DigFrame(int At, float Speed, float Remainder, float Time);
 
 	readonly RectInt Body = body.Stand;
 	readonly RectInt DuckBody = body.Duck;
@@ -69,6 +73,17 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	static int AirborneResolveDistance => 12;
 	static int RidePhaseSpacing => 12;
 	static int BoardReach => 160;
+	static float BurrowPenalty => 0.3f;
+	// A burrow that spends its whole timer is this risky.
+	static float BurrowRisk => 0.6f;
+	static float MantleRisk => 0.2f;
+	// Let go this many frames before the burrow's timer would do it for us.
+	static int BurrowMarginFrames => 3;
+	static int BurrowPopFrames => 50;
+	static int BurrowCeilingDrop => 64;
+	static int BurrowMouthReach => Game.TileSize * 3;
+	static int BurrowLinePixels => 1500;
+	static int BurrowTraceSlice => 32;
 	static readonly bool LogBuilds = Environment.GetEnvironmentVariable("LOG_REACH") == "1";
 
 	public readonly List<Node> Nodes = [];
@@ -101,6 +116,19 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	int[] incomingStart = [];
 	int[] incoming = [];
 	int[] fill = [];
+	readonly bool burrows = body.Abilities.Has(PawnAbilities.Burrow);
+	// A full jump in place, back down to the ground it left: how a burrow dives in.
+	readonly int hopFrames = moves.Where(move => move is { Kind: ReachMove.Kinds.Jump, Dir: 0, Steer: 0 })
+		.Max(move => Array.FindIndex(move.Offsets, move.GroundedFrames + 2, offset => offset.Y >= 0));
+	// How a body in the air gathers speed to one side.
+	readonly ReachMove driftLeft = moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: -1 });
+	readonly ReachMove driftRight = moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 1 });
+	Game game = null!;
+	float burrowTime;
+	readonly List<Dug> dug = [];
+	bool dugReversed;
+	// Stands beside the open end of a BurrowLine, and the way to it.
+	readonly HashSet<(int Node, int Dir)> mouths = [];
 	bool solvedMidMove; // nothing stood in the last target, so it was reached partway through moves
 	readonly PriorityQueue<int, float> queue = new();
 	int sweeps;
@@ -176,6 +204,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		}
 
 		ropes = RopeSignature(game);
+		this.game = game;
+		burrowTime = Pawn.BurrowDurationFor(game);
 		bounds = solid.Bounds;
 		roomBottom = room.WorldBounds.Bottom;
 	}
@@ -191,6 +221,12 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			}
 			else if (actor is MovingPlatform { WaitsForWeight: true, Parked: true } platform)
 				hash.Add(platform.Position);
+			else if (actor is BurrowLine line)
+			{
+				hash.Add(line.Position);
+				hash.Add(line.Points.Length);
+			}
+		hash.Add(game.PickupCount(PickupKind.BurrowUpgrade));
 		return hash.ToHashCode();
 	}
 
@@ -240,6 +276,10 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		yield return false;
 		foreach (var step in Prepare(game))
 			yield return step;
+		// Ahead of the rest, which goes on to expand the wall nodes these pop out against.
+		if (burrows)
+			foreach (var step in Burrows())
+				yield return step;
 		for (var i = 0; i < Nodes.Count; i++)
 		{
 			Expand(i);
@@ -262,7 +302,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		}
 		for (var e = 0; e < Edges.Count; e++)
 		{
-			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && Margins(edge) is var (knife, tooShort))
+			if (Edges[e] is { Move: >= 0 } edge && !Moves[edge.Move].Burrows && Nodes[edge.To].Kind == NodeKind.Stand && Margins(edge) is var (knife, tooShort))
 			{
 				if (tooShort)
 					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty * 2, Risk = 1 };
@@ -285,6 +325,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		ropeNodes.Clear();
 		ropePoints.Clear();
 		ropeReach = default;
+		mouths.Clear();
 		sweeps = 0;
 
 		for (var ty = bounds.Top; ty < bounds.Bottom; ty += Game.TileSize)
@@ -386,6 +427,31 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			}
 		}
 
+		if (!burrows)
+			yield break;
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not BurrowLine { Points.Length: > 1 } line || game.destroying.Contains(line))
+				continue;
+			foreach (var end in (ReadOnlySpan<int>)[0, line.Points.Length - 1])
+			{
+				if (line.IsDoorPoint(end) || line.IsSwitchPoint(end) || game.BurrowLinePointConnected(line, end))
+					continue;
+				var mouth = line.WorldPoint(end).RoundToPoint2();
+				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
+				{
+					var nearest = -1;
+					for (var i = 0; i < Nodes.Count; i++)
+						if (Nodes[i] is { Kind: NodeKind.Stand, Ducking: false } stand && Math.Abs(stand.Position.Y - mouth.Y) <= 4 &&
+							(mouth.X - stand.Position.X) * dir is > 0 and var away && away <= BurrowMouthReach &&
+							(nearest < 0 || away < (mouth.X - Nodes[nearest].Position.X) * dir))
+							nearest = i;
+					if (nearest >= 0)
+						mouths.Add((nearest, dir));
+				}
+			}
+			yield return false;
+		}
 	}
 
 	void AddLip(Point2 lip, int dir, bool ducking)
@@ -547,6 +613,200 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk, BoardingRisk);
 		}
 		ghost = default;
+	}
+
+	// The path a burrow takes from a dive at these feet holding dir, and steer until it has turned that way, a
+	// pixel at a time by the burrow's own travel. It ends where the burrow would have to stop or pop out: a dead
+	// end, a switch, or a line that comes out in the open.
+	IEnumerable<bool> TraceBurrow(Point2 feet, int dir, int steer)
+	{
+		dug.Clear();
+		var intent = new Vector2(dir, steer);
+		var (at, burrow) = (feet, new BurrowCursor { Toward = Vector2.UnitY });
+		if (!game.SnapToSurface(ref at, ref burrow.Toward, Pawn.BurrowAttachProbe))
+			yield break;
+		burrow.Heading = new((int)MathF.Round(burrow.Toward.Y), -(int)MathF.Round(burrow.Toward.X));
+		burrow.SolidLeft = dugReversed = dir * burrow.Heading.X < 0;
+		if (dugReversed)
+			burrow.Heading = new(-burrow.Heading.X, -burrow.Heading.Y);
+		dug.Add(new(at, burrow.Toward, burrow.Travel, burrow.CruiseSpeed(false), false));
+		for (var surface = Pawn.BurrowMaxSpeed * burrowTime + Game.TileSize; surface > 0 && dug.Count < BurrowLinePixels;)
+		{
+			game.BurrowTraceQuiet = true;
+			var travel = game.TravelBurrow(ref at, ref burrow, 1, intent, false, out _);
+			var moved = travel == BurrowTravel.Moving || travel == BurrowTravel.LineEnd && game.AttachBurrow(ref at, ref burrow, intent);
+			game.ReleaseBurrowLineExit(ref burrow, at);
+			game.BurrowTraceQuiet = false;
+			if (!moved)
+				yield break;
+			if (burrow.Line == null)
+				surface--;
+			dug.Add(new(at, burrow.Toward, burrow.Travel, burrow.CruiseSpeed(false), burrow.Line != null));
+			if (burrow.Travel.Y * steer > 0.5f)
+				intent.Y = 0;
+			if (dug.Count % BurrowTraceSlice == 0)
+				yield return false;
+		}
+	}
+
+	// A frame of travel along the traced path, as Pawn.BurrowState paces it: easing up to the speed it cruises
+	// at there or braking to a stop, the timer running only off the lines. False once the path or the
+	// timer runs out.
+	bool Dig(ref DigFrame frame, bool pressing)
+	{
+		var target = pressing ? dug[frame.At].Cruise : 0;
+		frame.Speed = Calc.Approach(frame.Speed, target, (target > frame.Speed ? Pawn.BurrowAccel : Pawn.BurrowFriction) * ReachMoves.Dt);
+		frame.Remainder += frame.Speed * ReachMoves.Dt;
+		var pixels = (int)frame.Remainder;
+		frame.Remainder -= pixels;
+		frame.At += pixels;
+		if (frame.At >= dug.Count)
+		{
+			frame.At = dug.Count - 1;
+			return false;
+		}
+		if (!dug[frame.At].OnLine)
+			frame.Time -= ReachMoves.Dt;
+		return frame.Time > 0;
+	}
+
+	// The burrows worth a look: up a wall or over a lip within a tile of a stand, or into a line's mouth. A burrow
+	// dives into what's under the middle of the feet, so a lip's own stand, hanging over it, has none.
+	IEnumerable<bool> Burrows()
+	{
+		for (int index = 0, stands = Nodes.Count; index < stands; index++)
+		{
+			if (Nodes[index] is not { Kind: NodeKind.Stand, Ducking: false, Position: var p } || !Solid(new RectInt(p.X, p.Y, 1, 1)))
+				continue;
+			for (var dir = -1; dir <= 1; dir += 2)
+			{
+				var (q, crawl, walked) = (p, false, true);
+				for (var n = 0; n < Game.TileSize && walked; n++)
+					walked = WalkStep(ref q, dir, ref crawl) == Step.Walked;
+				var mouth = mouths.Contains((index, dir));
+				for (var steer = mouth ? -1 : 0; steer <= (mouth ? 1 : 0) && (mouth || !walked); steer++)
+					foreach (var step in BurrowFrom(index, dir, steer))
+						yield return step;
+			}
+		}
+	}
+
+	// Where a burrow from this stand gets to, holding dir and steer: each frame along its path it could let go
+	// partway up a wall (a Rise), or stop and pop out onto the floor there or down from the ceiling (a Dig).
+	IEnumerable<bool> BurrowFrom(int index, int dir, int steer)
+	{
+		edgeTo.Clear();
+		foreach (var step in TraceBurrow(Nodes[index].Position, dir, steer))
+			yield return step;
+		if (dug.Count < 2)
+			yield break;
+		var rise = Moves.FindIndex(move => move.Kind == ReachMove.Kinds.Rise && move.Dir == dir && move.Steer == steer);
+		var dig = Moves.FindIndex(move => move.Kind == ReachMove.Kinds.Dig && move.Dir == dir && move.Steer == steer);
+		var frame = new DigFrame(0, 0, 0, burrowTime - BurrowMarginFrames * ReachMoves.Dt);
+		// What the pilot sees as it decides a frame's input: where the frame before left the burrow.
+		var seen = dug[0].At;
+		// Turning round to head the other way takes the first frame.
+		for (var frames = dugReversed ? 2 : 1; ; frames++)
+		{
+			var (stop, stopFrames) = (frame, frames - 1);
+			if (!Dig(ref frame, true))
+				yield break;
+			var here = dug[frame.At];
+			var cost = (hopFrames + frames) * ReachMoves.Dt + BurrowPenalty;
+			var risk = BurrowRisk * (1 - frame.Time / burrowTime);
+			if (frame.At != stop.At && !here.OnLine && here.Toward.X == dir && here.Heading.Y < 0)
+				RiseFrom(index, rise, here.At - new Point2(dir > 0 ? Body.Right : Body.Left, 0), dir, seen, cost, risk);
+
+			var stopped = true;
+			for (; stopped && stop.Speed > 0; stopFrames++)
+				stopped = Dig(ref stop, false);
+			var rest = dug[stop.At];
+			if (stopped && stop.At > 0 && !rest.OnLine && stop.Time > ReachMoves.Dt)
+			{
+				var to = rest.Toward.Y > 0.5f ? StandAt(rest.At) : rest.Toward.Y < -0.5f ? DropStand(rest.At) : -1;
+				if (to >= 0 && to != index)
+					AddEdge(index, to, dig, seen, stopFrames, (hopFrames + stopFrames + BurrowPopFrames) * ReachMoves.Dt + BurrowPenalty, 0, risk);
+			}
+			seen = here.At;
+			yield return false;
+		}
+	}
+
+	// Popped out partway up a wall, holding into it: up to the wall node where the launch tops out (or bonks, or
+	// runs out of wall), and on over the wall's top if the launch clears it.
+	void RiseFrom(int index, int move, Point2 feet, int side, Point2 start, float cost, float risk)
+	{
+		if (Solid(Body + feet) || !WallBeside(feet, side))
+			return;
+		var rise = Moves[move].Offsets;
+		var (top, k) = (feet, 1);
+		for (; k < rise.Length && !Solid(Body + feet + rise[k]) && WallBeside(feet + rise[k], side); k++)
+			top = feet + rise[k];
+		if (top != feet && WallNode(top, side) is var wall and >= 0)
+			AddEdge(index, wall, move, start, k - 1, cost + (k - 1) * ReachMoves.Dt, 0, risk);
+		// Only a mantle that still lands when the pop comes a couple of px early or late.
+		if (k < rise.Length && Mantle(move, feet, side, out var landing, out var frames) &&
+			Mantle(move, feet + new Point2(0, 2), side, out _, out _) && Mantle(move, feet - new Point2(0, 2), side, out _, out _) &&
+			StandAt(landing) is var to and >= 0)
+			AddEdge(index, to, move, start, frames, cost + frames * ReachMoves.Dt, 0, MathF.Min(1, risk + MantleRisk));
+	}
+
+	// The launch held into a wall it clears the top of: up as the Rise recorded, then down as a fall, drifting
+	// over the top from the frame the wall stops being in the way. False if it comes back down the wall, or
+	// lands still sliding toward an edge.
+	bool Mantle(int move, Point2 feet, int side, out Point2 landing, out int frames)
+	{
+		var rise = Moves[move].Offsets;
+		var drift = (side < 0 ? driftLeft : driftRight).Offsets;
+		var (p, freeFrom, free) = (feet, feet.X, 0);
+		landing = default;
+		for (frames = 1; frames < rise.Length + fall.Offsets.Length - 1; frames++)
+		{
+			for (var x = freeFrom + drift[Math.Min(free + 1, drift.Length - 1)].X; p.X != x; p.X += side)
+				if (Solid(Body + p + new Point2(side, 0)))
+				{
+					(freeFrom, free) = (p.X, -1);
+					break;
+				}
+			free++;
+			var y = frames < rise.Length ? feet.Y + rise[frames].Y : feet.Y + rise[^1].Y + fall.Offsets[frames - rise.Length + 1].Y;
+			for (var dy = Math.Sign(y - p.Y); p.Y != y; p.Y += dy)
+				if (dy > 0 && Grounded(p, Body))
+					break;
+				else if (Solid(Body + p + new Point2(0, dy)))
+					return false;
+			if (frames < rise.Length)
+				continue;
+			if (p.X == feet.X)
+				return false;
+			if (Grounded(p, Body))
+			{
+				landing = p;
+				free = Math.Clamp(free, 1, drift.Length - 1);
+				var speed = (drift[free].X - drift[free - 1].X) / ReachMoves.Dt;
+				var crawl = false;
+				for (var n = (int)(speed * speed / 4000) + 2; n > 0; n--)
+					if (WalkStep(ref p, side, ref crawl) == Step.Off)
+						return false;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// The stand a pawn put down here is on: one a short walk along the surface, or a new one right here.
+	int StandAt(Point2 p)
+		=> !TryStand(p, out var ducking) ? -1 : StandNear(p, Game.TileSize, out _) is var near and >= 0 ? near : AddStand(p, 0, ducking);
+
+	// Popped out of a ceiling: straight down to the floor below, crouched if that's all the room there is.
+	int DropStand(Point2 ceiling)
+	{
+		for (var drop = DuckBody.Height; drop <= BurrowCeilingDrop; drop++)
+			if (Solid(DuckBody + ceiling + new Point2(0, drop)))
+				return -1;
+			else if (StandAt(ceiling + new Point2(0, drop)) is var stand and >= 0)
+				return stand;
+		return -1;
 	}
 
 	static int NearestPhase(List<Point2> phases, Point2 at)
@@ -993,7 +1253,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			for (var e = 0; e < Edges.Count; e++)
 			{
 				var edge = Edges[e];
-				if (edge.Move < 0 || Vector2.DistanceSquared(edge.Start, target.Center) > TouchSearchRadius * TouchSearchRadius ||
+				if (edge.Move < 0 || Moves[edge.Move].Burrows || Vector2.DistanceSquared(edge.Start, target.Center) > TouchSearchRadius * TouchSearchRadius ||
 					TouchFrame(edge, target) is not (var frame and > 0))
 					continue;
 				// Past a bonk the recording only bounds the path, so sweep it for the real touch.
@@ -1136,7 +1396,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		{
 			var edge = Edges[e];
 			var start = (Vector2)edge.Start + new Vector2(0, -2);
-			if (edge.Move < 0)
+			if (edge.Move < 0 || Moves[edge.Move].Burrows)
 				batcher.Line(start, (Vector2)Nodes[edge.To].Position + new Vector2(0, -2), 1, PathColor);
 			else
 			{

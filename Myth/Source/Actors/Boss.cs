@@ -36,7 +36,7 @@ public class Boss : Pawn
 	private enum EscapePhase { None, Leap, Cling, Flee }
 
 	readonly ReachPilot pilot;
-	readonly ReachSense sense = new(ReachBody.Bud);
+	readonly ReachSense sense = new(ReachBody.Bud with { Abilities = PawnAbilities.None });
 	private int health = MaxHealth;
 	private Vector2? navTarget;
 	private float retargetTimer;

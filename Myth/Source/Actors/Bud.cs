@@ -73,8 +73,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	protected override float IdleBreathingRate => 0.7f;
 	protected override int? RumbleControllerIndex =>
 		secondControllerControlling ? Game.Controls.BudControllerIndex : null;
-	protected override PawnAbilities Abilities =>
-		secondControllerControlling ? PawnAbilities.Burrow : PawnAbilities.None;
+	protected override PawnAbilities Abilities => PawnAbilities.Burrow;
 	public bool CanSay => Game.CanShowBudSpeech();
 
 	public string DebugNavLabel => pilot.Label;
