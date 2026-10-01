@@ -1016,7 +1016,8 @@ public partial class Game : IDisposable
 		var fromRight = direction?.X < 0;
 		var fromTop = direction?.Y > 0;
 		var fromBottom = direction?.Y < 0;
-		var best = forRoom.WorldBounds.Center;
+		// An authored save point beats the room's geometric center, which is usually midair.
+		var best = FindSavePointPosition(forRoom) ?? forRoom.WorldBounds.Center;
 		var bestScore = float.MaxValue;
 		var targetX = fromLeft ? 0 : fromRight ? forRoom.Size.X - 1 : (forRoom.Size.X - 1) * 0.5f;
 		var targetY = fromTop ? 0 : fromBottom ? forRoom.Size.Y - 1 : (forRoom.Size.Y - 1) * 0.5f;
@@ -1024,27 +1025,32 @@ public partial class Game : IDisposable
 		for (var y = 1; y < forRoom.Size.Y; y++)
 			for (var x = 0; x < forRoom.Size.X; x++)
 			{
-				if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
-					continue;
-
 				var dx = x - targetX;
 				var dy = y - targetY;
 				var score = dx * dx + dy * dy * 0.25f;
 				if (score >= bestScore)
 					continue;
 
+				// The real standing footprint, not "a free tile over a solid one" -- otherwise a
+				// 1x1 pocket in the geometry scores well and the player spawns wedged in it.
+				var candidate = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+				if (!Player.HasSupportedFooting(forRoom, candidate))
+					continue;
+
 				bestScore = score;
-				best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+				best = candidate;
 			}
 
 		return best;
 	}
 
-	static bool IsTileWalkable(Room room, int x, int y)
-		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && !IsTileSolid(room, x, y);
-
-	static bool IsTileSolid(Room room, int x, int y)
-		=> room.GetEntry(new Point2(x, y)) is { BlocksMovement: true };
+	static Point2? FindSavePointPosition(Room forRoom)
+	{
+		foreach (var actor in forRoom.Actors)
+			if (ActorSpecs.GetTypeName(actor) == nameof(SavePoint) && ActorSpecs.ReadResolvedPosition(actor) is { } local)
+				return forRoom.WorldBounds.TopLeft + local;
+		return null;
+	}
 
 	Vector2 easedPlayerCameraTarget; // TODO: use nullable and clear on room switch or load
 

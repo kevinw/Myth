@@ -1857,14 +1857,18 @@ public partial class Player : Pawn, INeuralTextureAgent
 	}
 
 	bool HasSupportedFooting(Point2 pos)
+		=> Game.CurrentRoom is { } current && HasSupportedFooting(current, pos);
+
+	// Room-parameterized so it also answers for a room that isn't loaded yet (spawn placement).
+	internal static bool HasSupportedFooting(Room room, Point2 pos)
 	{
 		var box = StandingHitboxRect + pos;
-		if (Game.OverlapsRoomCollision(box))
+		if (Game.OverlapsRoomCollision(room, box))
 			return false; // standing space is blocked
 
 		var groundY = box.Bottom; // first pixel row below the feet
-		return Game.OverlapsRoomCollision(new RectInt(box.Left, groundY, 1, 1))
-			&& Game.OverlapsRoomCollision(new RectInt(box.Right - 1, groundY, 1, 1));
+		return Game.OverlapsRoomCollision(room, new RectInt(box.Left, groundY, 1, 1))
+			&& Game.OverlapsRoomCollision(room, new RectInt(box.Right - 1, groundY, 1, 1));
 	}
 
 #if EDITOR
