@@ -1,0 +1,4386 @@
+{
+ "game": "Super Metroid",
+ "source": "blkerby/MapRandomizer room_geometry.json + maps/vanilla/vanilla_map.json (CC BY 4.0). Vanilla layout; gates not yet imported -- see sm-json-data for per-strat requirements.",
+ "start": "Landing Site",
+ "rooms": [
+  {
+   "id": "The Moat",
+   "rect": [
+    37,
+    8,
+    2,
+    2
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Landing Site",
+   "rect": [
+    24,
+    4,
+    9,
+    5
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Crateria Tube",
+   "rect": [
+    33,
+    8,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Parlor And Alcatraz",
+   "rect": [
+    19,
+    8,
+    5,
+    5
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Climb",
+   "rect": [
+    19,
+    13,
+    3,
+    9
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Pit Room",
+   "rect": [
+    21,
+    21,
+    3,
+    2
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Flyway",
+   "rect": [
+    23,
+    10,
+    3,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Pre-Map Flyway",
+   "rect": [
+    21,
+    11,
+    3,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Crateria Map Room",
+   "rect": [
+    24,
+    11,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Crateria Save Room",
+   "rect": [
+    19,
+    10,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "The Final Missile",
+   "rect": [
+    17,
+    11,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Final Missile Bombway",
+   "rect": [
+    18,
+    11,
+    2,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Bomb Torizo Room",
+   "rect": [
+    26,
+    10,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Terminator Room",
+   "rect": [
+    13,
+    8,
+    6,
+    3
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Green Pirates Shaft",
+   "rect": [
+    12,
+    6,
+    1,
+    7
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Lower Mushrooms",
+   "rect": [
+    8,
+    12,
+    4,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Green Brinstar Elevator Room",
+   "rect": [
+    7,
+    12,
+    1,
+    4
+   ],
+   "region": "Crateria",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Crateria Kihunter Room",
+   "rect": [
+    34,
+    8,
+    3,
+    3
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Statues Hallway",
+   "rect": [
+    13,
+    12,
+    5,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Red Brinstar Elevator Room",
+   "rect": [
+    35,
+    11,
+    1,
+    4
+   ],
+   "region": "Crateria",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Blue Brinstar Elevator Room",
+   "rect": [
+    24,
+    21,
+    1,
+    4
+   ],
+   "region": "Crateria",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Statues Room",
+   "rect": [
+    18,
+    12,
+    1,
+    5
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Crateria Power Bomb Room",
+   "rect": [
+    33,
+    5,
+    2,
+    1
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Crateria Super Room",
+   "rect": [
+    22,
+    13,
+    4,
+    8
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Gauntlet Entrance",
+   "rect": [
+    19,
+    6,
+    5,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Gauntlet Energy Tank Room",
+   "rect": [
+    13,
+    6,
+    6,
+    1
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "West Ocean",
+   "rect": [
+    39,
+    4,
+    8,
+    6
+   ],
+   "region": "Crateria",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Bowling Alley Path",
+   "rect": [
+    42,
+    6,
+    2,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "East Ocean",
+   "rect": [
+    57,
+    4,
+    7,
+    6
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Forgotten Highway Kago Room",
+   "rect": [
+    64,
+    8,
+    1,
+    4
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Crab Maze",
+   "rect": [
+    61,
+    12,
+    4,
+    2
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Forgotten Highway Elevator",
+   "rect": [
+    60,
+    14,
+    1,
+    4
+   ],
+   "region": "Crateria",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Forgotten Highway Elbow",
+   "rect": [
+    60,
+    13,
+    1,
+    1
+   ],
+   "region": "Crateria",
+   "tags": []
+  },
+  {
+   "id": "Red Tower",
+   "rect": [
+    31,
+    32,
+    1,
+    10
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Red Brinstar Fireflea Room",
+   "rect": [
+    23,
+    38,
+    8,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "X-Ray Scope Room",
+   "rect": [
+    21,
+    38,
+    2,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Bat Room",
+   "rect": [
+    32,
+    41,
+    2,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Below Spazer",
+   "rect": [
+    34,
+    40,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Spazer Room",
+   "rect": [
+    36,
+    40,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Hellway",
+   "rect": [
+    32,
+    32,
+    3,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Caterpillar Room",
+   "rect": [
+    35,
+    27,
+    3,
+    8
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Alpha Power Bomb Room",
+   "rect": [
+    32,
+    34,
+    3,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Beta Power Bomb Room",
+   "rect": [
+    33,
+    30,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Caterpillar Save Room",
+   "rect": [
+    36,
+    31,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Sloaters Refill",
+   "rect": [
+    30,
+    41,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Morph Ball Room",
+   "rect": [
+    19,
+    31,
+    8,
+    3
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Construction Zone",
+   "rect": [
+    27,
+    33,
+    1,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "First Missile Room",
+   "rect": [
+    26,
+    34,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Blue Brinstar Energy Tank Room",
+   "rect": [
+    28,
+    31,
+    3,
+    3
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Blue Brinstar Boulder Room",
+   "rect": [
+    28,
+    31,
+    2,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Billy Mays Room",
+   "rect": [
+    27,
+    31,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Green Brinstar Main Shaft",
+   "rect": [
+    7,
+    23,
+    4,
+    12
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Early Supers Room",
+   "rect": [
+    8,
+    26,
+    3,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Brinstar Reserve Tank Room",
+   "rect": [
+    11,
+    27,
+    2,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Brinstar Pre-Map Room",
+   "rect": [
+    4,
+    27,
+    3,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Brinstar Map Room",
+   "rect": [
+    3,
+    27,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Green Brinstar Fireflea Room",
+   "rect": [
+    4,
+    29,
+    3,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Green Brinstar Missile Refill",
+   "rect": [
+    3,
+    30,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Green Brinstar Main Shaft Save Room",
+   "rect": [
+    6,
+    28,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Etecoon Save Room",
+   "rect": [
+    3,
+    34,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Green Brinstar Beetom Room",
+   "rect": [
+    6,
+    33,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Etecoon Energy Tank Room",
+   "rect": [
+    4,
+    33,
+    5,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Etecoon Super Room",
+   "rect": [
+    3,
+    33,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Green Hill Zone",
+   "rect": [
+    17,
+    33,
+    8,
+    4
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Noob Bridge",
+   "rect": [
+    25,
+    36,
+    6,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Spore Spawn Kihunter Room",
+   "rect": [
+    17,
+    27,
+    4,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Spore Spawn Room",
+   "rect": [
+    20,
+    24,
+    1,
+    3
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Dachora Room",
+   "rect": [
+    8,
+    29,
+    7,
+    7
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Dachora Energy Refill",
+   "rect": [
+    7,
+    35,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Big Pink",
+   "rect": [
+    13,
+    27,
+    5,
+    10
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Big Pink Save Room",
+   "rect": [
+    13,
+    27,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Pink Brinstar Power Bomb Room",
+   "rect": [
+    13,
+    30,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Pink Brinstar Hopper Room",
+   "rect": [
+    17,
+    30,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Hopper Energy Tank Room",
+   "rect": [
+    19,
+    31,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Spore Spawn Super Room",
+   "rect": [
+    21,
+    24,
+    2,
+    9
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Spore Spawn Farming Room",
+   "rect": [
+    18,
+    32,
+    3,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Waterway Energy Tank Room",
+   "rect": [
+    6,
+    36,
+    7,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Warehouse Entrance",
+   "rect": [
+    39,
+    41,
+    3,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Warehouse Zeela Room",
+   "rect": [
+    42,
+    41,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Warehouse Energy Tank Room",
+   "rect": [
+    41,
+    42,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Warehouse Kihunter Room",
+   "rect": [
+    43,
+    41,
+    4,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Kraid Save Room",
+   "rect": [
+    47,
+    41,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Baby Kraid Room",
+   "rect": [
+    45,
+    42,
+    6,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Kraid Eye Door Room",
+   "rect": [
+    51,
+    41,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Kraid Recharge Station",
+   "rect": [
+    52,
+    41,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": []
+  },
+  {
+   "id": "Kraid Room",
+   "rect": [
+    53,
+    41,
+    2,
+    2
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "boss"
+   ]
+  },
+  {
+   "id": "Varia Suit Room",
+   "rect": [
+    55,
+    42,
+    1,
+    1
+   ],
+   "region": "Brinstar",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "West Glass Tube Tunnel",
+   "rect": [
+    36,
+    41,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Boyon Gate Hall",
+   "rect": [
+    38,
+    40,
+    4,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Glass Tunnel",
+   "rect": [
+    37,
+    40,
+    1,
+    3
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Glass Tunnel Save Room",
+   "rect": [
+    38,
+    42,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Main Street",
+   "rect": [
+    36,
+    32,
+    3,
+    8
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Fish Tank",
+   "rect": [
+    39,
+    36,
+    4,
+    3
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Mt. Everest",
+   "rect": [
+    38,
+    32,
+    6,
+    4
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Crab Shaft",
+   "rect": [
+    44,
+    30,
+    2,
+    4
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Crab Tunnel",
+   "rect": [
+    38,
+    39,
+    4,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Red Fish Room",
+   "rect": [
+    38,
+    30,
+    3,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Mama Turtle Room",
+   "rect": [
+    43,
+    35,
+    3,
+    4
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Pseudo Plasma Spark Room",
+   "rect": [
+    44,
+    27,
+    4,
+    3
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Northwest Maridia Bug Room",
+   "rect": [
+    40,
+    27,
+    4,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Watering Hole",
+   "rect": [
+    38,
+    27,
+    2,
+    3
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Aqueduct Save Room",
+   "rect": [
+    45,
+    34,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Aqueduct",
+   "rect": [
+    46,
+    32,
+    6,
+    3
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Toilet",
+   "rect": [
+    48,
+    28,
+    1,
+    10
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Botwoon Hallway",
+   "rect": [
+    46,
+    31,
+    4,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Botwoon's Room",
+   "rect": [
+    50,
+    31,
+    2,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Botwoon Energy Tank Room",
+   "rect": [
+    52,
+    31,
+    7,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Halfie Climb Room",
+   "rect": [
+    59,
+    29,
+    5,
+    3
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Maridia Missile Refill Room",
+   "rect": [
+    64,
+    31,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Colosseum",
+   "rect": [
+    60,
+    29,
+    7,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Draygon Save Room",
+   "rect": [
+    67,
+    29,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Maridia Health Refill Room",
+   "rect": [
+    68,
+    29,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "The Precious Room",
+   "rect": [
+    67,
+    30,
+    2,
+    3
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Draygon's Room",
+   "rect": [
+    65,
+    32,
+    2,
+    2
+   ],
+   "region": "Maridia",
+   "tags": [
+    "boss"
+   ]
+  },
+  {
+   "id": "Space Jump Room",
+   "rect": [
+    64,
+    33,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "West Cactus Alley Room",
+   "rect": [
+    53,
+    29,
+    1,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "East Cactus Alley Room",
+   "rect": [
+    54,
+    29,
+    5,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Plasma Spark Room",
+   "rect": [
+    48,
+    25,
+    4,
+    6
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Oasis",
+   "rect": [
+    48,
+    38,
+    1,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "West Sand Hall",
+   "rect": [
+    44,
+    39,
+    4,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "West Sand Hall Tunnel",
+   "rect": [
+    43,
+    39,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Maridia Map Room",
+   "rect": [
+    43,
+    40,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Botwoon Quicksand Room",
+   "rect": [
+    54,
+    32,
+    2,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Below Botwoon Energy Tank",
+   "rect": [
+    52,
+    33,
+    4,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "West Aqueduct Quicksand Room",
+   "rect": [
+    47,
+    35,
+    1,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "East Aqueduct Quicksand Room",
+   "rect": [
+    49,
+    35,
+    1,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "East Sand Hole",
+   "rect": [
+    49,
+    37,
+    2,
+    2
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "West Sand Hole",
+   "rect": [
+    46,
+    37,
+    2,
+    2
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "East Sand Hall",
+   "rect": [
+    49,
+    39,
+    3,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Bug Sand Hole",
+   "rect": [
+    52,
+    28,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Plasma Beach Quicksand Room",
+   "rect": [
+    52,
+    29,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Butterfly Room",
+   "rect": [
+    52,
+    30,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Thread The Needle Room",
+   "rect": [
+    53,
+    28,
+    7,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Maridia Elevator Room",
+   "rect": [
+    60,
+    23,
+    1,
+    6
+   ],
+   "region": "Maridia",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Forgotten Highway Save Room",
+   "rect": [
+    61,
+    27,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Kassiuz Room",
+   "rect": [
+    51,
+    23,
+    1,
+    4
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Plasma Tutorial Room",
+   "rect": [
+    52,
+    23,
+    1,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Plasma Room",
+   "rect": [
+    53,
+    23,
+    2,
+    3
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Pants Room",
+   "rect": [
+    52,
+    36,
+    2,
+    4
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Shaktool Room",
+   "rect": [
+    54,
+    38,
+    4,
+    1
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Spring Ball Room",
+   "rect": [
+    58,
+    38,
+    2,
+    2
+   ],
+   "region": "Maridia",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Crab Hole",
+   "rect": [
+    42,
+    39,
+    1,
+    2
+   ],
+   "region": "Maridia",
+   "tags": []
+  },
+  {
+   "id": "Main Hall",
+   "rect": [
+    46,
+    54,
+    8,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Fast Pillars Setup Room",
+   "rect": [
+    54,
+    55,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Pillar Room",
+   "rect": [
+    55,
+    57,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "The Worst Room In The Game",
+   "rect": [
+    59,
+    52,
+    1,
+    6
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Amphitheatre",
+   "rect": [
+    60,
+    52,
+    4,
+    5
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Red Kihunter Shaft",
+   "rect": [
+    64,
+    52,
+    3,
+    5
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Red Kihunter Shaft Save Room",
+   "rect": [
+    65,
+    55,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Wasteland",
+   "rect": [
+    61,
+    57,
+    6,
+    3
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Metal Pirates Room",
+   "rect": [
+    59,
+    59,
+    3,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Plowerhouse Room",
+   "rect": [
+    56,
+    59,
+    3,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Lower Norfair Farming Room",
+   "rect": [
+    53,
+    59,
+    3,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Ridley's Room",
+   "rect": [
+    52,
+    59,
+    1,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "boss"
+   ]
+  },
+  {
+   "id": "Ridley Tank Room",
+   "rect": [
+    51,
+    60,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Mickey Mouse Room",
+   "rect": [
+    55,
+    52,
+    4,
+    4
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Lower Norfair Fireflea Room",
+   "rect": [
+    64,
+    49,
+    3,
+    6
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Lower Norfair Spring Ball Maze Room",
+   "rect": [
+    62,
+    48,
+    5,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Lower Norfair Escape Power Bomb Room",
+   "rect": [
+    66,
+    49,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Three Musketeers' Room",
+   "rect": [
+    58,
+    46,
+    4,
+    3
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Acid Statue Room",
+   "rect": [
+    44,
+    56,
+    3,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Golden Torizo's Room",
+   "rect": [
+    47,
+    58,
+    2,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Screw Attack Room",
+   "rect": [
+    49,
+    57,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Golden Torizo Energy Recharge",
+   "rect": [
+    50,
+    58,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Fast Ripper Room",
+   "rect": [
+    50,
+    57,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Business Center",
+   "rect": [
+    39,
+    43,
+    1,
+    7
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Norfair Map Room",
+   "rect": [
+    38,
+    47,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Hi Jump Energy Tank Room",
+   "rect": [
+    37,
+    48,
+    2,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Hi Jump Boots Room",
+   "rect": [
+    36,
+    49,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Cathedral Entrance",
+   "rect": [
+    40,
+    46,
+    3,
+    2
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Cathedral",
+   "rect": [
+    43,
+    46,
+    3,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Rising Tide",
+   "rect": [
+    46,
+    47,
+    5,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Frog Speedway",
+   "rect": [
+    41,
+    48,
+    8,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Upper Norfair Farming Room",
+   "rect": [
+    49,
+    48,
+    2,
+    2
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Purple Shaft",
+   "rect": [
+    51,
+    49,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Purple Farming Room",
+   "rect": [
+    52,
+    50,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Frog Savestation",
+   "rect": [
+    40,
+    48,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Bubble Mountain",
+   "rect": [
+    51,
+    45,
+    2,
+    4
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Bubble Mountain Save Room",
+   "rect": [
+    50,
+    46,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Green Bubbles Missile Room",
+   "rect": [
+    49,
+    45,
+    2,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Norfair Reserve Tank Room",
+   "rect": [
+    47,
+    45,
+    2,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Bat Cave",
+   "rect": [
+    53,
+    44,
+    1,
+    2
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Speed Booster Hall",
+   "rect": [
+    54,
+    44,
+    12,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Speed Booster Room",
+   "rect": [
+    66,
+    45,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Single Chamber",
+   "rect": [
+    53,
+    46,
+    6,
+    4
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Double Chamber",
+   "rect": [
+    54,
+    47,
+    4,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Wave Beam Room",
+   "rect": [
+    58,
+    47,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Ice Beam Gate Room",
+   "rect": [
+    32,
+    44,
+    7,
+    4
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Ice Beam Acid Room",
+   "rect": [
+    33,
+    46,
+    2,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Ice Beam Snake Room",
+   "rect": [
+    32,
+    44,
+    2,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Ice Beam Room",
+   "rect": [
+    34,
+    45,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Ice Beam Tutorial Room",
+   "rect": [
+    33,
+    44,
+    2,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Crumble Shaft",
+   "rect": [
+    31,
+    47,
+    1,
+    4
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Nutella Refill",
+   "rect": [
+    49,
+    52,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Spiky Acid Snakes Tunnel",
+   "rect": [
+    50,
+    52,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Kronic Boost Room",
+   "rect": [
+    54,
+    51,
+    2,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Magdollite Tunnel",
+   "rect": [
+    52,
+    51,
+    3,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Lava Dive Room",
+   "rect": [
+    51,
+    53,
+    4,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Volcano Room",
+   "rect": [
+    56,
+    49,
+    3,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Spiky Platforms Tunnel",
+   "rect": [
+    54,
+    49,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Red Pirate Shaft",
+   "rect": [
+    48,
+    49,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Acid Snakes Tunnel",
+   "rect": [
+    45,
+    52,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Crocomire Speedway",
+   "rect": [
+    32,
+    50,
+    13,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Crocomire Escape",
+   "rect": [
+    40,
+    49,
+    4,
+    2
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Crocomire's Room",
+   "rect": [
+    41,
+    53,
+    8,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Post Crocomire Farming Room",
+   "rect": [
+    39,
+    53,
+    2,
+    2
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Post Crocomire Power Bomb Room",
+   "rect": [
+    38,
+    53,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Post Crocomire Shaft",
+   "rect": [
+    39,
+    55,
+    1,
+    5
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Post Crocomire Missile Room",
+   "rect": [
+    40,
+    58,
+    4,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Post Crocomire Jump Room",
+   "rect": [
+    33,
+    58,
+    8,
+    3
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Grapple Beam Room",
+   "rect": [
+    32,
+    57,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Grapple Tutorial Room 1",
+   "rect": [
+    33,
+    57,
+    2,
+    1
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Grapple Tutorial Room 2",
+   "rect": [
+    35,
+    55,
+    1,
+    3
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Grapple Tutorial Room 3",
+   "rect": [
+    36,
+    55,
+    3,
+    2
+   ],
+   "region": "Norfair",
+   "tags": []
+  },
+  {
+   "id": "Crocomire Save Room",
+   "rect": [
+    45,
+    51,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Post Crocomire Save Room",
+   "rect": [
+    41,
+    54,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Lower Norfair Elevator",
+   "rect": [
+    50,
+    53,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "transit"
+   ]
+  },
+  {
+   "id": "Lower Norfair Elevator Save Room",
+   "rect": [
+    49,
+    53,
+    1,
+    1
+   ],
+   "region": "Norfair",
+   "tags": [
+    "save",
+    "transit"
+   ]
+  },
+  {
+   "id": "Wrecked Ship Entrance",
+   "rect": [
+    47,
+    8,
+    4,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Wrecked Ship Main Shaft",
+   "rect": [
+    47,
+    5,
+    6,
+    8
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Attic",
+   "rect": [
+    47,
+    4,
+    7,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Basement",
+   "rect": [
+    49,
+    13,
+    5,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Wrecked Ship Map Room",
+   "rect": [
+    48,
+    13,
+    1,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Phantoon's Room",
+   "rect": [
+    54,
+    13,
+    1,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "boss"
+   ]
+  },
+  {
+   "id": "Wrecked Ship West Super Room",
+   "rect": [
+    50,
+    11,
+    1,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Bowling Alley",
+   "rect": [
+    45,
+    5,
+    6,
+    3
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Gravity Suit Room",
+   "rect": [
+    45,
+    7,
+    1,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Wrecked Ship East Super Room",
+   "rect": [
+    53,
+    11,
+    4,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Sponge Bath",
+   "rect": [
+    52,
+    9,
+    2,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Spiky Death Room",
+   "rect": [
+    54,
+    9,
+    2,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Electric Death Room",
+   "rect": [
+    56,
+    7,
+    1,
+    3
+   ],
+   "region": "Wrecked Ship",
+   "tags": []
+  },
+  {
+   "id": "Wrecked Ship Energy Tank Room",
+   "rect": [
+    53,
+    7,
+    3,
+    2
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Assembly Line",
+   "rect": [
+    54,
+    4,
+    3,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "upgrade"
+   ]
+  },
+  {
+   "id": "Wrecked Ship Save Room",
+   "rect": [
+    52,
+    8,
+    1,
+    1
+   ],
+   "region": "Wrecked Ship",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Tourian First Room",
+   "rect": [
+    18,
+    13,
+    1,
+    4
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Map Room",
+   "rect": [
+    19,
+    16,
+    1,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Metroid Room 1",
+   "rect": [
+    12,
+    16,
+    6,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Metroid Room 2",
+   "rect": [
+    11,
+    16,
+    1,
+    2
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Metroid Room 3",
+   "rect": [
+    12,
+    17,
+    6,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Metroid Room 4",
+   "rect": [
+    18,
+    17,
+    1,
+    2
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Blue Hopper Room",
+   "rect": [
+    17,
+    19,
+    2,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Dust Torizo Room",
+   "rect": [
+    15,
+    19,
+    2,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Big Boy Room",
+   "rect": [
+    11,
+    19,
+    4,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Seaweed Room",
+   "rect": [
+    10,
+    19,
+    1,
+    2
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Recharge Room",
+   "rect": [
+    9,
+    20,
+    1,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Eye Door Room",
+   "rect": [
+    11,
+    20,
+    4,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Rinka Shaft",
+   "rect": [
+    15,
+    20,
+    1,
+    3
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Lower Tourian Save Room",
+   "rect": [
+    14,
+    21,
+    1,
+    1
+   ],
+   "region": "Tourian",
+   "tags": [
+    "save"
+   ]
+  },
+  {
+   "id": "Mother Brain Room",
+   "rect": [
+    11,
+    22,
+    4,
+    1
+   ],
+   "region": "Tourian",
+   "tags": [
+    "boss"
+   ]
+  },
+  {
+   "id": "Tourian Escape Room 1",
+   "rect": [
+    9,
+    22,
+    2,
+    1
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Escape Room 2",
+   "rect": [
+    9,
+    23,
+    1,
+    2
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Escape Room 3",
+   "rect": [
+    10,
+    23,
+    6,
+    2
+   ],
+   "region": "Tourian",
+   "tags": []
+  },
+  {
+   "id": "Tourian Escape Room 4",
+   "rect": [
+    16,
+    20,
+    3,
+    6
+   ],
+   "region": "Tourian",
+   "tags": []
+  }
+ ],
+ "edges": [
+  {
+   "a": "The Moat",
+   "b": "West Ocean",
+   "kind": "door"
+  },
+  {
+   "a": "Landing Site",
+   "b": "Crateria Power Bomb Room",
+   "kind": "door"
+  },
+  {
+   "a": "Landing Site",
+   "b": "Crateria Tube",
+   "kind": "door"
+  },
+  {
+   "a": "Crateria Tube",
+   "b": "Crateria Kihunter Room",
+   "kind": "door"
+  },
+  {
+   "a": "Parlor And Alcatraz",
+   "b": "Landing Site",
+   "kind": "door"
+  },
+  {
+   "a": "Parlor And Alcatraz",
+   "b": "Flyway",
+   "kind": "door"
+  },
+  {
+   "a": "Parlor And Alcatraz",
+   "b": "Pre-Map Flyway",
+   "kind": "door"
+  },
+  {
+   "a": "Parlor And Alcatraz",
+   "b": "Climb",
+   "kind": "door"
+  },
+  {
+   "a": "Climb",
+   "b": "Crateria Super Room",
+   "kind": "door"
+  },
+  {
+   "a": "Climb",
+   "b": "Pit Room",
+   "kind": "door"
+  },
+  {
+   "a": "Pit Room",
+   "b": "Blue Brinstar Elevator Room",
+   "kind": "door"
+  },
+  {
+   "a": "Flyway",
+   "b": "Bomb Torizo Room",
+   "kind": "door"
+  },
+  {
+   "a": "Pre-Map Flyway",
+   "b": "Crateria Map Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crateria Save Room",
+   "b": "Parlor And Alcatraz",
+   "kind": "door"
+  },
+  {
+   "a": "The Final Missile",
+   "b": "Final Missile Bombway",
+   "kind": "door"
+  },
+  {
+   "a": "Final Missile Bombway",
+   "b": "Parlor And Alcatraz",
+   "kind": "door"
+  },
+  {
+   "a": "Terminator Room",
+   "b": "Parlor And Alcatraz",
+   "kind": "door"
+  },
+  {
+   "a": "Green Pirates Shaft",
+   "b": "Gauntlet Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Pirates Shaft",
+   "b": "Terminator Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Pirates Shaft",
+   "b": "Statues Hallway",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Mushrooms",
+   "b": "Green Pirates Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Elevator Room",
+   "b": "Lower Mushrooms",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Elevator Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Crateria Kihunter Room",
+   "b": "The Moat",
+   "kind": "door"
+  },
+  {
+   "a": "Crateria Kihunter Room",
+   "b": "Red Brinstar Elevator Room",
+   "kind": "door"
+  },
+  {
+   "a": "Statues Hallway",
+   "b": "Statues Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Brinstar Elevator Room",
+   "b": "Caterpillar Room",
+   "kind": "door"
+  },
+  {
+   "a": "Blue Brinstar Elevator Room",
+   "b": "Morph Ball Room",
+   "kind": "door"
+  },
+  {
+   "a": "Statues Room",
+   "b": "Tourian First Room",
+   "kind": "door"
+  },
+  {
+   "a": "Gauntlet Entrance",
+   "b": "Landing Site",
+   "kind": "door"
+  },
+  {
+   "a": "Gauntlet Energy Tank Room",
+   "b": "Gauntlet Entrance",
+   "kind": "door"
+  },
+  {
+   "a": "West Ocean",
+   "b": "Attic",
+   "kind": "door"
+  },
+  {
+   "a": "West Ocean",
+   "b": "Bowling Alley",
+   "kind": "door"
+  },
+  {
+   "a": "West Ocean",
+   "b": "Bowling Alley Path",
+   "kind": "door"
+  },
+  {
+   "a": "West Ocean",
+   "b": "Gravity Suit Room",
+   "kind": "door"
+  },
+  {
+   "a": "West Ocean",
+   "b": "Wrecked Ship Entrance",
+   "kind": "door"
+  },
+  {
+   "a": "East Ocean",
+   "b": "Forgotten Highway Kago Room",
+   "kind": "door"
+  },
+  {
+   "a": "Forgotten Highway Kago Room",
+   "b": "Crab Maze",
+   "kind": "door"
+  },
+  {
+   "a": "Forgotten Highway Elevator",
+   "b": "Maridia Elevator Room",
+   "kind": "door"
+  },
+  {
+   "a": "Forgotten Highway Elbow",
+   "b": "Crab Maze",
+   "kind": "door"
+  },
+  {
+   "a": "Forgotten Highway Elbow",
+   "b": "Forgotten Highway Elevator",
+   "kind": "door"
+  },
+  {
+   "a": "Red Tower",
+   "b": "Hellway",
+   "kind": "door"
+  },
+  {
+   "a": "Red Tower",
+   "b": "Bat Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Brinstar Fireflea Room",
+   "b": "Red Tower",
+   "kind": "door"
+  },
+  {
+   "a": "X-Ray Scope Room",
+   "b": "Red Brinstar Fireflea Room",
+   "kind": "door"
+  },
+  {
+   "a": "Bat Room",
+   "b": "Below Spazer",
+   "kind": "door"
+  },
+  {
+   "a": "Below Spazer",
+   "b": "Spazer Room",
+   "kind": "door"
+  },
+  {
+   "a": "Below Spazer",
+   "b": "West Glass Tube Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Hellway",
+   "b": "Caterpillar Room",
+   "kind": "door"
+  },
+  {
+   "a": "Caterpillar Room",
+   "b": "Red Fish Room",
+   "kind": "door"
+  },
+  {
+   "a": "Caterpillar Room",
+   "b": "Caterpillar Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Alpha Power Bomb Room",
+   "b": "Caterpillar Room",
+   "kind": "door"
+  },
+  {
+   "a": "Beta Power Bomb Room",
+   "b": "Caterpillar Room",
+   "kind": "door"
+  },
+  {
+   "a": "Sloaters Refill",
+   "b": "Red Tower",
+   "kind": "door"
+  },
+  {
+   "a": "Morph Ball Room",
+   "b": "Construction Zone",
+   "kind": "door"
+  },
+  {
+   "a": "Construction Zone",
+   "b": "Blue Brinstar Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "First Missile Room",
+   "b": "Construction Zone",
+   "kind": "door"
+  },
+  {
+   "a": "Blue Brinstar Boulder Room",
+   "b": "Blue Brinstar Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Billy Mays Room",
+   "b": "Blue Brinstar Boulder Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Main Shaft",
+   "b": "Early Supers Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Main Shaft",
+   "b": "Dachora Room",
+   "kind": "door"
+  },
+  {
+   "a": "Early Supers Room",
+   "b": "Brinstar Reserve Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Brinstar Pre-Map Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Brinstar Map Room",
+   "b": "Brinstar Pre-Map Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Fireflea Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Missile Refill",
+   "b": "Green Brinstar Fireflea Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Main Shaft Save Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Etecoon Save Room",
+   "b": "Etecoon Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Brinstar Beetom Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Etecoon Energy Tank Room",
+   "b": "Green Brinstar Beetom Room",
+   "kind": "door"
+  },
+  {
+   "a": "Etecoon Energy Tank Room",
+   "b": "Green Brinstar Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Etecoon Super Room",
+   "b": "Etecoon Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Hill Zone",
+   "b": "Morph Ball Room",
+   "kind": "door"
+  },
+  {
+   "a": "Green Hill Zone",
+   "b": "Noob Bridge",
+   "kind": "door"
+  },
+  {
+   "a": "Noob Bridge",
+   "b": "Red Tower",
+   "kind": "door"
+  },
+  {
+   "a": "Spore Spawn Room",
+   "b": "Spore Spawn Super Room",
+   "kind": "door"
+  },
+  {
+   "a": "Spore Spawn Room",
+   "b": "Spore Spawn Kihunter Room",
+   "kind": "door"
+  },
+  {
+   "a": "Dachora Room",
+   "b": "Big Pink",
+   "kind": "door"
+  },
+  {
+   "a": "Dachora Energy Refill",
+   "b": "Dachora Room",
+   "kind": "door"
+  },
+  {
+   "a": "Big Pink",
+   "b": "Spore Spawn Kihunter Room",
+   "kind": "door"
+  },
+  {
+   "a": "Big Pink",
+   "b": "Pink Brinstar Hopper Room",
+   "kind": "door"
+  },
+  {
+   "a": "Big Pink",
+   "b": "Spore Spawn Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Big Pink",
+   "b": "Green Hill Zone",
+   "kind": "door"
+  },
+  {
+   "a": "Big Pink Save Room",
+   "b": "Big Pink",
+   "kind": "door"
+  },
+  {
+   "a": "Pink Brinstar Power Bomb Room",
+   "b": "Big Pink",
+   "kind": "door"
+  },
+  {
+   "a": "Pink Brinstar Hopper Room",
+   "b": "Hopper Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Spore Spawn Farming Room",
+   "b": "Spore Spawn Super Room",
+   "kind": "door"
+  },
+  {
+   "a": "Waterway Energy Tank Room",
+   "b": "Big Pink",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Entrance",
+   "b": "Warehouse Zeela Room",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Entrance",
+   "b": "Business Center",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Energy Tank Room",
+   "b": "Warehouse Zeela Room",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Kihunter Room",
+   "b": "Kraid Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Kihunter Room",
+   "b": "Baby Kraid Room",
+   "kind": "door"
+  },
+  {
+   "a": "Warehouse Kihunter Room",
+   "b": "Warehouse Zeela Room",
+   "kind": "door"
+  },
+  {
+   "a": "Baby Kraid Room",
+   "b": "Kraid Eye Door Room",
+   "kind": "door"
+  },
+  {
+   "a": "Kraid Eye Door Room",
+   "b": "Kraid Recharge Station",
+   "kind": "door"
+  },
+  {
+   "a": "Kraid Eye Door Room",
+   "b": "Kraid Room",
+   "kind": "door"
+  },
+  {
+   "a": "Kraid Room",
+   "b": "Varia Suit Room",
+   "kind": "door"
+  },
+  {
+   "a": "West Glass Tube Tunnel",
+   "b": "Glass Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Boyon Gate Hall",
+   "b": "Warehouse Entrance",
+   "kind": "door"
+  },
+  {
+   "a": "Boyon Gate Hall",
+   "b": "Crab Hole",
+   "kind": "door"
+  },
+  {
+   "a": "Glass Tunnel",
+   "b": "Boyon Gate Hall",
+   "kind": "door"
+  },
+  {
+   "a": "Glass Tunnel",
+   "b": "Glass Tunnel Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Main Street",
+   "b": "Mt. Everest",
+   "kind": "door"
+  },
+  {
+   "a": "Main Street",
+   "b": "Fish Tank",
+   "kind": "door"
+  },
+  {
+   "a": "Main Street",
+   "b": "Crab Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Main Street",
+   "b": "Glass Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Fish Tank",
+   "b": "Mama Turtle Room",
+   "kind": "door"
+  },
+  {
+   "a": "Mt. Everest",
+   "b": "Crab Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Mt. Everest",
+   "b": "Fish Tank",
+   "kind": "door"
+  },
+  {
+   "a": "Crab Shaft",
+   "b": "Aqueduct",
+   "kind": "door"
+  },
+  {
+   "a": "Crab Tunnel",
+   "b": "Crab Hole",
+   "kind": "door"
+  },
+  {
+   "a": "Red Fish Room",
+   "b": "Mt. Everest",
+   "kind": "door"
+  },
+  {
+   "a": "Pseudo Plasma Spark Room",
+   "b": "Crab Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Northwest Maridia Bug Room",
+   "b": "Pseudo Plasma Spark Room",
+   "kind": "door"
+  },
+  {
+   "a": "Watering Hole",
+   "b": "Northwest Maridia Bug Room",
+   "kind": "door"
+  },
+  {
+   "a": "Aqueduct Save Room",
+   "b": "Aqueduct",
+   "kind": "door"
+  },
+  {
+   "a": "Aqueduct",
+   "b": "Below Botwoon Energy Tank",
+   "kind": "door"
+  },
+  {
+   "a": "Aqueduct",
+   "b": "West Aqueduct Quicksand Room",
+   "kind": "one-way"
+  },
+  {
+   "a": "Aqueduct",
+   "b": "East Aqueduct Quicksand Room",
+   "kind": "one-way"
+  },
+  {
+   "a": "Toilet",
+   "b": "Oasis",
+   "kind": "door"
+  },
+  {
+   "a": "Botwoon Hallway",
+   "b": "Botwoon's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Botwoon Hallway",
+   "b": "Aqueduct",
+   "kind": "door"
+  },
+  {
+   "a": "Botwoon's Room",
+   "b": "Botwoon Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Botwoon Energy Tank Room",
+   "b": "Halfie Climb Room",
+   "kind": "door"
+  },
+  {
+   "a": "Halfie Climb Room",
+   "b": "Colosseum",
+   "kind": "door"
+  },
+  {
+   "a": "Halfie Climb Room",
+   "b": "Maridia Missile Refill Room",
+   "kind": "door"
+  },
+  {
+   "a": "Colosseum",
+   "b": "Draygon Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Colosseum",
+   "b": "The Precious Room",
+   "kind": "door"
+  },
+  {
+   "a": "Draygon Save Room",
+   "b": "Maridia Health Refill Room",
+   "kind": "door"
+  },
+  {
+   "a": "Draygon's Room",
+   "b": "The Precious Room",
+   "kind": "door"
+  },
+  {
+   "a": "Space Jump Room",
+   "b": "Draygon's Room",
+   "kind": "door"
+  },
+  {
+   "a": "West Cactus Alley Room",
+   "b": "East Cactus Alley Room",
+   "kind": "door"
+  },
+  {
+   "a": "East Cactus Alley Room",
+   "b": "Halfie Climb Room",
+   "kind": "door"
+  },
+  {
+   "a": "Plasma Spark Room",
+   "b": "Kassiuz Room",
+   "kind": "door"
+  },
+  {
+   "a": "Plasma Spark Room",
+   "b": "Bug Sand Hole",
+   "kind": "door"
+  },
+  {
+   "a": "Plasma Spark Room",
+   "b": "Butterfly Room",
+   "kind": "door"
+  },
+  {
+   "a": "Plasma Spark Room",
+   "b": "Toilet",
+   "kind": "door"
+  },
+  {
+   "a": "Oasis",
+   "b": "East Sand Hall",
+   "kind": "door"
+  },
+  {
+   "a": "West Sand Hall",
+   "b": "Oasis",
+   "kind": "door"
+  },
+  {
+   "a": "West Sand Hall Tunnel",
+   "b": "West Sand Hall",
+   "kind": "door"
+  },
+  {
+   "a": "West Aqueduct Quicksand Room",
+   "b": "West Sand Hole",
+   "kind": "one-way"
+  },
+  {
+   "a": "East Aqueduct Quicksand Room",
+   "b": "East Sand Hole",
+   "kind": "one-way"
+  },
+  {
+   "a": "East Sand Hole",
+   "b": "East Sand Hall",
+   "kind": "one-way"
+  },
+  {
+   "a": "West Sand Hole",
+   "b": "West Sand Hall",
+   "kind": "one-way"
+  },
+  {
+   "a": "East Sand Hall",
+   "b": "Pants Room",
+   "kind": "door"
+  },
+  {
+   "a": "Bug Sand Hole",
+   "b": "Thread The Needle Room",
+   "kind": "door"
+  },
+  {
+   "a": "Butterfly Room",
+   "b": "West Cactus Alley Room",
+   "kind": "door"
+  },
+  {
+   "a": "Thread The Needle Room",
+   "b": "Maridia Elevator Room",
+   "kind": "door"
+  },
+  {
+   "a": "Maridia Elevator Room",
+   "b": "Forgotten Highway Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Kassiuz Room",
+   "b": "Plasma Tutorial Room",
+   "kind": "door"
+  },
+  {
+   "a": "Plasma Tutorial Room",
+   "b": "Plasma Room",
+   "kind": "door"
+  },
+  {
+   "a": "Pants Room",
+   "b": "Shaktool Room",
+   "kind": "door"
+  },
+  {
+   "a": "Shaktool Room",
+   "b": "Spring Ball Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crab Hole",
+   "b": "West Sand Hall Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Crab Hole",
+   "b": "Maridia Map Room",
+   "kind": "door"
+  },
+  {
+   "a": "Main Hall",
+   "b": "Fast Pillars Setup Room",
+   "kind": "door"
+  },
+  {
+   "a": "Fast Pillars Setup Room",
+   "b": "Mickey Mouse Room",
+   "kind": "door"
+  },
+  {
+   "a": "Fast Pillars Setup Room",
+   "b": "Pillar Room",
+   "kind": "door"
+  },
+  {
+   "a": "Pillar Room",
+   "b": "The Worst Room In The Game",
+   "kind": "door"
+  },
+  {
+   "a": "The Worst Room In The Game",
+   "b": "Amphitheatre",
+   "kind": "door"
+  },
+  {
+   "a": "Amphitheatre",
+   "b": "Red Kihunter Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Red Kihunter Shaft",
+   "b": "Lower Norfair Fireflea Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Kihunter Shaft",
+   "b": "Red Kihunter Shaft Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Kihunter Shaft",
+   "b": "Wasteland",
+   "kind": "door"
+  },
+  {
+   "a": "Metal Pirates Room",
+   "b": "Wasteland",
+   "kind": "door"
+  },
+  {
+   "a": "Plowerhouse Room",
+   "b": "Metal Pirates Room",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Farming Room",
+   "b": "Plowerhouse Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ridley's Room",
+   "b": "Lower Norfair Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ridley Tank Room",
+   "b": "Ridley's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Mickey Mouse Room",
+   "b": "The Worst Room In The Game",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Fireflea Room",
+   "b": "Lower Norfair Escape Power Bomb Room",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Spring Ball Maze Room",
+   "b": "Lower Norfair Fireflea Room",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Spring Ball Maze Room",
+   "b": "Lower Norfair Escape Power Bomb Room",
+   "kind": "door"
+  },
+  {
+   "a": "Three Musketeers' Room",
+   "b": "Lower Norfair Spring Ball Maze Room",
+   "kind": "door"
+  },
+  {
+   "a": "Acid Statue Room",
+   "b": "Main Hall",
+   "kind": "door"
+  },
+  {
+   "a": "Acid Statue Room",
+   "b": "Golden Torizo's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Golden Torizo's Room",
+   "b": "Screw Attack Room",
+   "kind": "door"
+  },
+  {
+   "a": "Screw Attack Room",
+   "b": "Fast Ripper Room",
+   "kind": "door"
+  },
+  {
+   "a": "Screw Attack Room",
+   "b": "Golden Torizo Energy Recharge",
+   "kind": "door"
+  },
+  {
+   "a": "Fast Ripper Room",
+   "b": "Fast Pillars Setup Room",
+   "kind": "door"
+  },
+  {
+   "a": "Business Center",
+   "b": "Cathedral Entrance",
+   "kind": "door"
+  },
+  {
+   "a": "Business Center",
+   "b": "Frog Savestation",
+   "kind": "door"
+  },
+  {
+   "a": "Business Center",
+   "b": "Crocomire Escape",
+   "kind": "door"
+  },
+  {
+   "a": "Norfair Map Room",
+   "b": "Business Center",
+   "kind": "door"
+  },
+  {
+   "a": "Hi Jump Energy Tank Room",
+   "b": "Business Center",
+   "kind": "door"
+  },
+  {
+   "a": "Hi Jump Boots Room",
+   "b": "Hi Jump Energy Tank Room",
+   "kind": "door"
+  },
+  {
+   "a": "Cathedral Entrance",
+   "b": "Cathedral",
+   "kind": "door"
+  },
+  {
+   "a": "Cathedral",
+   "b": "Rising Tide",
+   "kind": "door"
+  },
+  {
+   "a": "Rising Tide",
+   "b": "Bubble Mountain",
+   "kind": "door"
+  },
+  {
+   "a": "Frog Speedway",
+   "b": "Upper Norfair Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Upper Norfair Farming Room",
+   "b": "Bubble Mountain",
+   "kind": "door"
+  },
+  {
+   "a": "Purple Shaft",
+   "b": "Purple Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Purple Shaft",
+   "b": "Magdollite Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Frog Savestation",
+   "b": "Frog Speedway",
+   "kind": "door"
+  },
+  {
+   "a": "Bubble Mountain",
+   "b": "Bat Cave",
+   "kind": "door"
+  },
+  {
+   "a": "Bubble Mountain",
+   "b": "Single Chamber",
+   "kind": "door"
+  },
+  {
+   "a": "Bubble Mountain",
+   "b": "Purple Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Bubble Mountain Save Room",
+   "b": "Bubble Mountain",
+   "kind": "door"
+  },
+  {
+   "a": "Green Bubbles Missile Room",
+   "b": "Bubble Mountain",
+   "kind": "door"
+  },
+  {
+   "a": "Norfair Reserve Tank Room",
+   "b": "Green Bubbles Missile Room",
+   "kind": "door"
+  },
+  {
+   "a": "Bat Cave",
+   "b": "Speed Booster Hall",
+   "kind": "door"
+  },
+  {
+   "a": "Speed Booster Hall",
+   "b": "Speed Booster Room",
+   "kind": "door"
+  },
+  {
+   "a": "Single Chamber",
+   "b": "Three Musketeers' Room",
+   "kind": "door"
+  },
+  {
+   "a": "Single Chamber",
+   "b": "Double Chamber",
+   "kind": "door"
+  },
+  {
+   "a": "Single Chamber",
+   "b": "Spiky Platforms Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Double Chamber",
+   "b": "Wave Beam Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Gate Room",
+   "b": "Business Center",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Acid Room",
+   "b": "Ice Beam Gate Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Snake Room",
+   "b": "Ice Beam Tutorial Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Snake Room",
+   "b": "Ice Beam Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Snake Room",
+   "b": "Ice Beam Acid Room",
+   "kind": "door"
+  },
+  {
+   "a": "Ice Beam Tutorial Room",
+   "b": "Ice Beam Gate Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crumble Shaft",
+   "b": "Ice Beam Gate Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crumble Shaft",
+   "b": "Crocomire Speedway",
+   "kind": "door"
+  },
+  {
+   "a": "Nutella Refill",
+   "b": "Spiky Acid Snakes Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Spiky Acid Snakes Tunnel",
+   "b": "Kronic Boost Room",
+   "kind": "door"
+  },
+  {
+   "a": "Kronic Boost Room",
+   "b": "Volcano Room",
+   "kind": "door"
+  },
+  {
+   "a": "Magdollite Tunnel",
+   "b": "Kronic Boost Room",
+   "kind": "door"
+  },
+  {
+   "a": "Lava Dive Room",
+   "b": "Kronic Boost Room",
+   "kind": "door"
+  },
+  {
+   "a": "Spiky Platforms Tunnel",
+   "b": "Volcano Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Pirate Shaft",
+   "b": "Upper Norfair Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Red Pirate Shaft",
+   "b": "Acid Snakes Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Acid Snakes Tunnel",
+   "b": "Nutella Refill",
+   "kind": "door"
+  },
+  {
+   "a": "Crocomire Speedway",
+   "b": "Crocomire Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crocomire Speedway",
+   "b": "Acid Snakes Tunnel",
+   "kind": "door"
+  },
+  {
+   "a": "Crocomire Speedway",
+   "b": "Crocomire's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Crocomire Escape",
+   "b": "Crocomire Speedway",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Farming Room",
+   "b": "Crocomire's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Farming Room",
+   "b": "Post Crocomire Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Farming Room",
+   "b": "Post Crocomire Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Power Bomb Room",
+   "b": "Post Crocomire Farming Room",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Shaft",
+   "b": "Post Crocomire Missile Room",
+   "kind": "door"
+  },
+  {
+   "a": "Post Crocomire Shaft",
+   "b": "Post Crocomire Jump Room",
+   "kind": "door"
+  },
+  {
+   "a": "Grapple Beam Room",
+   "b": "Grapple Tutorial Room 1",
+   "kind": "door"
+  },
+  {
+   "a": "Grapple Beam Room",
+   "b": "Post Crocomire Jump Room",
+   "kind": "door"
+  },
+  {
+   "a": "Grapple Tutorial Room 1",
+   "b": "Grapple Tutorial Room 2",
+   "kind": "door"
+  },
+  {
+   "a": "Grapple Tutorial Room 2",
+   "b": "Grapple Tutorial Room 3",
+   "kind": "door"
+  },
+  {
+   "a": "Grapple Tutorial Room 3",
+   "b": "Post Crocomire Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Elevator",
+   "b": "Lava Dive Room",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Elevator",
+   "b": "Main Hall",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Norfair Elevator Save Room",
+   "b": "Lower Norfair Elevator",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Entrance",
+   "b": "Wrecked Ship Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Main Shaft",
+   "b": "Wrecked Ship Save Room",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Main Shaft",
+   "b": "Sponge Bath",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Main Shaft",
+   "b": "Wrecked Ship East Super Room",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Main Shaft",
+   "b": "Basement",
+   "kind": "door"
+  },
+  {
+   "a": "Attic",
+   "b": "Assembly Line",
+   "kind": "door"
+  },
+  {
+   "a": "Attic",
+   "b": "Wrecked Ship Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Basement",
+   "b": "Phantoon's Room",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Map Room",
+   "b": "Basement",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship West Super Room",
+   "b": "Wrecked Ship Main Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Gravity Suit Room",
+   "b": "Bowling Alley",
+   "kind": "door"
+  },
+  {
+   "a": "Sponge Bath",
+   "b": "Spiky Death Room",
+   "kind": "door"
+  },
+  {
+   "a": "Spiky Death Room",
+   "b": "Electric Death Room",
+   "kind": "door"
+  },
+  {
+   "a": "Electric Death Room",
+   "b": "East Ocean",
+   "kind": "door"
+  },
+  {
+   "a": "Wrecked Ship Energy Tank Room",
+   "b": "Electric Death Room",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian First Room",
+   "b": "Tourian Map Room",
+   "kind": "door"
+  },
+  {
+   "a": "Metroid Room 1",
+   "b": "Tourian First Room",
+   "kind": "door"
+  },
+  {
+   "a": "Metroid Room 2",
+   "b": "Metroid Room 1",
+   "kind": "door"
+  },
+  {
+   "a": "Metroid Room 2",
+   "b": "Metroid Room 3",
+   "kind": "door"
+  },
+  {
+   "a": "Metroid Room 3",
+   "b": "Metroid Room 4",
+   "kind": "door"
+  },
+  {
+   "a": "Metroid Room 4",
+   "b": "Blue Hopper Room",
+   "kind": "door"
+  },
+  {
+   "a": "Dust Torizo Room",
+   "b": "Blue Hopper Room",
+   "kind": "door"
+  },
+  {
+   "a": "Big Boy Room",
+   "b": "Dust Torizo Room",
+   "kind": "door"
+  },
+  {
+   "a": "Seaweed Room",
+   "b": "Big Boy Room",
+   "kind": "door"
+  },
+  {
+   "a": "Seaweed Room",
+   "b": "Tourian Eye Door Room",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Recharge Room",
+   "b": "Seaweed Room",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Eye Door Room",
+   "b": "Rinka Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Lower Tourian Save Room",
+   "b": "Rinka Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Mother Brain Room",
+   "b": "Rinka Shaft",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Escape Room 1",
+   "b": "Mother Brain Room",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Escape Room 1",
+   "b": "Tourian Escape Room 2",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Escape Room 2",
+   "b": "Tourian Escape Room 3",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Escape Room 3",
+   "b": "Tourian Escape Room 4",
+   "kind": "door"
+  },
+  {
+   "a": "Tourian Escape Room 4",
+   "b": "Climb",
+   "kind": "door"
+  }
+ ],
+ "items": []
+}

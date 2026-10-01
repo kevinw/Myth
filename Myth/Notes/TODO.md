@@ -1,3 +1,5 @@
+- animate any rigged model with text https://github.com/Friedrich-M/UniMate
+- try Jev for a "similarity stamp" or "tile fill" in the editor
 - idea: YOU place the save points. you have a limited amount. secret mechanic to tunnel into them to warp.
 - do some automated research on https://steamdb.info/charts/?tagid=1628&sort=peak
 - try picking an mid jump attack direction by doing an actor scan (could be gated by time...) to address a particular T&P pain point

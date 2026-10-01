@@ -1,0 +1,99 @@
+{
+ "games": [
+  {
+   "game": "FIXTURE (synthetic)",
+   "source": "Hand-built to exercise the metrics. NOT a real game. Delete once real maps land.",
+   "rooms": 12,
+   "edges": 14,
+   "cycleRank": 3,
+   "cycleRankPer100": 25.0,
+   "shortLoopShare": 0.0,
+   "medianLoop": 5,
+   "branchingShare": 33.3,
+   "deadEndShare": 8.3,
+   "saveCentrality": 45.5,
+   "saveAnchorCentrality": 75.8,
+   "areaSpread": 2.2,
+   "interdigitation": 100.0,
+   "silhouetteCollisions": 66.7,
+   "edgeKinds": {
+    "open": 7,
+    "gate": 4,
+    "door": 1,
+    "one-way": 1,
+    "hidden": 1
+   },
+   "frontierMedian": 2.0,
+   "frontierMin": 0,
+   "frontierCurve": [
+    4,
+    2,
+    2,
+    0
+   ],
+   "orderings": 2,
+   "softlocked": null,
+   "verbScore": 2.0,
+   "keycards": 0,
+   "gateSpans": {
+    "morph": {
+     "locks": 2,
+     "firstUse": 0,
+     "medianUse": 1.5
+    },
+    "hook": {
+     "locks": 2,
+     "firstUse": 1,
+     "medianUse": 2.0
+    }
+   },
+   "promissoryNotes": 3,
+   "noteLatencyMedian": 22,
+   "noteLatencySpread": [
+    8,
+    41
+   ]
+  },
+  {
+   "game": "Super Metroid",
+   "source": "blkerby/MapRandomizer room_geometry.json + maps/vanilla/vanilla_map.json (CC BY 4.0). Vanilla layout; gates not yet imported -- see sm-json-data for per-strat requirements.",
+   "rooms": 253,
+   "edges": 276,
+   "cycleRank": 26,
+   "cycleRankPer100": 10.3,
+   "shortLoopShare": 24.0,
+   "medianLoop": 8,
+   "branchingShare": 23.7,
+   "deadEndShare": 29.2,
+   "saveCentrality": 15.0,
+   "saveAnchorCentrality": 81.1,
+   "areaSpread": 50.0,
+   "interdigitation": 40.0,
+   "silhouetteCollisions": 79.4,
+   "edgeKinds": {
+    "door": 270,
+    "one-way": 6
+   }
+  },
+  {
+   "game": "Myth (ours)",
+   "source": "Assets/Rooms/Myth",
+   "rooms": 110,
+   "edges": 100,
+   "cycleRank": 23,
+   "cycleRankPer100": 20.9,
+   "shortLoopShare": 73.9,
+   "medianLoop": 4,
+   "branchingShare": 31.8,
+   "deadEndShare": 40.0,
+   "saveCentrality": null,
+   "saveAnchorCentrality": null,
+   "areaSpread": 18.4,
+   "interdigitation": 3.2,
+   "silhouetteCollisions": 62.7,
+   "edgeKinds": {
+    "open": 100
+   }
+  }
+ ]
+}

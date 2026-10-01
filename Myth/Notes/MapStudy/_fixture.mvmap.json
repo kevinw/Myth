@@ -1,0 +1,44 @@
+{
+ "game": "FIXTURE (synthetic)",
+ "source": "Hand-built to exercise the metrics. NOT a real game. Delete once real maps land.",
+ "start": "landing",
+ "rooms": [
+  { "id": "landing",   "rect": [0, 0, 4, 3],  "region": "surface", "tags": ["save"] },
+  { "id": "hall",      "rect": [4, 0, 4, 3],  "region": "surface", "tags": ["hub"] },
+  { "id": "shaft",     "rect": [8, 0, 3, 9],  "region": "surface", "tags": ["transit"] },
+  { "id": "morph-room","rect": [11, 0, 4, 3], "region": "caves",   "tags": ["upgrade"] },
+  { "id": "cave-a",    "rect": [15, 0, 4, 3], "region": "caves",   "tags": [] },
+  { "id": "cave-b",    "rect": [15, 3, 4, 3], "region": "caves",   "tags": ["secret"] },
+  { "id": "vista",     "rect": [4, 3, 4, 3],  "region": "surface", "tags": ["vista"] },
+  { "id": "hook-room", "rect": [4, 6, 4, 3],  "region": "caves",   "tags": ["upgrade", "save"] },
+  { "id": "tower",     "rect": [11, 3, 4, 6], "region": "city",    "tags": ["transit"] },
+  { "id": "city-gate", "rect": [15, 6, 4, 3], "region": "city",    "tags": [] },
+  { "id": "depths",    "rect": [8, 9, 4, 4],  "region": "city",    "tags": ["save"] },
+  { "id": "boss",      "rect": [12, 9, 4, 4], "region": "city",    "tags": ["boss", "arena"] }
+ ],
+ "edges": [
+  { "a": "landing",   "b": "hall",      "kind": "open" },
+  { "a": "hall",      "b": "shaft",     "kind": "open" },
+  { "a": "shaft",     "b": "morph-room","kind": "door" },
+  { "a": "morph-room","b": "cave-a",    "kind": "gate:morph" },
+  { "a": "cave-a",    "b": "cave-b",    "kind": "open" },
+  { "a": "cave-b",    "b": "tower",     "kind": "one-way" },
+  { "a": "hall",      "b": "vista",     "kind": "open" },
+  { "a": "vista",     "b": "hook-room", "kind": "gate:morph" },
+  { "a": "shaft",     "b": "tower",     "kind": "hidden" },
+  { "a": "tower",     "b": "hook-room", "kind": "open" },
+  { "a": "tower",     "b": "city-gate", "kind": "gate:hook" },
+  { "a": "city-gate", "b": "depths",    "kind": "open" },
+  { "a": "depths",    "b": "boss",      "kind": "open" },
+  { "a": "depths",    "b": "landing",   "kind": "gate:hook" }
+ ],
+ "items": [
+  { "ability": "morph", "room": "morph-room" },
+  { "ability": "hook",  "room": "hook-room" }
+ ],
+ "notes": [
+  { "issued": "vista", "redeemed": "hook-room", "ability": "morph", "minutes": 8,  "kind": "vista" },
+  { "issued": "hall",  "redeemed": "depths",    "ability": "hook",  "minutes": 41, "kind": "locked-door" },
+  { "issued": "shaft", "redeemed": "city-gate", "ability": "hook",  "minutes": 22, "kind": "vista" }
+ ]
+}
