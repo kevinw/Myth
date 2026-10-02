@@ -201,7 +201,7 @@ public partial class Manager
 				return true;
 			}
 			if (room != null)
-				PreviewActorSurface(room, actor, property.Name, value, preview);
+				PreviewActorProperty(room, actor, property.Name, value, preview);
 		}
 		else if (property.Type == typeof(ContentRef<CostumeContent>) || property.Type == typeof(ContentRef<RibbonStyleContent>))
 		{
@@ -268,14 +268,17 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (IsMovingPlatformMaterialProperty(property))
+		else if (IsDualMaterialProperty(property))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? "metal-dual";
-			if (DrawMovingPlatformMaterialButtons(ref value))
+			if (DrawDualMaterialPicker(ref value, out var preview))
 			{
+				ClearContentPickerPreview(restore: false);
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
 			}
+			if (room != null)
+				PreviewActorProperty(room, actor, property.Name, value, preview);
 		}
 		else if (property.Name == nameof(Prop.SpriteName) && IsPropActor(actor))
 		{
@@ -1385,21 +1388,13 @@ public partial class Manager
 			dual.AsSpan(0, value.Length).Equals(value, StringComparison.OrdinalIgnoreCase);
 	}
 
-	// Dual tilesets a MovingPlatform can be skinned with (each has generated color + normal tiles).
-	static readonly (string Tileset, string Label)[] PlatformMaterials =
-	[
-		("metal-dual", "Metal"),
-		("castle-dual", "Castle"),
-		("stone-dual", "Stone"),
-	];
-
-	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
+	static bool IsDualMaterialProperty(ActorSpecs.EditableProperty property)
+		=> property.Name == nameof(DualGridRect.Material) && typeof(DualGridRect).IsAssignableFrom(property.DeclaringType);
 
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(ContentRef<SurfaceContent>);
 
-	enum ContentPickerPreviewKind { None, RoomSurface, ActorSurface, NeuralModel }
+	enum ContentPickerPreviewKind { None, RoomSurface, ActorProperty, NeuralModel }
 	ContentPickerPreviewKind contentPickerPreviewKind;
 	string contentPickerPreviewRoomId = "";
 	string contentPickerPreviewActorId = "";
@@ -1454,12 +1449,12 @@ public partial class Manager
 		runtimeRoom.BackdropSurfaceId = preview!;
 	}
 
-	void PreviewActorSurface(Room room, JsonObject actor, string property, string original, string? preview)
+	void PreviewActorProperty(Room room, JsonObject actor, string property, string original, string? preview)
 	{
 		if (ActorSpecs.GetActorId(actor) is not { } actorId ||
 			game is not { IsEditorPreview: true, CurrentRoom: { } runtimeRoom } || runtimeRoom.Id != room.Id ||
 			game.GetActorById(actorId) is not { } runtime ||
-			!BeginContentPickerPreview(ContentPickerPreviewKind.ActorSurface, room, actorId, property, -1, original, preview))
+			!BeginContentPickerPreview(ContentPickerPreviewKind.ActorProperty, room, actorId, property, -1, original, preview))
 			return;
 		ActorSpecs.SetEditableProperty(runtime, property, JsonValue.Create(preview));
 	}
@@ -1482,7 +1477,7 @@ public partial class Manager
 				case ContentPickerPreviewKind.RoomSurface:
 					room.BackdropSurfaceId = contentPickerPreviewOriginal;
 					break;
-				case ContentPickerPreviewKind.ActorSurface:
+				case ContentPickerPreviewKind.ActorProperty:
 					if (game.GetActorById(contentPickerPreviewActorId) is { } actor)
 						ActorSpecs.SetEditableProperty(actor, contentPickerPreviewProperty,
 							JsonValue.Create(contentPickerPreviewOriginal));
@@ -1594,22 +1589,52 @@ public partial class Manager
 		return changed;
 	}
 
-	bool DrawMovingPlatformMaterialButtons(ref string value)
-	{
-		var changed = false;
-		for (var i = 0; i < PlatformMaterials.Length; i++)
-		{
-			var (tileset, label) = PlatformMaterials[i];
-			if (i > 0)
-				SameLine();
+	// Every dual tileset a tile kit declares, so a dual-grid block can wear any of them.
+	static readonly List<(string Tileset, string Label)> dualMaterials = [];
 
-			var image = Assets.GetTileset(tileset)?.Tiles.FirstOrDefault() ?? new Subtexture();
-			if (ImGuiSubtextureButton(tileset, image, label, value == tileset, new Vector2(ButtonSize, ButtonSize)) && value != tileset)
+	static List<(string Tileset, string Label)> DualMaterials()
+	{
+		dualMaterials.Clear();
+		foreach (var entry in Factory.Entries.Values)
+			if (entry.DualTilesetName is { } tileset && !dualMaterials.Exists(m => m.Tileset == tileset))
+				dualMaterials.Add((tileset, entry.Name));
+		return dualMaterials;
+	}
+
+	// The fully-interior dual tile: the material itself, with no edge art.
+	static Subtexture DualMaterialSwatch(string tileset) => Assets.GetTileset(tileset)?.GetTile(2, 1) ?? new Subtexture();
+
+	const int DualMaterialPickerColumns = 8;
+
+	// Like the surface picker: the current material's swatch opens a grid of every dual tileset, and hovering
+	// one previews it on the live actor.
+	bool DrawDualMaterialPicker(ref string value, out string? preview)
+	{
+		preview = null;
+		var changed = false;
+		if (ImGuiSubtextureButton("##DualMaterial", DualMaterialSwatch(value), $"Material '{value}' — click to change", false,
+			new Vector2(ButtonSize), true, 0f))
+			OpenPopup("##DualMaterialGrid");
+
+		PushSwatchGridStyle();
+		if (BeginPopup("##DualMaterialGrid"))
+		{
+			var column = 0;
+			foreach (var (tileset, label) in DualMaterials())
 			{
-				value = tileset;
-				changed = true;
+				SwatchGridWrap(ref column, DualMaterialPickerColumns);
+				if (SwatchGridButton($"##dual{tileset}", DualMaterialSwatch(tileset), label, value == tileset))
+				{
+					value = tileset;
+					changed = true;
+					CloseCurrentPopup();
+				}
+				if (IsItemHovered())
+					preview = tileset;
 			}
+			EndPopup();
 		}
+		PopSwatchGridStyle();
 		return changed;
 	}
 

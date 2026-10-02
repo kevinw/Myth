@@ -133,11 +133,12 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 		riders.Clear();
 		foreach (var actor in Game.Actors) if (CanRide(actor))
 		{
-			// A burrower in the seam we closed on it travels with the side it's following: our outline
-			// carries it, the solid we pinned it to leaves it where it is.
-			if (actor is Pawn pawn && pawn.BurrowSeam == this)
+			// A burrower sealed in a seam rides only the side it's following: the crusher's outline, or the
+			// solid the crusher pinned it to. With two crushers meeting, the other side is a crusher too, and
+			// both carrying it would tear it off whichever one it's actually walking.
+			if (actor is Pawn { BurrowSeam: { } seam } pawn)
 			{
-				if (pawn.FollowsBurrowSeam)
+				if (pawn.FollowsBurrowSeam ? seam == this : seam != this && actor.OverlapsAny(Point2.Zero, this))
 					riders.Add(actor);
 				continue;
 			}
@@ -169,7 +170,7 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
 			// top, carry it. Both move by the same delta with the actor's own collision, so they
 			// scrape to a stop against walls instead of clipping through.
-			if (riders.Contains(actor) || !(actor is Pawn pawn && pawn.BurrowSeam == this) && actor.OverlapsAny(Point2.Zero, this))
+			if (riders.Contains(actor) || actor is not Pawn { BurrowSeam: not null } && actor.OverlapsAny(Point2.Zero, this))
 			{
 				actor.MovePixels(step);
 				if (actor.OverlapsAny(Point2.Zero, this))

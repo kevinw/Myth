@@ -9,6 +9,7 @@
   "TintSprite": false,
   "Cookie": "Cone",
   "CookieCutoff": 0.033,
+  "DimsWhenBuried": true,
   "HitFlickerTime": 0.05,
   "HitFlickerStrength": 0
 }

@@ -671,23 +671,98 @@ public partial class Game
 		public void Dispose() => game.seam = null;
 	}
 
+	internal static readonly Point2[] BurrowDebugDirections = [Point2.Right, Point2.Down, Point2.Left, Point2.Up];
+
+	// Which steps out of the burrow point are walkable with the solid kept on the cursor's side (bit i =
+	// BurrowDebugDirections[i]), seen through its seam. For the debug overlay.
+	internal int BurrowEdges(Point2 vertex, in BurrowCursor burrow)
+	{
+		using var _ = WalkingSeam(burrow.Seam, burrow.SeamFollow);
+		var mask = 0;
+		for (var i = 0; i < BurrowDebugDirections.Length; i++)
+		{
+			var d = BurrowDebugDirections[i];
+			var left = (Vector2)new Point2(d.Y, -d.X);
+			var valid = left == burrow.Toward ? BoundaryEdgeValid(vertex, d, true)
+				: -left == burrow.Toward ? BoundaryEdgeValid(vertex, d, false)
+				: BoundaryEdgeValid(vertex, d, true) || BoundaryEdgeValid(vertex, d, false);
+			if (valid)
+				mask |= 1 << i;
+		}
+		return mask;
+	}
+
+	// The walk can go somewhere from here: ahead, or back the way it came (a reversal flips the hand with the
+	// heading, keeping the solid on the same side).
+	internal bool BurrowCanWalk(Point2 vertex, in BurrowCursor burrow)
+	{
+		using var _ = WalkingSeam(burrow.Seam, burrow.SeamFollow);
+		return PickBoundaryDir(vertex, burrow.Heading, burrow.SolidLeft) != Point2.Zero ||
+			PickBoundaryDir(vertex, -burrow.Heading, !burrow.SolidLeft) != Point2.Zero;
+	}
+
 	// No air on either side of the burrow point's face: something closed over it.
 	internal bool Buried(Point2 vertex, Vector2 toward, out Point2 a, out Point2 b)
 	{
-		var across = new Vector2(toward.Y, -toward.X) * 0.5f;
-		a = CellAt(vertex - toward * 0.5f + across);
-		b = CellAt(vertex - toward * 0.5f - across);
+		FaceCells(vertex, -toward, out a, out b);
 		return SolidPixel(a) && SolidPixel(b);
 	}
 
-	internal Crusher? BuryingCrusher(Point2 vertex, Vector2 toward)
+	// The two cells beside `vertex` on its `side`.
+	static void FaceCells(Point2 vertex, Vector2 side, out Point2 a, out Point2 b)
 	{
-		if (!Buried(vertex, toward, out var a, out var b))
-			return null;
+		var across = new Vector2(side.Y, -side.X) * 0.5f;
+		a = CellAt(vertex + side * 0.5f + across);
+		b = CellAt(vertex + side * 0.5f - across);
+	}
+
+	static bool Covers(Actor actor, Point2 cell) => actor.Hitbox.Contains(cell - actor.Position);
+
+	// Which side of a crusher seam the burrow walks, picked fresh from the geometry around `vertex` every frame,
+	// so crushers meeting, parting and carrying us can't leave a stale choice behind. Only while the walk is
+	// buried -- no edge through the touching solids -- and a crusher is one of them: follow the crusher's own
+	// outline when `intent` presses toward it (or, with no input, when we already were), otherwise walk the solid
+	// it pinned us to. Our current hand is tried before the flipped one. False, with no seam, when nothing is
+	// buried here or no choice gives the walk an edge.
+	internal bool ResolveBurrowSeam(Point2 vertex, ref BurrowCursor burrow, Vector2 intent, float deadzone)
+	{
+		var previous = burrow;
+		burrow.Seam = null;
+		if (BurrowCanWalk(vertex, burrow))
+			return false;
+
+		FaceCells(vertex, burrow.Toward, out var ahead0, out var ahead1);
+		FaceCells(vertex, -burrow.Toward, out var behind0, out var behind1);
 		foreach (var actor in Actors)
-			if (actor is Crusher crusher && (crusher.Hitbox.Contains(a - crusher.Position) || crusher.Hitbox.Contains(b - crusher.Position)))
-				return crusher;
-		return null;
+		{
+			if (actor is not Crusher crusher)
+				continue;
+			var ahead = Covers(crusher, ahead0) || Covers(crusher, ahead1);
+			if (!ahead && !Covers(crusher, behind0) && !Covers(crusher, behind1))
+				continue;
+
+			var towardCrusher = ahead ? burrow.Toward : -burrow.Toward;
+			var follow = intent != Vector2.Zero
+				? Vector2.Dot(intent, towardCrusher) > deadzone
+				: previous.Seam == crusher && previous.SeamFollow;
+			foreach (var seamFollow in (ReadOnlySpan<bool>)[follow, !follow])
+			foreach (var flip in (ReadOnlySpan<bool>)[false, true])
+			{
+				var candidate = burrow with
+				{
+					Seam = crusher,
+					SeamFollow = seamFollow,
+					Toward = flip ? -burrow.Toward : burrow.Toward,
+					SolidLeft = flip != burrow.SolidLeft
+				};
+				if (BurrowCanWalk(vertex, candidate))
+				{
+					burrow = candidate;
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	bool SolidPixel(Point2 cell)

@@ -50,6 +50,8 @@ public class BurrowLine : PointPathActor, IActivationSource
 	bool firstConnected;
 	bool lastConnected;
 	bool targetActive;
+	// Where we were placed. Seeds the stitches and glint, so a line riding a moving actor keeps its look.
+	Point2 seedPosition;
 	bool IActivationSource.ActivationIsPersistent => false;
 
 	public BurrowLine()
@@ -57,6 +59,12 @@ public class BurrowLine : PointPathActor, IActivationSource
 		Depth = Depths.Ambient;
 		Sprite = null;
 		CollidesWithSolids = false;
+	}
+
+	public override void Added()
+	{
+		base.Added();
+		seedPosition = Position;
 	}
 
 	public override void Render(Batcher batcher)
@@ -270,7 +278,7 @@ public class BurrowLine : PointPathActor, IActivationSource
 	}
 
 	float StitchUnit(int stitch, uint salt)
-		=> (Hash32.Mix((uint)Position.X * 0x9e3779b9u ^ (uint)Position.Y * 0x85ebca6bu ^
+		=> (Hash32.Mix((uint)seedPosition.X * 0x9e3779b9u ^ (uint)seedPosition.Y * 0x85ebca6bu ^
 			(uint)(stitch + 1) * 0xc2b2ae35u ^ salt * 0x27d4eb2du) & 0xffff) / 65535f;
 
 	void RenderGlint(Batcher batcher)
@@ -279,7 +287,7 @@ public class BurrowLine : PointPathActor, IActivationSource
 		if (length <= 0)
 			return;
 
-		var distance = (Time.SecondsF * GlintSpeed + Position.X * 0.37f + Position.Y * 0.19f) % length;
+		var distance = (Time.SecondsF * GlintSpeed + seedPosition.X * 0.37f + seedPosition.Y * 0.19f) % length;
 		if (distance < 0)
 			distance += length;
 		var center = PointAtDistance(distance) - Position;

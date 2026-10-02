@@ -1,3 +1,4 @@
+using System.Numerics;
 using Foster.Framework;
 
 namespace Myth;
@@ -37,6 +38,9 @@ public class Light : Actor, IHitByHitbox
 	// Cone cookie only: pushes the cone's apex down its axis (fraction of the radius) so the cone
 	// begins below the source -- e.g. a horizontal bulb casting a cutoff cone. 0 = apex at the source.
 	[I(0, 1)] public float CookieCutoff = 0f;
+	// When what the light shines into turns solid -- a lamp on a Crusher slammed flush to the floor -- it eases
+	// back to a small dim circle instead of projecting its cone into the ground.
+	public bool DimsWhenBuried;
 	[InspectorGroup("Shadow")]
 	[I(0, 16)] public float ShadowSourceRadius = DefaultShadowSourceRadius;
 	[I(0, 3)] public float ShadowSoftness = 1.0f;
@@ -128,6 +132,37 @@ public class Light : Actor, IHitByHitbox
 
 	// Keep the old flicker headroom as the average while the light breathes around it.
 	public float RenderScale => FlickerScale * HitFlickerScale;
+	public float RenderRadius => Radius * RenderScale * Calc.Lerp(1, BuriedRadiusScale, buried);
+	public float RenderIntensity => Intensity * RenderScale * Calc.Lerp(1, BuriedIntensityScale, buried);
+	public float RenderCookieStrength => CookieStrength * (1 - buried);
+	public float RenderCookieCutoff => CookieCutoff * (1 - buried);
+
+	static float BuriedRadiusScale => 0.3f;
+	static float BuriedIntensityScale => 0.35f;
+	static int BuriedClearance => 32; // px of open space ahead the light needs to be fully itself
+	float buried; // 0..1: how little room there is ahead of the light
+
+	// Open space straight ahead along the cone, up to BuriedClearance, not counting whatever we're attached to:
+	// the crusher carrying the lamp is always solid around it, the floor it lands on is what buries it.
+	int Clearance()
+	{
+		var axis = Cookie == LightCookie.None ? Vector2.UnitY : Calc.AngleToVector(CookieAngleDegrees * Calc.DegToRad);
+		for (var distance = 0; distance < BuriedClearance; distance++)
+			if (SolidAt((Position + axis * distance).RoundToPoint2()))
+				return distance;
+		return BuriedClearance;
+	}
+
+	bool SolidAt(Point2 point)
+	{
+		var probe = new RectInt(point, 1, 1);
+		if (Game.OverlapsRoomCollision(this, probe))
+			return true;
+		foreach (var other in Game.Actors)
+			if (other != AttachmentTarget && other is not Grid && other.Mask.Has(Masks.Solid) && other.Hitbox.Overlaps(probe - other.Position))
+				return true;
+		return false;
+	}
 	public float RenderShadowSourceRadius => ShadowSourceRadius * (1 + (RenderScale / FlickerBaseScale - 1) * 0.45f);
 
 	float HitFlickerScale
@@ -187,6 +222,8 @@ public class Light : Actor, IHitByHitbox
 	public override void Update()
 	{
 		base.Update();
+		if (DimsWhenBuried)
+			buried = 1 - Clearance() / (float)BuriedClearance;
 		if (hitFlickerAge < 0)
 			return;
 

@@ -1615,20 +1615,19 @@ public sealed partial class GameView
 		{
 			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
-				var renderScale = light.RenderScale;
 				var added = renderer.AddLight(
 					light.Position,
-					light.Radius * renderScale,
-					light.Intensity * renderScale,
+					light.RenderRadius,
+					light.RenderIntensity,
 					light.Height,
 					light.LightColor,
 					light.Cookie,
 					light.CookieAngleDegrees,
 					light.CookieSpeedDegrees,
 					light.CookieScale,
-					light.CookieStrength,
+					light.RenderCookieStrength,
 					light.CookieFeather,
-					light.CookieCutoff,
+					light.RenderCookieCutoff,
 					light.RenderShadowSourceRadius,
 					light.ShadowSoftness,
 					light.ShadowNoise,

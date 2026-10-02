@@ -95,6 +95,12 @@ public abstract partial class Pawn
 	internal Vector2 BurrowTravelHeading => burrow.Travel;
 	internal Actor? BurrowSeam => State == States.Burrow ? burrow.Seam : null;
 	internal bool FollowsBurrowSeam => burrow.SeamFollow;
+	internal ref readonly BurrowCursor BurrowCursorState => ref burrow;
+	internal BurrowTravel LastBurrowTravel { get; private set; }
+	internal float BurrowTimeLeft => burrowTimer;
+	internal bool BurrowSealed => burrowSealed;
+	internal Vector2 BurrowIntent => burrowIntent;
+
 	internal bool AtBurrowLineEndpoint(BurrowLine line, int pointIndex)
 		=> State == States.Burrow && burrow.Line == line &&
 			Vector2.DistanceSquared(Position, line.WorldPoint(pointIndex)) <= 0.25f;
@@ -468,7 +474,7 @@ public abstract partial class Pawn
 		var pixels = (int)burrowMoveRemainder;
 		burrowMoveRemainder -= pixels;
 		if (pixels > 0)
-			switch (Game.TravelBurrow(ref Position, ref burrow, pixels, intent, this is Player, out var remaining))
+			switch (LastBurrowTravel = Game.TravelBurrow(ref Position, ref burrow, pixels, intent, this is Player, out var remaining))
 			{
 				case BurrowTravel.Door:
 					burrowOnJumpthru = false;
@@ -516,12 +522,16 @@ public abstract partial class Pawn
 					// A dead end. If we're driving into it and the surface exits the room into an
 					// adjacent one, transition and keep burrowing on the far side. Otherwise pop out;
 					// if we merely coasted here on friction, kill the glide and stay put.
-					if (move && burrow.Seam == null)
+					if (move)
 					{
 						if (TryBurrowRoomTransition(burrow.Heading))
 							return;
-						PopOutOfBurrow();
-						return;
+						if (CanPopHere(out var crouched))
+						{
+							ducking = crouched;
+							PopOutOfBurrow();
+							return;
+						}
 					}
 					burrowSpeed = 0;
 					burrowMoveRemainder = 0;
@@ -549,60 +559,52 @@ public abstract partial class Pawn
 		if (burrow.Line == null && !quantumArmed)
 			burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
 		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
-		var wantsExit = burrow.Line == null && burrow.Seam == null && (burrowTimer <= 0 || !input.JumpDown);
 		if (burrow.Blocked && (burrow.Line == null || CanExitBurrowLine(out _)))
 			burrow.Blocked = false;
-		if (wantsExit)
+		if (burrow.Line == null && (burrowTimer <= 0 || !input.JumpDown) && CanPopHere(out var popCrouched))
 		{
-			if (!CanExitBurrowLine(out var exitDucking))
-			{
-				if (!burrow.Blocked && Game.BurrowTraceEnabled)
-					Game.TraceBurrow(
-						$"pop blocked inside guide id={burrow.Line?.ActorId ?? "?"} position={Position}");
-				burrow.Blocked = true;
-				return;
-			}
-
-			ducking = exitDucking;
+			ducking = popCrouched;
 			if (burrowTimer <= 0)
 				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
 			PopOutOfBurrow();
 		}
 	}
 
-	// A Crusher closing over the burrow point seals us into the seam between it and whatever it hit: the one
-	// line where two touching solids read apart. Pressing toward the crusher follows its outline (and rides it
-	// home); anything else follows the solid it pinned us to. Leaving the seam is one-way, and we can't pop out
-	// of it until a tile of room opens in front of us.
+	// A Crusher closing over the burrow point seals us into the seam between it and whatever it hit -- the one
+	// line where two touching solids read apart -- re-picked from the geometry every frame (Game.ResolveBurrowSeam).
 	void UpdateBurrowSeam(Vector2 intent)
 	{
-		if (burrow.Line != null)
-			return;
-		if (burrow.Seam == null)
-		{
-			if (Game.BuryingCrusher(Position, burrow.Toward) is not { } crusher)
-				return;
-			(burrow.Seam, burrow.SeamFollow, burrowSealed) = (crusher, false, true);
-			if (Game.BurrowTraceEnabled)
-				Game.TraceBurrow($"sealed in seam position={Position} normal={burrow.Toward}");
-		}
-		else if (!Game.OverlapsSolid(this, RectInt.Centered((Position - burrow.Toward * (Game.TileSize / 2)).RoundToPoint2(), Game.TileSize, Game.TileSize)))
-		{
+		var was = burrow.Seam;
+		if (burrow.Line == null && Game.ResolveBurrowSeam(Position, ref burrow, intent, BurrowTangentDeadzone))
+			burrowSealed = true;
+		else
 			burrow.Seam = null;
-			if (Game.BurrowTraceEnabled)
-				Game.TraceBurrow($"left seam position={Position}");
-			return;
-		}
-
-		// Only while still sandwiched: once the walk has turned a corner out into air there's one side left.
-		var towardCrusher = burrow.SeamFollow ? burrow.Toward : -burrow.Toward;
-		if (intent == Vector2.Zero || Vector2.Dot(intent, towardCrusher) > BurrowTangentDeadzone == burrow.SeamFollow ||
-			!Game.Buried(Position, burrow.Toward, out _, out _))
-			return;
-		burrow.SeamFollow = !burrow.SeamFollow;
-		burrow.Toward = -burrow.Toward;
-		burrow.SolidLeft = !burrow.SolidLeft;
+		if (Game.BurrowTraceEnabled && was != burrow.Seam)
+			Game.TraceBurrow(burrow.Seam == null ? $"left seam position={Position}"
+				: $"seam position={Position} follow={burrow.SeamFollow} normal={burrow.Toward}");
 	}
+
+	// Where popping out would leave us: the hitbox slides out from the surface up to a body's height (a ceiling
+	// pop drops a full body below it, a wall pop steps clear of the wall), standing if that fits anywhere along
+	// the way, else crouched. False when not even a crouch fits -- popping would only bury us in solid.
+	internal bool RoomToPop(out bool crouch)
+	{
+		var outward = -burrow.Toward;
+		foreach (var hitbox in (ReadOnlySpan<RectInt>)[StandingHitboxRect, DuckingHitboxRect])
+			for (var step = 0; step <= StandingHitboxRect.Height; step++)
+				if (!Game.OverlapsSolid(this, hitbox + (Position + outward * step).RoundToPoint2()))
+				{
+					crouch = hitbox == DuckingHitboxRect;
+					return true;
+				}
+		crouch = false;
+		return false;
+	}
+
+	// Popping out needs room for at least a crouch; otherwise we keep burrowing. Buried with nowhere to walk at
+	// all is the exception: better out than held forever.
+	bool CanPopHere(out bool crouch)
+		=> RoomToPop(out crouch) || burrow.Seam == null && !Game.BurrowCanWalk(Position, burrow);
 
 	void FlickerTorchesAlongBurrow(Point2 previousPosition)
 	{
@@ -631,6 +633,10 @@ public abstract partial class Pawn
 	}
 
 	// StopBurrow stop a burrow
+	// Emerging downward from a line (out of a ceiling): no pop back up against the way we were going, just drop
+	// out carrying the glide.
+	bool DroppingOutOfLine => burrow.Line != null && burrow.LineHeading != Vector2.Zero && Vector2.Normalize(burrow.LineHeading).Y > 0.5f;
+
 	private void PopOutOfBurrow()
 	{
 		var exitDir = burrow.Toward;
@@ -650,13 +656,8 @@ public abstract partial class Pawn
 		// are exiting from.
 		if (burrow.Line == null && exitDir.Y < 0)
 		{
-			Position = (Point2)(new Vector2(Position.X, Position.Y + StandingHitboxRect.Height));
-
-			// Additional hack: if there's not room, try a crouch.
-			if (Game.OverlapsRoomCollision(this, Point2.Zero))
-			{
-				ducking = true;
-			}
+			// RoomToPop already chose standing or crouched for the space below.
+			Position += new Point2(0, (ducking ? DuckingHitboxRect : StandingHitboxRect).Height);
 		}
 
 		// Popping up underneath a Carryable at rest catches it overhead — the burrow is the
@@ -690,7 +691,7 @@ public abstract partial class Pawn
 			// "Cancel" a big popup jump by holding Down on the Dpad. A very short burrow
 			// (a quick tap in and out) gets the same soft pop regardless of input — it
 			// clearly wasn't a committed launch, so don't fling the player.
-			Velocity = -exitDir * popMagnitude + travel;
+			Velocity = DroppingOutOfLine ? travel : -exitDir * popMagnitude + travel;
 			var shortBurrow = burrowDuration - burrowTimer < ShortBurrowDampenTime;
 			if (Velocity.Y < 50 && (shortBurrow || caught || input.MoveY > 0))
 				Velocity.Y *= 0.5f;
@@ -712,7 +713,7 @@ public abstract partial class Pawn
 			Velocity = Vector2.Zero;
 			ducking = true;
 		}
-		jumpTimer = cramped ? 0 : BurrowPopTime;
+		jumpTimer = cramped || DroppingOutOfLine ? 0 : BurrowPopTime;
 		jumpCutImmune = true; // the pop keeps its full float even when jump is released
 		State = States.Normal;
 		AudioEvent("jump");

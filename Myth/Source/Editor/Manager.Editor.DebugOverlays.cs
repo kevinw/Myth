@@ -60,6 +60,81 @@ public partial class Manager
 		label.Dispose();
 	}
 
+	// Collision-rects view: what a burrow thinks is around it -- the seam it's sealed in (cyan = walking the other
+	// side, magenta = following the crusher's outline), the two
+	// cells on its open side (red = solid; both red = buried), which of the four steps the walk accepts (white)
+	// or refuses (dark red), and arrows for into-surface (red) and heading (green).
+	void BurrowDebugOverlayImGui()
+	{
+		if (game == null || !playing || !game.IsCollisionDebugVisible)
+			return;
+
+		var viewport = GameViewRect;
+		var draw = ImGui.GetForegroundDrawList();
+		var pixel = GameWorldToImGui(viewport, game, Vector2.UnitX).X - GameWorldToImGui(viewport, game, Vector2.Zero).X;
+		var label = new ValueStringBuilder(stackalloc char[256]);
+		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not Pawn { State: Pawn.States.Burrow } pawn)
+				continue;
+
+			ref readonly var burrow = ref pawn.BurrowCursorState;
+			var at = pawn.Position;
+			Vector2 Screen(Vector2 world) => GameWorldToImGui(viewport, game, world);
+			void Box(RectInt rect, uint color, bool fill)
+			{
+				if (fill)
+					draw.AddRectFilled(Screen(rect.TopLeft), Screen(rect.BottomRight), color);
+				else
+					draw.AddRect(Screen(rect.TopLeft), Screen(rect.BottomRight), color, 0, ImDrawFlags.None, 1.5f);
+			}
+
+			if (burrow.Seam is { } seam)
+				Box(seam.Hitbox.Rect + seam.Position, burrow.SeamFollow ? ImGuiColor(1, 0.3f, 1, 1) : ImGuiColor(0.3f, 1, 1, 1), false);
+
+			game.Buried(at, burrow.Toward, out var a, out var b);
+			foreach (var cell in (ReadOnlySpan<Point2>)[a, b])
+				Box(new RectInt(cell, 1, 1), game.BurrowLineSolidAt(cell + new Vector2(0.5f)) ? ImGuiColor(1, 0.2f, 0.2f, 0.7f) : ImGuiColor(1, 1, 1, 0.25f), true);
+
+			var edges = game.BurrowEdges(at, burrow);
+			for (var i = 0; i < Game.BurrowDebugDirections.Length; i++)
+			{
+				var step = (Vector2)Game.BurrowDebugDirections[i];
+				draw.AddLine(Screen(at + step * 0.5f), Screen(at + step * 2.5f),
+					(edges & (1 << i)) != 0 ? ImGuiColor(1, 1, 1, 1) : ImGuiColor(0.5f, 0, 0, 1), MathF.Max(2, pixel * 0.6f));
+			}
+			draw.AddLine(Screen(at), Screen(at + burrow.Toward * 5), ImGuiColor(1, 0.2f, 0.2f, 1), 2);
+			draw.AddLine(Screen(at), Screen(at + (Vector2)burrow.Heading * 5), ImGuiColor(0.2f, 1, 0.2f, 1), 2);
+			draw.AddCircleFilled(Screen(at), MathF.Max(2, pixel * 0.4f), ImGuiColor(1, 1, 1, 1));
+
+			label.Clear();
+			label.Append(burrow.Seam != null ? (burrow.SeamFollow ? "seam: follow " : "seam: other side of ") : "no seam");
+			if (burrow.Seam != null)
+				label.Append(burrow.Seam.ActorId ?? burrow.Seam.GetType().Name);
+			label.Append("\ntoward ");
+			label.Append(burrow.Toward.X); label.Append(','); label.Append(burrow.Toward.Y);
+			label.Append("  heading ");
+			label.Append(burrow.Heading.X); label.Append(','); label.Append(burrow.Heading.Y);
+			label.Append(burrow.SolidLeft ? "  solid L" : "  solid R");
+			label.Append("\nlast ");
+			label.Append(pawn.LastBurrowTravel.ToString());
+			label.Append(burrow.Blocked ? "  BLOCKED" : "");
+			label.Append(burrow.Line != null ? "  on line" : "");
+			label.Append(pawn.BurrowSealed ? "  sealed" : "");
+			label.Append(!pawn.RoomToPop(out var crouch) ? "  pop: no room" : crouch ? "  pop: crouch" : "  pop: stand");
+			label.Append("\ntimer ");
+			label.Append(pawn.BurrowTimeLeft, "0.00");
+			label.Append("  speed ");
+			label.Append(pawn.BurrowSpeed, "0");
+			label.Append("  intent ");
+			label.Append(pawn.BurrowIntent.X); label.Append(','); label.Append(pawn.BurrowIntent.Y);
+			DebugOverlayLabelImGui($"BurrowDebug{pawn.GetHashCode()}", Screen(at - new Vector2(0, 10)), label.AsSpan(), viewport);
+		}
+		draw.PopClipRect();
+		label.Dispose();
+	}
+
 	void BudDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.TryGetBudDebugOverlay(out var worldPosition, out var label))

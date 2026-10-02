@@ -233,6 +233,7 @@ public partial class Manager
 		ResetDebugOverlayLayout();
 		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
+		BurrowDebugOverlayImGui();
 		LiveTileEditingImGui();
 		LiveActorEditingImGui();
 		LiveStatusImGui();
