@@ -97,13 +97,13 @@ public static partial class Assets
 	{
 		get
 		{
-			// During development we search up from the working directory to find the Assets
-			// folder (instead of copying all the Assets to the build directory). A bundled
-			// app (Myth.app launched from Finder) starts with cwd=/, so fall back to probing
-			// up from the executable's directory, where the bundle carries Assets.
-			path ??= FindAssetsFrom(Environment.CurrentDirectory)
-				?? FindAssetsFrom(AppContext.BaseDirectory)
-				?? throw new Exception("Unable to find Assets path");
+			// Search up from the executable (dev: bin/<config>/net10.0 under the project; bundle:
+			// Contents/MacOS next to Resources), then from the working directory.
+			path ??= FindAssetsFrom(AppContext.BaseDirectory)
+				?? FindAssetsFrom(Environment.CurrentDirectory)
+				?? throw new DirectoryNotFoundException(
+					$"No {assetsFolderName} folder containing {roomsFolderName}/ or {contentPakName} above " +
+					$"'{AppContext.BaseDirectory}' or '{Environment.CurrentDirectory}'.");
 			return path;
 		}
 	}
@@ -114,17 +114,22 @@ public static partial class Assets
 		for (var depth = 0; depth < 10 && directory != null; depth++)
 		{
 			var candidate = Path.Join(directory, assetsFolderName);
-			if (Directory.Exists(candidate))
+			if (IsAssetsFolder(candidate))
 				return candidate;
 			// macOS bundle layout: the executable lives in Contents/MacOS while data must
 			// sit in Contents/Resources (codesign rejects non-code under MacOS).
 			var resources = Path.Join(directory, "Resources", assetsFolderName);
-			if (Directory.Exists(resources))
+			if (IsAssetsFolder(resources))
 				return resources;
 			directory = Path.GetDirectoryName(directory);
 		}
 		return null;
 	}
+
+	// Any folder named Assets (an empty ~/Assets, say) isn't ours: a dev tree has Rooms/, a
+	// packaged build has Content.pak.
+	static bool IsAssetsFolder(string candidate)
+		=> Directory.Exists(Path.Join(candidate, roomsFolderName)) || File.Exists(Path.Join(candidate, contentPakName));
 
 	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
 	// Authoring inputs (.ase sources, kit specs, bake config). Read at runtime in dev and
