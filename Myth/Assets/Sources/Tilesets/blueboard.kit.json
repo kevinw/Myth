@@ -1,0 +1,10 @@
+{
+  "substance": "Brick",
+  "char": "W",
+  "mask": "stone-kit",
+  "seed": 1,
+  "wobble": 0.515,
+  "source": "terrain",
+  "normalKernel": "Facet",
+  "normalStrength": 2.321
+}

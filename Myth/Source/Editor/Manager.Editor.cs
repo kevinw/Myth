@@ -91,8 +91,9 @@ public partial class Manager
 	RectInt? pendingCreateRoomTiles;
 	bool createRoomPopupRequested;
 	bool addTilePopupRequested;
-	string newTileName = "";
 	Factory.TileLayer newTileLayer;
+	(string Source, string Slice, Point2 Size) newTileSlice;
+	List<(string Source, string Slice, Point2 Size)>? unclaimedKitSlices;
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
 	ActorTag actorPaletteFilter = ActorTag.None; // None = show all
@@ -1187,10 +1188,13 @@ public partial class Manager
 
 			var dualPreview = GetDualTilesetPreview(entry);
 
+			var selected = selectedActorPaletteIndex < 0 && brush == id;
 			if (ImGuiSubtextureButton(vsb.AsSpan(), entry.Image, entry.Name, dualPreview,
-				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize),
+				selected, new Vector2(ButtonSize, ButtonSize),
 				imagePadding: 0, drawBorder: false))
 				SelectTileBrush(entry.Layer, id);
+			if (selected)
+				OutlineSelectedPaletteItem();
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				OpenTileSourceEditor(entry);
 
@@ -1223,6 +1227,17 @@ public partial class Manager
 			addTilePopupRequested = true;
 		}
 		PopID();
+	}
+
+	// Drawn over the item on the draw list rather than as a button border: the palette grid runs on
+	// 1px spacing, so a 2px border would push every tile apart. Insetting by half the stroke keeps it
+	// fully inside the item rect, which leaves the layout untouched.
+	static void OutlineSelectedPaletteItem()
+	{
+		const float thickness = 2;
+		var inset = new Vector2(thickness / 2);
+		GetWindowDrawList().AddRect(GetItemRectMin() + inset, GetItemRectMax() - inset,
+			ImGuiColor(1, 1, 1, 1), GetStyle().FrameRounding, ImDrawFlags.None, thickness);
 	}
 
 	const string EditorButtonSubtexture_Plus = "buttons/18";
@@ -5480,12 +5495,25 @@ public partial class Manager
 		EndPaddedPopup();
 	}
 
+	// A slice's shape decides the kit's macro-block size: 8px tall is an ordinary kit, 16px tall is a
+	// 2x2 block, and so on. 0 means the slice cannot be a kit at all, which disables it in the list.
+	static int KitFillTilesFor(Point2 size)
+	{
+		var tiles = size.Y / Game.TileSize;
+		if (size.Y <= 0 || size.Y % Game.TileSize != 0 || tiles > TileKits.MaxFillTiles)
+			return 0;
+		return size.X > 0 && size.X % (tiles * Game.TileSize) == 0 ? tiles : 0;
+	}
+
 	void DrawAddTilePopup()
 	{
 		if (addTilePopupRequested)
 		{
 			addTilePopupRequested = false;
-			newTileName = "";
+			newTileSlice = default;
+			// Read once per opening rather than per frame: it parses every kit source file.
+			unclaimedKitSlices = [.. Assets.KitSourceSlices()
+				.Where(it => CanCreateTileKit(it.Slice.ToLowerInvariant()))];
 			OpenPopup("Add Tile");
 		}
 
@@ -5494,31 +5522,62 @@ public partial class Manager
 			return;
 
 		TextUnformatted(newTileLayer == Factory.TileLayer.Background
-			? "Create a new background tile:"
-			: "Create a new foreground tile:");
-		SetNextItemWidth(240);
-		if (IsWindowAppearing())
-			SetKeyboardFocusHere();
-		var submit = InputTextWithHint("##NewTileName", "tile name", ref newTileName, 32,
-			ImGuiInputTextFlags.EnterReturnsTrue);
-		var name = newTileName.Trim().ToLowerInvariant();
-		var valid = CanCreateTileKit(name);
+			? "New background tile, from a slice you have drawn:"
+			: "New foreground tile, from a slice you have drawn:");
+
+		var slices = unclaimedKitSlices ?? [];
+		if (slices.Count == 0)
+		{
+			// A kit is a slice plus knobs, so there is nothing to create until the art exists. Saying
+			// so here is what keeps a kit from ever pointing at a slice that is not there.
+			TextDisabled($"No unclaimed slices in Assets/Sources/Tilesets/{Assets.KitSourceFolder}.");
+			TextDisabled("Draw the tile in Aseprite and slice over it, then come back.");
+			if (Button("Open art in Aseprite", new Vector2(186, 0)))
+				AsepriteLauncher.OpenFile(Path.Join(Assets.SourcesPath, "Tilesets", Assets.KitSourceFolder,
+					$"{TileKits.Specs.FirstOrDefault()?.Source ?? "terrain"}.ase"));
+		}
+		else
+		{
+			BeginChild("Slices", new Vector2(280, MathF.Min(slices.Count, 8) * GetFrameHeight()), ImGuiChildFlags.Borders);
+			foreach (var slice in slices)
+			{
+				var label = $"{slice.Slice}  ({slice.Source}, {slice.Size.X}x{slice.Size.Y})";
+				BeginDisabled(KitFillTilesFor(slice.Size) == 0);
+				if (Selectable(label, newTileSlice == slice))
+					newTileSlice = slice;
+				EndDisabled();
+			}
+			EndChild();
+		}
+
+		var fillTiles = KitFillTilesFor(newTileSlice.Size);
+		if (slices.Count > 0)
+			TextDisabled(fillTiles switch
+			{
+				0 when newTileSlice.Source != null => "that slice is not a whole number of tiles -- it must be N x N tiles, N up to 4",
+				> 1 => $"a {fillTiles}x{fillTiles} macro block of {newTileSlice.Size.X / (fillTiles * Game.TileSize)} variant(s)",
+				1 => $"{newTileSlice.Size.X / Game.TileSize} variant tile(s)",
+				_ => "pick a slice",
+			});
+
+		var name = newTileSlice.Slice?.Trim().ToLowerInvariant() ?? "";
+		var valid = name.Length > 0 && newTileSlice.Source != null && fillTiles > 0 && CanCreateTileKit(name);
 		BeginDisabled(!valid);
-		var create = Button("Create", new Vector2(90, 0)) || submit;
+		var create = Button("Create", new Vector2(90, 0));
 		EndDisabled();
 		SameLine();
 		var cancel = Button("Cancel", new Vector2(90, 0)) || !open;
 
-		if (create && valid)
+		if (create && valid && newTileSlice.Source is { } source)
 		{
-			var spec = CreateTileKitDraft(name, newTileLayer);
-			newTileName = "";
+			var spec = CreateTileKitDraft(name, source, fillTiles, newTileLayer);
+			newTileSlice = default;
 			OpenTileKitEditor(spec);
 			CloseCurrentPopup();
 		}
 		else if (cancel)
 		{
-			newTileName = "";
+			newTileSlice = default;
 			CloseCurrentPopup();
 		}
 

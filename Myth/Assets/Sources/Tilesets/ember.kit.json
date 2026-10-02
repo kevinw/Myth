@@ -4,64 +4,6 @@
   "slopeChar": "F",
   "mask": "stone-kit",
   "seed": 238489668,
-  "edgeWidth": "2-3",
-  "palette": {
-    "a": "222034",
-    "m": "45283C",
-    "r": "AC3232",
-    "o": "DF7126"
-  },
-  "heights": { "a": 0.67, "m": 0.42, "r": 0, "o": 0 },
-  "fills": [
-    ["aamaaaaa",
-     "aamaaaam",
-     "aaaraaam",
-     "aaaaraaa",
-     "maaaroaa",
-     "maaaaraa",
-     "aaaaaara",
-     "amaaaaam"],
-    ["aaaammaa",
-     "aaaaamaa",
-     "maaaaaaa",
-     "mmaaamaa",
-     "aaaaamma",
-     "aamaaaaa",
-     "aamaaaam",
-     "aaaaaaam"],
-    ["aaaaamaa",
-     "maaaamaa",
-     "maaaaaaa",
-     "aarraaam",
-     "aaaarora",
-     "amaaaaaa",
-     "amaaaama",
-     "aaaaaama"],
-    ["aaaaaaaa",
-     "amaaaraa",
-     "amaaaaoa",
-     "aaaaaara",
-     "aammaaaa",
-     "maaaamaa",
-     "aaaaamaa",
-     "aamaaaaa"]
-  ],
-  "edge": [
-    ["595652", 45],
-    ["45283C", 38],
-    ["AC3232", 10],
-    ["DF7126", 7]
-  ],
-  "edgeTop": [
-    ["595652", 45],
-    ["696A6A", 35],
-    ["45283C", 14],
-    ["AC3232", 6]
-  ],
-  "edgeBottom": [
-    ["DF7126", 40],
-    ["AC3232", 40],
-    ["FBF236", 10],
-    ["45283C", 10]
-  ]
+  "wobble": 0.6,
+  "source": "terrain"
 }

@@ -717,6 +717,7 @@ public static partial class Assets
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var generatedSprites = new List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
+		var kitSourceFiles = new Dictionary<string, Aseprite>(StringComparer.OrdinalIgnoreCase);
 		var generatedTileImages = new Dictionary<string, List<Image>>();
 		var generatedNormalImages = new Dictionary<string, List<Image>>();
 		var generatedOccluders = new Dictionary<string, List<List<Tileset.OccluderSegment[]>>>();
@@ -745,7 +746,13 @@ public static partial class Assets
 		{
 			var name = Path.ChangeExtension(Path.GetRelativePath(tilesetsPath, file), null)!.Replace(Path.DirectorySeparatorChar, '/');
 			var ase = new Aseprite(file);
-			if (ase.Frames.Length > 0)
+			if (ase.Frames.Length == 0)
+				continue;
+			// Everything under Kits/ is kit source art read through slices, never a tileset of its own
+			// -- packing it would burn atlas space on pixels no room ever draws.
+			if (name.StartsWith($"{KitSourceFolder}/", StringComparison.OrdinalIgnoreCase))
+				kitSourceFiles.Add(name[(KitSourceFolder.Length + 1)..], ase);
+			else
 				tilesetFiles.Add(name, ase);
 		}
 
@@ -774,7 +781,7 @@ public static partial class Assets
 			if (!tilesetFiles.TryGetValue(spec.MaskKit, out var maskKit))
 				throw new InvalidOperationException($"Tile kit '{spec.Name}' references missing mask kit '{spec.MaskKit}'.");
 
-			GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out var dualOccluders);
+			GenerateDualTilesetFromSpec(spec, maskKit, KitSourceFor(spec, kitSourceFiles), out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out var dualOccluders);
 			generatedTileImages[spec.Name] = baseTiles;
 			generatedTileImages[spec.DualName] = dualVariants;
 			generatedNormalImages[spec.DualName] = dualNormals;
@@ -1943,7 +1950,90 @@ public static partial class Assets
 	/// Generates the tileset outputs for a JSON kit spec: images come from the spec's
 	/// palette/patterns/noise instead of an .ase, and the silhouette mask is borrowed from
 	/// the referenced .ase kit. Everything downstream is shared with the .ase path.
-	static void GenerateDualTilesetFromSpec(TileKitSpec spec, Aseprite maskKit, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> baseNormals, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	public const string KitSourceFolder = "Kits";
+
+	/// Editor: every slice in every kit source file that could become a kit, newest files last. Rim
+	/// strips and debug slices are left out, so what comes back is the list of drawable tiles -- read
+	/// from disk on demand so a slice added in Aseprite a second ago is already here.
+	public static List<(string Source, string Slice, Point2 Size)> KitSourceSlices()
+	{
+		var result = new List<(string, string, Point2)>();
+		var directory = Path.Join(SourcesPath, "Tilesets", KitSourceFolder);
+		if (!Directory.Exists(directory))
+			return result;
+
+		foreach (var file in EnumerateAsepriteFiles(directory).Order(StringComparer.OrdinalIgnoreCase))
+		{
+			var source = Path.GetFileNameWithoutExtension(file)!;
+			foreach (var slice in GetKitSlices(new Aseprite(file)).Values)
+				if (!IsRimSliceName(slice.Name))
+					result.Add((source, slice.Name.Trim(), GetSliceBounds(slice).Size));
+		}
+		return result;
+	}
+
+	static bool IsRimSliceName(string name)
+		=> name.EndsWith("-rim", StringComparison.OrdinalIgnoreCase)
+			|| name.EndsWith("-rimtop", StringComparison.OrdinalIgnoreCase)
+			|| name.EndsWith("-rimbottom", StringComparison.OrdinalIgnoreCase);
+
+	static Aseprite KitSourceFor(TileKitSpec spec, Dictionary<string, Aseprite> sources)
+	{
+		if (spec.Source is not { } source)
+			throw new InvalidOperationException($"Tile kit '{spec.Name}' has no \"source\": every kit reads its art from a .ase under Tilesets/{KitSourceFolder}.");
+		if (!sources.TryGetValue(source, out var ase))
+			throw new InvalidOperationException($"Tile kit '{spec.Name}' names source '{source}', but Tilesets/{KitSourceFolder}/{source}.ase does not exist. Found: {(sources.Count == 0 ? "none" : string.Join(", ", sources.Keys.Order()))}.");
+		return ase;
+	}
+
+	/// Pulls a kit's fills and relief out of its slice in the shared source file. The slice is a grid
+	/// of tile cells; with fillTiles > 1 each macro block is a contiguous group, so a hole in one
+	/// would silently shift every later group and is rejected instead.
+	static (List<Image> Fills, List<Image> Heights) ExtractKitSourceTiles(TileKitSpec spec, Image art, Image? relief, RectInt bounds)
+	{
+		var block = spec.FillTiles * Game.TileSize;
+		if (bounds.Width % block != 0 || bounds.Height != block)
+			throw new InvalidOperationException(
+				$"Tile kit '{spec.Name}': slice '{spec.Name}' in {spec.Source}.ase is {bounds.Width}x{bounds.Height}, but a fillTiles {spec.FillTiles} kit needs a width that is a multiple of {block} and a height of exactly {block}.");
+
+		var fills = new List<Image>();
+		var heights = new List<Image>();
+		var groups = bounds.Width / block;
+		for (var group = 0; group < groups; group++)
+			for (var phase = 0; phase < spec.FillTiles * spec.FillTiles; phase++)
+			{
+				var cell = new RectInt(
+					bounds.X + group * block + phase % spec.FillTiles * Game.TileSize,
+					bounds.Y + phase / spec.FillTiles * Game.TileSize,
+					Game.TileSize, Game.TileSize);
+				if (!HasOpaquePixel(art, cell))
+				{
+					if (spec.FillTiles == 1)
+						continue; // a gap between variants is fine when a cell is a whole tile
+					throw new InvalidOperationException(
+						$"Tile kit '{spec.Name}': slice '{spec.Name}' in {spec.Source}.ase has an empty cell at block {group}, tile {phase}. A fillTiles {spec.FillTiles} kit needs every cell of a block painted.");
+				}
+				fills.Add(ExtractTile(art, cell));
+				// No relief painted for a cell is flat, not an error -- a kit can be part way through.
+				heights.Add(relief != null ? ExtractTile(relief, cell) : new Image(Game.TileSize, Game.TileSize));
+			}
+
+		if (fills.Count == 0)
+			throw new InvalidOperationException($"Tile kit '{spec.Name}': slice '{spec.Name}' in {spec.Source}.ase has no painted tiles.");
+		return (fills, heights);
+	}
+
+	static Rim? ExtractKitRim(TileKitSpec spec, Image art, Dictionary<string, Aseprite.Slice> slices)
+	{
+		if (SliceImage($"{spec.Name}-rim") is not { } side)
+			return null;
+		return new Rim(side, SliceImage($"{spec.Name}-rimtop"), SliceImage($"{spec.Name}-rimbottom"));
+
+		Image? SliceImage(string name)
+			=> slices.TryGetValue(NormalizeLayerName(name), out var slice) ? ExtractTile(art, GetSliceBounds(slice)) : null;
+	}
+
+	static void GenerateDualTilesetFromSpec(TileKitSpec spec, Aseprite maskKit, Aseprite source, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> baseNormals, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		baseTiles = [];
 		baseSlopeEdges = [];
@@ -1964,12 +2054,21 @@ public static partial class Assets
 		using var rendered = maskKit.RenderFrame(0, layer => nonDebugLayers.Contains(layer) && !heightLayers.Contains(layer));
 		using var mask = ExtractTile(rendered, maskBounds);
 
-		var fills = TileKits.RasterizeFills(spec);
-		var heights = TileKits.RasterizeHeights(spec);
-		var (edges, edgeTops, edgeBottoms) = TileKits.RasterizeEdges(spec);
-		var edgeWidth = ParseEdgeWidthValue(spec.Name, spec.EdgeWidth);
+		var sourceSlices = GetKitSlices(source);
+		if (!sourceSlices.TryGetValue(NormalizeLayerName(spec.Name), out var fillSlice))
+			throw new InvalidOperationException(
+				$"Tile kit '{spec.Name}': {spec.Source}.ase has no slice named '{spec.Name}'. Slices there: {(sourceSlices.Count == 0 ? "none" : string.Join(", ", sourceSlices.Keys.Order()))}.");
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, baseNormals, dualVariants, dualNormals, dualOccluders);
+		var sourceLayers = GetNonDebugLayers(source);
+		var sourceHeightLayers = GetLayerBranch(source, "height");
+		sourceLayers.ExceptWith(sourceHeightLayers);
+		using var art = RenderLayerFrame(source, sourceLayers, 0);
+		using var relief = sourceHeightLayers.Count > 0 ? RenderLayerFrame(source, sourceHeightLayers, 0) : null;
+
+		var (fills, heights) = ExtractKitSourceTiles(spec, art, relief, GetSliceBounds(fillSlice));
+		using var rim = ExtractKitRim(spec, art, sourceSlices);
+
+		GenerateDualTilesetCore(mask, fills, heights, [], [], [], [], (0, 0), spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, baseNormals, dualVariants, dualNormals, dualOccluders, spec.NormalBake, rim);
 	}
 
 	// Shared dual-tileset generation. Takes ownership of every image list (disposed here);
@@ -1979,8 +2078,9 @@ public static partial class Assets
 	// this many groups, cycling the fills, so their edges still break up.
 	const int MinWobbleGroups = 4;
 
-	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> baseNormals, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> baseNormals, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders, NormalBake? normalBake = null, Rim? rim = null)
 	{
+		var bake = normalBake ?? NormalBake.Default;
 		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
 
 		// Variants are laid out group-major, phase-minor: the renderer hashes a world tile to a
@@ -2007,14 +2107,14 @@ public static partial class Assets
 				{
 					baseTiles.Add(ExtractTile(fill, fill.Bounds));
 					if (heights.Count > 0)
-						baseNormals.Add(GenerateNormalImage(heights[fillIndex], wrap: true));
+						baseNormals.Add(GenerateNormalImage(heights[fillIndex], wrap: true, bake));
 					if (edges.Count > 0)
 						baseSlopeEdges.Add(ExtractTile(edges[0], edges[0].Bounds));
 				}
 				var edgeWidth = edgeWidthRange.Min + variant % (edgeWidthRange.Max - edgeWidthRange.Min + 1);
 				var side = Pick(edgeSides, variant) ?? Pick(edges, variant);
-				dualVariants.Add(GenerateDualTilesetVariant(fill, groupMask, Pick(edgeTops, variant) ?? side, side, Pick(edgeBottoms, variant) ?? side, edgeWidth));
-				dualNormals.Add(GenerateDualTilesetNormalVariant(groupMask, heights.Count > 0 ? heights[fillIndex] : null));
+				dualVariants.Add(GenerateDualTilesetVariant(fill, groupMask, Pick(edgeTops, variant) ?? side, side, Pick(edgeBottoms, variant) ?? side, edgeWidth, rim, variant));
+				dualNormals.Add(GenerateDualTilesetNormalVariant(groupMask, heights.Count > 0 ? heights[fillIndex] : null, bake));
 				dualOccluders.Add(GenerateDualTilesetOccluderVariant(groupMask));
 			}
 
@@ -2033,7 +2133,8 @@ public static partial class Assets
 	public static Image GenerateTileKitPreviewImage(TileKitSpec spec, string[] solidMap)
 	{
 		var maskKit = new Aseprite(Path.Join(SourcesPath, "Tilesets", $"{spec.MaskKit}.ase"));
-		GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out _);
+		var source = new Aseprite(Path.Join(SourcesPath, "Tilesets", KitSourceFolder, $"{spec.Source}.ase"));
+		GenerateDualTilesetFromSpec(spec, maskKit, source, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out _);
 
 		var rows = solidMap.Length;
 		var columns = solidMap.Max(row => row.Length);
@@ -2362,10 +2463,6 @@ public static partial class Assets
 		return ParseEdgeWidthValue(kitName, value);
 	}
 
-	/// Editor helper: the (min, max) rim width a kit's edgeWidth string describes.
-	public static (int Min, int Max) EdgeWidthRangeForEditor(string kitName, string value)
-		=> ParseEdgeWidthValue(kitName, value);
-
 	static (int Min, int Max) ParseEdgeWidthValue(string kitName, string value)
 	{
 		var dash = value.IndexOf('-');
@@ -2458,19 +2555,19 @@ public static partial class Assets
 		}
 	}
 
-	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth)
+	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth, Rim? rim, int variant)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
 			var tile = DualGrid.MaskToTile[tileMask];
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
-			GenerateDualTile(output, source, fill, tileMask, mask, edgeTop, edgeSide, edgeBottom, edgeWidth);
+			GenerateDualTile(output, source, fill, tileMask, mask, edgeTop, edgeSide, edgeBottom, edgeWidth, rim, variant);
 		}
 		return output;
 	}
 
-	static Image GenerateDualTilesetNormalVariant(Image mask, Image? height)
+	static Image GenerateDualTilesetNormalVariant(Image mask, Image? height, NormalBake bake)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
@@ -2478,7 +2575,7 @@ public static partial class Assets
 			var tile = DualGrid.MaskToTile[tileMask];
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
 			if (height != null)
-				GenerateDualHeightNormalTile(output, source, mask, height);
+				GenerateDualHeightNormalTile(output, source, mask, height, bake);
 			GenerateDualNormalTile(output, source, tileMask, mask);
 		}
 		return output;
@@ -2567,7 +2664,7 @@ public static partial class Assets
 		return mask[source.X + x, source.Y + y].A > 0;
 	}
 
-	static void GenerateDualHeightNormalTile(Image output, RectInt source, Image alphaMask, Image height)
+	static void GenerateDualHeightNormalTile(Image output, RectInt source, Image alphaMask, Image height, NormalBake bake)
 	{
 		var heights = HeightField(height, height.Bounds);
 		for (var y = 0; y < Game.TileSize; y++)
@@ -2578,7 +2675,7 @@ public static partial class Assets
 				if (maskAlpha <= 0 || heightAlpha <= 0)
 					continue;
 
-				var normal = NormalFromHeights(heights, height.Width, height.Height, x, y, wrap: true);
+				var normal = NormalFromHeights(heights, height.Width, height.Height, x, y, wrap: true, bake);
 				output[source.X + x, source.Y + y] = new Color(
 					normal.X * 0.5f + 0.5f,
 					normal.Y * 0.5f + 0.5f,
@@ -2635,7 +2732,7 @@ public static partial class Assets
 		return AlphaAt(image, source.X + x, source.Y + y);
 	}
 
-	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth)
+	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth, Rim? rim, int variant)
 	{
 		var tile = DualGrid.MaskToTile[mask];
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
@@ -2649,9 +2746,21 @@ public static partial class Assets
 					continue;
 
 				var color = fill[x, y];
-				if (hasEdge && edgeWidth > 0)
+				if (rim != null)
 				{
-					var chosen = ClassifyMaskEdge(alphaMask, source, x, y, edgeWidth) switch
+					// Painted rim: depth picks the column, a per-pixel jitter picks the row, and a
+					// transparent cell leaves the fill showing through -- that is the ragged edge.
+					var direction = ClassifyMaskEdge(alphaMask, source, x, y, rim.Depth, out var depth);
+					if (direction != EdgeDirection.None)
+					{
+						var rimColor = rim.Sample(direction, depth, RimJitter(x, y, variant));
+						if (rimColor.A != 0)
+							color = rimColor;
+					}
+				}
+				else if (hasEdge && edgeWidth > 0)
+				{
+					var chosen = ClassifyMaskEdge(alphaMask, source, x, y, edgeWidth, out _) switch
 					{
 						EdgeDirection.Top => edgeTop ?? edgeSide,
 						EdgeDirection.Bottom => edgeBottom ?? edgeSide,
@@ -2674,11 +2783,49 @@ public static partial class Assets
 	// average direction of that air, so pixels a couple deep under a top surface still
 	// classify as Top. Out-of-cell samples count as solid, same as the old rim test: the
 	// silhouette continues into the neighboring dual tile there.
-	static EdgeDirection ClassifyMaskEdge(Image mask, RectInt source, int x, int y, int width)
+	/// A kit's painted rim: x is depth from the silhouette, y is the jitter variant a stretch of
+	/// contour drew. A transparent cell means no rim at that depth, so rows that stop short at
+	/// different depths are what make an edge ragged instead of banded.
+	sealed class Rim(Image side, Image? top, Image? bottom) : IDisposable
+	{
+		public int Depth => side.Width;
+
+		public Color Sample(EdgeDirection direction, int depth, int jitter)
+		{
+			var strip = direction switch
+			{
+				EdgeDirection.Top => top ?? side,
+				EdgeDirection.Bottom => bottom ?? side,
+				_ => side,
+			};
+			return strip[Math.Clamp(depth - 1, 0, strip.Width - 1), jitter % strip.Height];
+		}
+
+		public void Dispose()
+		{
+			side.Dispose();
+			top?.Dispose();
+			bottom?.Dispose();
+		}
+	}
+
+	// Which jitter row a rim pixel draws. Deterministic per pixel and variant, so a rebake is stable
+	// and neighbouring tiles don't share a seam of identical rim.
+	static int RimJitter(int x, int y, int variant)
+	{
+		var hash = (uint)(x * 374761393 + y * 668265263 + variant * 2147483647);
+		hash = (hash ^ (hash >> 13)) * 1274126177;
+		return (int)((hash ^ (hash >> 16)) & 0x7FFFFFFF);
+	}
+
+	static EdgeDirection ClassifyMaskEdge(Image mask, RectInt source, int x, int y, int width, out int depth)
 	{
 		var vx = 0f;
 		var vy = 0f;
 		var found = false;
+		// How far in from the silhouette this pixel sits: the nearest empty neighbour's Manhattan
+		// distance, 1 for a pixel right on the contour. A rim strip is indexed by it.
+		depth = int.MaxValue;
 		for (var oy = -width; oy <= width; oy++)
 			for (var ox = -width; ox <= width; ox++)
 			{
@@ -2692,6 +2839,7 @@ public static partial class Assets
 				if (mask[sampleX, sampleY].A != 0)
 					continue;
 				found = true;
+				depth = Math.Min(depth, distance);
 				var weight = 1f / distance;
 				vx += ox * weight;
 				vy += oy * weight;
@@ -2772,7 +2920,9 @@ public static partial class Assets
 	static Image[] RenderLayerFrames(Aseprite ase, HashSet<Aseprite.Layer> layers)
 		=> RenderLayersVisible(layers, () => ase.RenderAllFrames(layers.Contains));
 
-	static Image RenderLayerFrame(Aseprite ase, HashSet<Aseprite.Layer> layers, int frame)
+	// Internal: the tile kit round trip renders the same way, so a layer left hidden in Aseprite still
+	// counts. A 'height' layer is data, and you hide it to see your art, not to switch it off.
+	internal static Image RenderLayerFrame(Aseprite ase, HashSet<Aseprite.Layer> layers, int frame)
 		=> RenderLayersVisible(layers, () => ase.RenderFrame(frame, layers.Contains));
 
 	static T RenderLayersVisible<T>(HashSet<Aseprite.Layer> layers, Func<T> render)

@@ -2,38 +2,6 @@
   "substance": "Brick",
   "mask": "stone-kit",
   "seed": 2055868265,
-  "edgeWidth": "1-3",
   "wobble": 0.109,
-  "palette": {
-    "a": "D9BD80",
-    "b": "C7AA66"
-  },
-  "heights": {
-    "a": 0.67,
-    "b": 0
-  },
-  "fills": [
-    [
-      "aaabaaba",
-      "bbabbbbb",
-      "aabaabba",
-      "bababbab",
-      "babbbbab",
-      "aababaaa",
-      "abbabbba",
-      "aaaaabaa"
-    ]
-  ],
-  "edge": [
-    [
-      "87936E",
-      45
-    ]
-  ],
-  "edgeTop": [
-    [
-      "D1B996",
-      20
-    ]
-  ]
+  "source": "terrain"
 }

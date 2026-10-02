@@ -3,46 +3,6 @@
   "layer": "Background",
   "mask": "stone-kit",
   "seed": 1415503283,
-  "edgeWidth": "1-4",
   "wobble": 0,
-  "palette": {
-    "a": "411834",
-    "b": "522510"
-  },
-  "heights": {
-    "a": 0.67,
-    "b": 0
-  },
-  "fills": [
-    [
-      "aaabaaaa",
-      "bbabbbbb",
-      "aaaaabaa",
-      "aaaaabaa",
-      "babbbbab",
-      "aabaaaaa",
-      "aabaaaaa",
-      "aaaaabaa"
-    ],
-    [
-      "baaaabaa",
-      "bbabbabb",
-      "aaaaabaa",
-      "aaaaabaa",
-      "baaaabab",
-      "aabaaaaa",
-      "aabbbbaa",
-      "abaaaaba"
-    ]
-  ],
-  "edge": [
-    [
-      "515B61",
-      45
-    ],
-    [
-      "363337",
-      40
-    ]
-  ]
+  "source": "terrain"
 }

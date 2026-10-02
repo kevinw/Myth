@@ -217,6 +217,9 @@ public static partial class Assets
 	// eight indexer reads and eight luminance conversions per pixel -- each re-fetching the pixel
 	// span -- to recompute values every neighbouring pixel needed again.
 	internal static Image GenerateNormalImage(Image source, bool wrap)
+		=> GenerateNormalImage(source, wrap, NormalBake.Default);
+
+	internal static Image GenerateNormalImage(Image source, bool wrap, NormalBake bake)
 	{
 		int width = source.Width, height = source.Height;
 		var output = new Image(width, height);
@@ -225,7 +228,7 @@ public static partial class Assets
 		for (var y = 0; y < height; y++)
 			for (var x = 0; x < width; x++)
 			{
-				var n = NormalFromHeights(heights, width, height, x, y, wrap);
+				var n = NormalFromHeights(heights, width, height, x, y, wrap, bake);
 				target[y * width + x] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
 			}
 		return output;
@@ -247,19 +250,61 @@ public static partial class Assets
 		return heights;
 	}
 
-	internal static Vector3 NormalFromHeights(float[] heights, int width, int height, int x, int y, bool wrap)
+	/// How a height field is read into slopes. The choice is about *where a feature's shading lands*,
+	/// not how strong it is: a central kernel estimates the slope at the sample point, so a 1px ridge
+	/// -- whose slope at its own centre is zero -- comes out flat with its highlight and shadow pushed
+	/// onto the neighbours. At 8px a tile that reads as softened, which is the opposite of hand-painted
+	/// shading, where the raised pixel is the lit one.
+	public enum NormalKernel
 	{
-		var topLeft = HeightAt(heights, width, height, x - 1, y - 1, wrap);
-		var top = HeightAt(heights, width, height, x, y - 1, wrap);
-		var topRight = HeightAt(heights, width, height, x + 1, y - 1, wrap);
-		var left = HeightAt(heights, width, height, x - 1, y, wrap);
-		var right = HeightAt(heights, width, height, x + 1, y, wrap);
-		var bottomLeft = HeightAt(heights, width, height, x - 1, y + 1, wrap);
-		var bottom = HeightAt(heights, width, height, x, y + 1, wrap);
-		var bottomRight = HeightAt(heights, width, height, x + 1, y + 1, wrap);
-		var sx = topLeft + 2 * left + bottomLeft - topRight - 2 * right - bottomRight;
-		var sy = topLeft + 2 * top + topRight - bottomLeft - 2 * bottom - bottomRight;
-		return Vector3.Normalize(new Vector3(sx, sy, 4 / HeightNormalStrength));
+		/// 3x3 Sobel. Smooth and symmetric; the 1-2-1 arm also bleeds dots and dashes sideways.
+		Sobel,
+		/// Central difference with no perpendicular blur. Sobel's placement, but neighbouring detail
+		/// stays out of it.
+		Crisp,
+		/// Backward difference: each pixel is a facet, lit by its own step up from the pixel behind it.
+		/// A 1px ridge lights the ridge and shadows the pixel past it -- the pixel-art convention.
+		Facet,
+	}
+
+	/// Kernel plus a tilt multiplier. Strength 1 with Sobel is the long-standing bake, so anything that
+	/// doesn't ask for something else keeps exactly the normals it had.
+	public readonly record struct NormalBake(NormalKernel Kernel, float Strength)
+	{
+		public static NormalBake Default => new(NormalKernel.Sobel, 1f);
+	}
+
+	// Each kernel reaches a different maximum over the same 0..1 height field -- Sobel's arms sum to 4,
+	// a single difference reaches 1 -- so z has to scale with it or swapping kernel silently changes
+	// how steep everything is.
+	static float KernelReach(NormalKernel kernel) => kernel == NormalKernel.Sobel ? 4 : 1;
+
+	internal static Vector3 NormalFromHeights(float[] heights, int width, int height, int x, int y, bool wrap)
+		=> NormalFromHeights(heights, width, height, x, y, wrap, NormalBake.Default);
+
+	internal static Vector3 NormalFromHeights(float[] heights, int width, int height, int x, int y, bool wrap, NormalBake bake)
+	{
+		float At(int dx, int dy) => HeightAt(heights, width, height, x + dx, y + dy, wrap);
+
+		float sx, sy;
+		switch (bake.Kernel)
+		{
+			case NormalKernel.Crisp:
+				sx = At(-1, 0) - At(1, 0);
+				sy = At(0, -1) - At(0, 1);
+				break;
+			case NormalKernel.Facet:
+				sx = At(-1, 0) - At(0, 0);
+				sy = At(0, -1) - At(0, 0);
+				break;
+			default:
+				sx = At(-1, -1) + 2 * At(-1, 0) + At(-1, 1) - At(1, -1) - 2 * At(1, 0) - At(1, 1);
+				sy = At(-1, -1) + 2 * At(0, -1) + At(1, -1) - At(-1, 1) - 2 * At(0, 1) - At(1, 1);
+				break;
+		}
+
+		var tilt = HeightNormalStrength * MathF.Max(bake.Strength, 0.01f);
+		return Vector3.Normalize(new Vector3(sx, sy, KernelReach(bake.Kernel) / tilt));
 	}
 
 	static float HeightAt(float[] heights, int width, int height, int x, int y, bool wrap)

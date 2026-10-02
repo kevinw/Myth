@@ -227,7 +227,7 @@ public static class Factory
 
 	public static bool HasSlopeTiles(string tilesetName)
 		=> Array.IndexOf(BuiltInSlopeTilesets, tilesetName) >= 0
-			|| TileKits.Specs.Exists(it => it.HasEdges && it.Name == tilesetName)
+			|| TileKits.Specs.Exists(it => it.Name == tilesetName)
 			|| TileKits.Registrations.Exists(it => it.HasSlope && it.Name == tilesetName);
 
 	// Registers a new Type

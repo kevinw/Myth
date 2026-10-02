@@ -15,6 +15,12 @@ static class AsepriteLauncher
 			return;
 		}
 
+		OpenFile(filename);
+	}
+
+	/// Opens any file in Aseprite -- the tile kit round trip hands it a scratch .ase.
+	public static void OpenFile(string filename)
+	{
 		var startInfo = CreateStartInfo(filename);
 
 		try
@@ -27,21 +33,21 @@ static class AsepriteLauncher
 		}
 	}
 
+	const string MacOpen = "/usr/bin/open";
+
 	static ProcessStartInfo CreateStartInfo(string filename)
 	{
-		if (OperatingSystem.IsMacOS())
+		// Always via `open` on macOS: running the binary inside the bundle starts a second copy every
+		// time, while `open` hands the file to the instance already running and brings it forward.
+		// The bundle is named by path first so a Steam install works whether or not LaunchServices
+		// has registered it.
+		if (OperatingSystem.IsMacOS() && File.Exists(MacOpen))
 		{
 			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			var steamAseprite = Path.Combine(homeDir, "Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
-			if (File.Exists(steamAseprite))
-				return CreateStartInfo(steamAseprite, filename);
-
-			var open = "/usr/bin/open";
-			if (File.Exists(open))
-			{
-				var startInfo = CreateStartInfo(open, "-a", "Aseprite", filename);
-				return startInfo;
-			}
+			var steamBundle = Path.Combine(homeDir, "Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app");
+			return Directory.Exists(steamBundle)
+				? CreateStartInfo(MacOpen, "-a", steamBundle, filename)
+				: CreateStartInfo(MacOpen, "-a", "Aseprite", filename);
 		}
 
 		return CreateStartInfo("aseprite", filename);

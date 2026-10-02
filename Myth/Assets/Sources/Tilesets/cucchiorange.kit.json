@@ -3,36 +3,6 @@
   "layer": "Background",
   "mask": "stone-kit",
   "seed": 1652487331,
-  "edgeWidth": "2-4",
   "wobble": 0.6,
-  "palette": {
-    "a": "E58837",
-    "b": "C98040"
-  },
-  "heights": {
-    "a": 0.67,
-    "b": 0
-  },
-  "fills": [
-    [
-      "aaabaaaa",
-      "abababab",
-      "aaaaabaa",
-      "aabbaaaa",
-      "baaaabab",
-      "aaaaaaaa",
-      "babaaaaa",
-      "aaaaabaa"
-    ]
-  ],
-  "edge": [
-    [
-      "CA772E",
-      52
-    ],
-    [
-      "932727",
-      19
-    ]
-  ]
+  "source": "terrain"
 }
