@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Reflection;
+using System.Reflection.Metadata;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -8,6 +9,8 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Foster.Framework;
 using LinkDotNet.StringBuilder;
+
+[assembly: MetadataUpdateHandler(typeof(Myth.ActorSpecs))]
 
 namespace Myth;
 
@@ -29,7 +32,7 @@ public static class ActorSpecs
 	};
 
 	// Members the trimmer/AOT compiler must keep on every registered actor type: reflection in
-	// Apply/SerializeActorDefaults reads public fields/properties, and Create/GetBaseline construct
+	// Apply/SerializeActorDefaults reads public fields/properties, and TypeDefaults constructs
 	// via the parameterless ctor.
 	private const DynamicallyAccessedMemberTypes RegisteredActorMembers =
 		DynamicallyAccessedMemberTypes.PublicParameterlessConstructor |
@@ -51,6 +54,10 @@ public static class ActorSpecs
 	private static readonly Dictionary<Type, string> actorNames = new();
 	static readonly Dictionary<(MemberInfo Member, Type Attribute), Attribute?> memberAttributes = [];
 	static readonly Dictionary<Type, SerializableMember[]> serializableMembers = [];
+	static readonly Dictionary<Type, JsonObject> typeDefaults = [];
+	static readonly JsonObject NoDefaults = [];
+	// Bumped by dotnet watch (off the main thread) so the reflection caches above drop on next use.
+	static int codeVersion, cachedCodeVersion;
 #if EDITOR
 	static readonly Dictionary<string, string> savedSpecJson = new(StringComparer.OrdinalIgnoreCase);
 	static readonly HashSet<string> dirtySpecs = new(StringComparer.OrdinalIgnoreCase);
@@ -106,6 +113,20 @@ public static class ActorSpecs
 		actorNames.Clear();
 		memberAttributes.Clear();
 		serializableMembers.Clear();
+		typeDefaults.Clear();
+	}
+
+	static void ClearCache(Type[]? _) => Interlocked.Increment(ref codeVersion);
+
+	static void DropStaleCodeCaches()
+	{
+		var version = Volatile.Read(ref codeVersion);
+		if (version == cachedCodeVersion)
+			return;
+		cachedCodeVersion = version;
+		memberAttributes.Clear();
+		serializableMembers.Clear();
+		typeDefaults.Clear();
 	}
 
 	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name, bool showFacing) where T : Actor
@@ -200,24 +221,17 @@ public static class ActorSpecs
 		"ContentRef<T> is a value type; creating its zero value does not require preserved constructors.")]
 	public static void CollectContentReferences(JsonObject spec, ContentDependencyCollector collector, string origin)
 	{
-		var resolved = Resolve(spec);
-		if (ReadString(resolved, TypeKey) is not { } typeName || !actorTypes.TryGetValue(typeName, out var type))
+		if (ReadResolvedString(spec, TypeKey) is not { } typeName || !actorTypes.TryGetValue(typeName, out var type))
 			return;
 		foreach (var member in GetSerializableMembers(type.Type))
 			if (member.Type.IsValueType && typeof(IContentReference).IsAssignableFrom(member.Type) &&
-				ReadStringValue(GetResolvedProperty(resolved, member.Name)) is { Length: > 0 } name &&
+				ReadStringValue(GetResolvedProperty(spec, member.Name)) is { Length: > 0 } name &&
 				Activator.CreateInstance(member.Type) is IContentReference reference)
 				reference.WithName(name).Collect(collector, $"{origin} field {member.Name}");
 	}
 
 	public static JsonObject? Get(string id)
 		=> specs.GetValueOrDefault(id);
-
-	public static JsonObject? Resolve(string id)
-		=> specs.TryGetValue(id, out var spec) ? Resolve(spec) : null;
-
-	public static JsonObject Resolve(JsonObject spec)
-		=> Resolve(spec, []);
 
 	public static string? GetTypeName(JsonObject spec)
 		=> GetResolvedProperty(spec, TypeKey)?.GetValue<string>();
@@ -247,19 +261,18 @@ public static class ActorSpecs
 
 	public static Actor? Create(Game game, JsonObject spec, Point2? position = null, string? sessionDestroyKey = null)
 	{
-		var resolved = Resolve(spec);
-		var typeName = ReadString(resolved, TypeKey);
+		var typeName = ReadResolvedString(spec, TypeKey);
 		if (string.IsNullOrWhiteSpace(typeName) || !actorTypes.TryGetValue(typeName, out var type))
 		{
 			// todo: in release build, make this a log?
-			throw new Exception($"Actor type '{typeName}' not registered.");
+			throw new Exception($"Actor type '{typeName}' not registered (From '{ReadString(spec, FromKey)}').");
 		}
 
-		var actorPosition = position ?? ReadPoint(resolved, PositionKey) ?? Point2.Zero;
+		var actorPosition = position ?? ReadResolvedPosition(spec) ?? Point2.Zero;
 		return game.Create(type.Type, actorPosition, actor =>
 		{
 			actor.SessionDestroyKey = sessionDestroyKey;
-			Apply(actor, type.Type, resolved);
+			Apply(actor, type.Type, spec);
 #if EDITOR
 			actor.AuthoredSpec = spec;
 #endif
@@ -308,35 +321,20 @@ public static class ActorSpecs
 
 	public static IEnumerable<EditableProperty> GetEditableProperties(JsonObject spec)
 	{
-		var resolved = Resolve(spec);
-		var typeName = ReadString(resolved, TypeKey);
+		var typeName = ReadResolvedString(spec, TypeKey);
 		if (typeName == null || !actorTypes.TryGetValue(typeName, out var type))
 			yield break;
 
-		var defaults = GetBaseline(new JsonObject { [TypeKey] = typeName }, resolved);
-		var inherited = ReadString(spec, FromKey) is { } from && specs.TryGetValue(from, out var inheritedSpec)
-			? inheritedSpec
-			: null;
+		var defaults = TypeDefaults(type.Type);
 		foreach (var member in GetSerializableMembers(type.Type))
 		{
 			if (!type.ShowFacing && member.Name == nameof(Actor.Facing))
 				continue;
 			var jsonName = member.Name;
-			var hasLocal = JsonUtil.ContainsProperty(spec, jsonName);
-			JsonNode? value = null;
-			JsonNode? resetValue = null;
-			if (JsonUtil.TryGetProperty(resolved, jsonName, out var resolvedValue) && resolvedValue != null)
-				value = resolvedValue.DeepClone();
-			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var defaultValue) && defaultValue != null)
-				value = defaultValue.DeepClone();
-			if (inherited != null && GetResolvedProperty(inherited, jsonName) is { } inheritedValue)
-				resetValue = inheritedValue;
-			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var resetDefaultValue))
-				resetValue = resetDefaultValue;
-
 			yield return new EditableProperty(member.Name, member.DisplayName, jsonName, member.Group,
 				member.Type, member.DeclaringType,
-				value, resetValue, hasLocal,
+				(GetResolvedProperty(spec, jsonName) ?? defaults[jsonName])?.DeepClone(),
+				InheritedValue(spec, defaults, jsonName), JsonUtil.ContainsProperty(spec, jsonName),
 				GetMemberAttribute<IAttribute>(member.Member),
 				GetMemberAttribute<MultilineAttribute>(member.Member),
 				GetMemberAttribute<ActorRefAttribute>(member.Member),
@@ -515,21 +513,21 @@ public static class ActorSpecs
 
 	public static JsonObject PruneForSave(JsonObject spec)
 	{
-		var resolved = Resolve(spec);
-		var baseline = GetBaseline(spec, resolved);
+		var typeName = ReadResolvedString(spec, TypeKey);
+		ActorType? actorType = typeName != null && actorTypes.TryGetValue(typeName, out var registered) ? registered : null;
+		var defaults = actorType is { } known ? TypeDefaults(known.Type) : NoDefaults;
 		var output = new JsonObject();
 
 		CopyIfPresent(spec, output, IdKey, IdKey);
 		CopyIfPresent(spec, output, FromKey, FromKey);
 		if (JsonUtil.ContainsProperty(spec, TypeKey))
 			CopyIfPresent(spec, output, TypeKey, TypeKey);
-		else if (!output.ContainsKey(FromKey) && ReadString(resolved, TypeKey) is { } typeName)
+		else if (!output.ContainsKey(FromKey) && typeName != null)
 			output[TypeKey] = typeName;
 		CopyIfPresent(spec, output, PositionKey, PositionKey);
 
-		var memberNames = ReadString(resolved, TypeKey) is { } resolvedTypeName &&
-						  actorTypes.TryGetValue(resolvedTypeName, out var resolvedType)
-			? GetSerializableMembers(resolvedType.Type).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
+		var memberNames = actorType is { } withMembers
+			? GetSerializableMembers(withMembers.Type).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
 			: [];
 
 		foreach (var (key, value) in spec)
@@ -539,7 +537,7 @@ public static class ActorSpecs
 
 			var outputKey = memberNames.TryGetValue(key, out var member) ? member.Name : key;
 
-			if (JsonUtil.TryGetProperty(baseline, outputKey, out var baselineValue) && JsonNode.DeepEquals(value, baselineValue))
+			if (InheritedValue(spec, defaults, outputKey) is { } baselineValue && JsonNode.DeepEquals(value, baselineValue))
 				continue;
 
 			output[outputKey] = value.DeepClone();
@@ -557,58 +555,31 @@ public static class ActorSpecs
 		return output;
 	}
 
-	private static JsonObject Resolve(JsonObject spec, HashSet<string> visiting)
-	{
-		var merged = new JsonObject();
-		var from = ReadString(spec, FromKey);
-		if (!string.IsNullOrWhiteSpace(from))
-		{
-			if (!visiting.Add(from))
-				throw new InvalidOperationException($"Actor spec inheritance cycle includes '{from}'.");
-
-			if (!specs.TryGetValue(from, out var inherited))
-				throw new InvalidOperationException($"Actor spec '{from}' not found.");
-
-			merged = Resolve(inherited, visiting);
-			visiting.Remove(from);
-		}
-
-		foreach (var (key, value) in spec)
-		{
-			JsonUtil.RemoveProperty(merged, key);
-			merged[key] = value?.DeepClone();
-		}
-
-		return merged;
-	}
-
 	// type is the actor's registered CLR type (annotated so its members survive trimming); it
 	// equals actor.GetType() but carries the DynamicallyAccessedMembers annotation GetType() drops.
 	private static void Apply(Actor actor, [DynamicallyAccessedMembers(RegisteredActorMembers)] Type type, JsonObject spec)
 	{
 		actor.ActorId = ReadString(spec, IdKey);
 		foreach (var member in GetSerializableMembers(type))
-		{
-			if (!JsonUtil.TryGetProperty(spec, member.Name, out var node) || node == null)
-				continue;
-
-			if (TryReadValue(node, member.Type, member.GetValue(actor), out var value))
+			if (GetResolvedProperty(spec, member.Name) is { } node &&
+				TryReadValue(node, member.Type, member.GetValue(actor), out var value))
 				member.SetValue(actor, value);
-		}
 	}
 
-	private static JsonObject GetBaseline(JsonObject local, JsonObject resolved)
+	// Shared: read-only, clone any node that leaves here into another document.
+	static JsonObject TypeDefaults([DynamicallyAccessedMembers(RegisteredActorMembers)] Type type)
 	{
-		if (ReadString(local, FromKey) is { } from && specs.TryGetValue(from, out var inherited))
-			return Resolve(inherited);
-
-		var typeName = ReadString(resolved, TypeKey);
-		if (typeName == null || !actorTypes.TryGetValue(typeName, out var type))
-			return [];
-
-		var actor = (Actor?)Activator.CreateInstance(type.Type);
-		return actor != null ? SerializeActorDefaults(type.Type, actor) : [];
+		DropStaleCodeCaches();
+		if (!typeDefaults.TryGetValue(type, out var defaults))
+			typeDefaults[type] = defaults = Activator.CreateInstance(type) is Actor actor ? SerializeActorDefaults(type, actor) : [];
+		return defaults;
 	}
+
+	// What a key reads as without a local value: the inherited spec's, else the type default.
+	static JsonNode? InheritedValue(JsonObject spec, JsonObject defaults, string key)
+		=> (ReadString(spec, FromKey) is { } from && specs.TryGetValue(from, out var inherited)
+			? GetResolvedProperty(inherited, key)
+			: null) ?? defaults[key];
 
 	private static JsonObject SerializeActorDefaults([DynamicallyAccessedMembers(RegisteredActorMembers)] Type type, Actor actor)
 	{
@@ -647,6 +618,7 @@ public static class ActorSpecs
 	private static SerializableMember[] GetSerializableMembers(
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
 	{
+		DropStaleCodeCaches();
 		if (serializableMembers.TryGetValue(type, out var cached))
 			return cached;
 
