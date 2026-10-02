@@ -6,5 +6,6 @@
   "edgeBandCells": 10,
   "freezeSteps": 141,
   "fireRate": 0.5,
+  "contrast": 0.28,
   "featureScale": 1
 }

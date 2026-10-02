@@ -295,6 +295,32 @@ public abstract partial class Pawn : Actor
 	public abstract PawnInput GetInput();
 	PawnInput prevInput = new();
 
+	// Crushed, the player and Bud are held flat where they were caught for a beat, then taken out of play
+	// like a fall. A burrower is never crushed: it's sealed into the seam instead (UpdateBurrowSeam).
+	static float CrushedHoldTime => 0.4f;
+	float crushedTimer;
+	Vector2 crushedSquish;
+
+	internal override void Crushed(Actor by, Point2 direction)
+	{
+		if (this is not (Player or Bud))
+		{
+			base.Crushed(by, direction);
+			return;
+		}
+		// Holding burrow with one to spend dives into the surface we're being pressed into, straight into the seam.
+		if (crushedTimer > 0 || State == States.Burrow ||
+			input.JumpDown && BurrowAvailable() && TryStartBurrow(Vector2.Zero, (Vector2)direction, by))
+			return;
+		crushedTimer = CrushedHoldTime;
+		crushedSquish = direction.X != 0 ? new(0.25f, 1.4f) : new(1.7f, 0.25f);
+		Stop();
+		GrantIFrames(CrushedHoldTime);
+		AudioEvent("player/squish");
+	}
+
+	protected virtual void CrushRecovered() { }
+
 	public override void Update()
 	{
 		if (Game.Rewinding) return;
@@ -302,6 +328,15 @@ public abstract partial class Pawn : Actor
 		// Gym runs test Bud; the stand-in player is scenery. Freeze it so it can't wander,
 		// fall into a pit, or die and drag the room through a transition mid-run.
 		if (Game.GymMode && this is Player) return;
+
+		if (crushedTimer > 0)
+		{
+			Squish = crushedSquish;
+			crushedTimer = Calc.Approach(crushedTimer, 0, Time.Delta);
+			if (crushedTimer <= 0)
+				CrushRecovered();
+			return;
+		}
 
 		var previousVelocity = Velocity;
 		AdvanceFrame();
@@ -1794,7 +1829,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static int RespawnInset => 16; // ~2 tiles
 	static int RespawnFootingSearch => 6;
 
-	// Falling off the bottom of the room is no longer instant death: take a normal hit and
+	protected override void CrushRecovered() => FallOffCliff();
+
+	// Falling off the bottom of the room (or being crushed) is no longer instant death: take a normal hit and
 	// respawn just inside the room from where we entered. If the hit happens to be fatal,
 	// ApplyHurt runs the usual death/reload, so we leave the position alone in that case.
 	void FallOffCliff()
@@ -1905,7 +1942,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	bool IsSafeGroundedRespawn()
 		=> Health > 0 && grounded && State != States.Burrow && State != States.Climb &&
-		 OverlapsFirst(Point2.Down, Masks.Solid) is not MovingPlatform;
+		 OverlapsFirst(Point2.Down, Masks.Solid) is not (MovingPlatform or Crusher);
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
 	{

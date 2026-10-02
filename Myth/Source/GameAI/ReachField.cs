@@ -187,7 +187,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		// would rebuild the field every refresh.
 		foreach (var actor in game.Actors)
 		{
-			if (actor is Grid or Pawn or MovingPlatform || actor.Tags.Has(ActorTag.Enemy) ||
+			if (actor is Crusher { NavFootprint: { } footprint } && (actor.Room == null || actor.Room == room))
+				solid.Fill(footprint);
+			if (actor is Grid or Pawn or MovingPlatform or Crusher || actor.Tags.Has(ActorTag.Enemy) ||
 				actor.Room != null && actor.Room != room || game.destroying.Contains(actor))
 				continue;
 			var layer = actor.Mask.Has(Actor.Masks.Solid) ? solid : actor.Mask.Has(Actor.Masks.Jumpthru) ? jumpthru : null;

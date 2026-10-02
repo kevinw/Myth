@@ -196,7 +196,7 @@ public sealed class SurfaceFollower
 	private RectInt Bounds() => (ProbeRect.Width == 0 ? actor.Hitbox.Rect : ProbeRect) + actor.Position;
 
 	bool CanUseSurface(in SurfaceHit hit)
-		=> (CanWalkOnMovingPlatforms || hit.Actor is not MovingPlatform) && CanUseSurface(-hit.Normal);
+		=> (CanWalkOnMovingPlatforms || hit.Actor is not (MovingPlatform or Crusher)) && CanUseSurface(-hit.Normal);
 
 	bool CanUseSurface(Vector2 direction) => ClimbsWallsAndCeilings || direction.Y > 0.5f;
 

@@ -611,6 +611,15 @@ public class Actor
 	/// Called when we were hit by another actor
 	internal virtual void OnWasHit(HitInfo hitInfo) { }
 
+	// Pinned against solid by a Crusher moving `direction`.
+	internal virtual void Crushed(Actor by, Point2 direction)
+	{
+		if (!Tags.Has(ActorTag.Enemy) || Tags.Has(ActorTag.Boss))
+			return;
+		Game.Create<Pop>(Position);
+		Game.Destroy(this);
+	}
+
 	/// Called when we perform a hit on another actor
 	public virtual void OnPerformHit(Actor hitting) { }
 

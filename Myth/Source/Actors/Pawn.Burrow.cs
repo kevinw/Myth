@@ -69,6 +69,7 @@ public abstract partial class Pawn
 	protected Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
 	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	float burrowSpeed;                  // current travel speed; eases via accel/friction
+	bool burrowSealed;                  // a crusher closed over us this burrow (see UpdateBurrowSeam)
 	bool burrowOnJumpthru;              // current surface is a one-way platform (ride on top, no submerge)
 	Point2 burrowRoomTransitionDirection;
 	readonly List<Vector2> glowPoints = [];
@@ -92,6 +93,8 @@ public abstract partial class Pawn
 	static float BurrowLeapCoyoteTime => 0.12f;
 	internal float BurrowSpeed => burrowSpeed;
 	internal Vector2 BurrowTravelHeading => burrow.Travel;
+	internal Actor? BurrowSeam => State == States.Burrow ? burrow.Seam : null;
+	internal bool FollowsBurrowSeam => burrow.SeamFollow;
 	internal bool AtBurrowLineEndpoint(BurrowLine line, int pointIndex)
 		=> State == States.Burrow && burrow.Line == line &&
 			Vector2.DistanceSquared(Position, line.WorldPoint(pointIndex)) <= 0.25f;
@@ -107,12 +110,18 @@ public abstract partial class Pawn
 		=> input.JumpDown && !burrowNeedsGrounding && TryStartBurrow(previousVelocity);
 
 	protected bool TryStartBurrow(Vector2 previousVelocity)
-	{
-		if (!CanBurrow()) return false;
+		=> CanBurrow() && TryStartBurrow(previousVelocity, Vector2.UnitY, sealedBy: null);
 
+	// `sealedBy`: a crusher pressing us into the surface toward `toward`. The snap looks past it, and the burrow
+	// starts already sealed in the seam.
+	bool TryStartBurrow(Vector2 previousVelocity, Vector2 toward, Actor? sealedBy)
+	{
 		Hitbox = new(BurrowHitboxRect);
-		burrow.Toward = Vector2.UnitY;
-		if (!Game.SnapToSurface(ref Position, ref burrow.Toward, BurrowAttachProbe))
+		burrow.Toward = toward;
+		bool snapped;
+		using (Game.WalkingSeam(sealedBy, follow: false))
+			snapped = Game.SnapToSurface(ref Position, ref burrow.Toward, BurrowAttachProbe);
+		if (!snapped)
 		{
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow($"start rejected: no surface near={Position}");
@@ -138,6 +147,9 @@ public abstract partial class Pawn
 		burrowReverseQueued = false;
 		burrow.Line = null;
 		burrow.LineExit = null;
+		burrow.Seam = sealedBy;
+		burrow.SeamFollow = false;
+		burrowSealed = sealedBy != null;
 		burrowRoomTransitionDirection = Point2.Zero;
 		ResetQuantumTunnel();
 		// Complementing the room preserves the boundary in place, but moves its solid to the
@@ -234,8 +246,11 @@ public abstract partial class Pawn
 			burrow.Line.Trace(burrow.Segment, burrow.T, burrow.Direction,
 				burrowIntent, arcLength, glowPoints, burrowLineGlowBack);
 		else
+		{
+			using var _ = Game.WalkingSeam(burrow.Seam, burrow.SeamFollow);
 			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrow.Heading, burrow.SolidLeft, burrow.LineExit,
 				arcLength, glowPoints, burrowIntent);
+		}
 	}
 
 	Vector2 GetBurrowIntent()
@@ -394,6 +409,7 @@ public abstract partial class Pawn
 			Game.TraceBurrow(
 				$"intent ignored as non-tangential intent={intent} travel={BurrowTravelHeading} projection={proj:0.##}");
 		burrowLastIntent = intent;
+		UpdateBurrowSeam(intent);
 		if (pressed && !burrowOrbiting && burrowSpeed <= BurrowReverseFlipSpeed && burrow.Line != null &&
 			burrow.Line.TryFindJunction(burrow.Segment, burrow.T, intent, BurrowJunctionSeekDistance,
 				burrow.Direction, out var seekDirection, out var seekDistance))
@@ -500,7 +516,7 @@ public abstract partial class Pawn
 					// A dead end. If we're driving into it and the surface exits the room into an
 					// adjacent one, transition and keep burrowing on the far side. Otherwise pop out;
 					// if we merely coasted here on friction, kill the glide and stay put.
-					if (move)
+					if (move && burrow.Seam == null)
 					{
 						if (TryBurrowRoomTransition(burrow.Heading))
 							return;
@@ -533,7 +549,7 @@ public abstract partial class Pawn
 		if (burrow.Line == null && !quantumArmed)
 			burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
 		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
-		var wantsExit = burrow.Line == null && (burrowTimer <= 0 || !input.JumpDown);
+		var wantsExit = burrow.Line == null && burrow.Seam == null && (burrowTimer <= 0 || !input.JumpDown);
 		if (burrow.Blocked && (burrow.Line == null || CanExitBurrowLine(out _)))
 			burrow.Blocked = false;
 		if (wantsExit)
@@ -552,6 +568,40 @@ public abstract partial class Pawn
 				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
 			PopOutOfBurrow();
 		}
+	}
+
+	// A Crusher closing over the burrow point seals us into the seam between it and whatever it hit: the one
+	// line where two touching solids read apart. Pressing toward the crusher follows its outline (and rides it
+	// home); anything else follows the solid it pinned us to. Leaving the seam is one-way, and we can't pop out
+	// of it until a tile of room opens in front of us.
+	void UpdateBurrowSeam(Vector2 intent)
+	{
+		if (burrow.Line != null)
+			return;
+		if (burrow.Seam == null)
+		{
+			if (Game.BuryingCrusher(Position, burrow.Toward) is not { } crusher)
+				return;
+			(burrow.Seam, burrow.SeamFollow, burrowSealed) = (crusher, false, true);
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow($"sealed in seam position={Position} normal={burrow.Toward}");
+		}
+		else if (!Game.OverlapsSolid(this, RectInt.Centered((Position - burrow.Toward * (Game.TileSize / 2)).RoundToPoint2(), Game.TileSize, Game.TileSize)))
+		{
+			burrow.Seam = null;
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow($"left seam position={Position}");
+			return;
+		}
+
+		// Only while still sandwiched: once the walk has turned a corner out into air there's one side left.
+		var towardCrusher = burrow.SeamFollow ? burrow.Toward : -burrow.Toward;
+		if (intent == Vector2.Zero || Vector2.Dot(intent, towardCrusher) > BurrowTangentDeadzone == burrow.SeamFollow ||
+			!Game.Buried(Position, burrow.Toward, out _, out _))
+			return;
+		burrow.SeamFollow = !burrow.SeamFollow;
+		burrow.Toward = -burrow.Toward;
+		burrow.SolidLeft = !burrow.SolidLeft;
 	}
 
 	void FlickerTorchesAlongBurrow(Point2 previousPosition)
@@ -654,7 +704,15 @@ public abstract partial class Pawn
 			Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
 		}
 
-		jumpTimer = BurrowPopTime;
+		// Coming out from under a crusher that's still lifting away: rise in place, crouched if that's all the
+		// room there is, rather than launching into its underside.
+		var cramped = burrowSealed && exitDir.Y > 0.5f && Game.OverlapsSolid(this, StandingHitboxRect + Position);
+		if (cramped)
+		{
+			Velocity = Vector2.Zero;
+			ducking = true;
+		}
+		jumpTimer = cramped ? 0 : BurrowPopTime;
 		jumpCutImmune = true; // the pop keeps its full float even when jump is released
 		State = States.Normal;
 		AudioEvent("jump");
@@ -666,6 +724,7 @@ public abstract partial class Pawn
 		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		burrow.Blocked = false;
+		burrow.Seam = null;
 		burrowRoomTransitionDirection = Point2.Zero;
 		ResetQuantumTunnel();
 		UpdateBurrowShift();

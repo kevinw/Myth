@@ -3,17 +3,12 @@ using System.Numerics;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Anchor = SpriteAnchor.TopLeft)]
-class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
+class MovingPlatform : DualGridRect
 {
 	SoundInstance? moveSound;
 	public static readonly Point2 DefaultSize = new(48, 32);
 	public static readonly Point2 DefaultCircleCenterOffset = new(0, 80);
 
-	public Point2 Size { get; set; } = DefaultSize;
-
-	// Dual (marching-squares) tileset the platform is skinned with -- supplies color + normals so it
-	// lights and reflects like solid tiles. Editor-pickable; see Manager.Editor material picker.
-	public string Material = "metal-dual";
 	[I(0, 5)] public float WaitTime = WAIT_TIME;
 	const float WAIT_TIME = 0.856f;
 	[I(5, 160)] public float Speed = 30f;
@@ -51,8 +46,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 	Motion motion = new() { Wait = WAIT_TIME };
 	Vector2 circleCenterOffset;
 	bool activationLightsOn;
-	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
-	Point2 originalPosition;
 	RectInt routeBounds;
 	ActorDestructionTrigger? appearanceTrigger;
 
@@ -64,11 +57,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		_ => null
 	};
 
-	public MovingPlatform()
-	{
-		Mask = Masks.Solid;
-		CollidesWithSolids = true;
-	}
+	public MovingPlatform() : base(DefaultSize) => CollidesWithSolids = true;
 
 	public override void Destroyed() {
 		StopAndReleaseSound(ref moveSound, false);
@@ -77,10 +66,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 	public override void Added()
 	{
 		base.Added();
-		// Size is applied from the spec before Added (editor resizes write it), so build the
-		// hitbox here to match the authored footprint rather than the construction-time default.
-		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
-		originalPosition = Position;
 		motion.Wait = WaitTime;
 		activationLightsOn = !ActivatedByWeight || Mode == MovementMode.Circle;
 		if (StartingDirection(Mode, Facing) is { } startingDirection)
@@ -262,56 +247,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		return step;
 	}
 
-	// Move the platform by a whole-pixel delta, carrying actors riding on top and pushing any
-	// caught in its path. While moving actors we go intangible (Mask cleared) so a carried rider
-	//  isn't "grounded" on us (lets it follow us down) and a pushed actor only collides with
-	// real walls (so it can squish, not snag on us).
-	void MoveSolid(Point2 step)
-	{
-		// TODO: riders are re-derived from overlap probes every step, so each new way of holding on
-		// (side huggers, burrowers) needs another probe here. The replacement is an explicit
-		// attachment: whoever grabs a surface records the actor and its offset -- the burrow walk
-		// already knows which actor's face it is on -- and applies that actor's per-frame delta
-		// itself. That drops the guessing below, survives diagonal motion (circle mode steps X and Y
-		// together, so a rider straddling a face can lose contact on both axes at once), and gives
-		// riders a defined order against their own movement instead of one that depends on where the
-		// platform lands in Game.Actors.
-		riders.Clear();
-		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
-		{
-			// Riding = standing on top, embedded in us, or — while airborne — hugging a side face (a
-			// wall-slide). Carrying side huggers keeps the player glued as we move, so wall-slide
-			// contact doesn't flicker open 1px at a time (which toggles the slow-slide gravity and
-			// makes the player vibrate). The !Grounded gate excludes things merely standing beside us.
-			//
-			// Embedded is the burrowing player: its 2x2 hitbox straddles our face by a single pixel,
-			// so a step away from the trailing face breaks contact outright. The post-move push below
-			// only catches the leading face (we move into that one), and the wall-hug branch can't
-			// help because a burrower on a vertical face reads as Grounded -- its box shifted down
-			// still overlaps us. Left behind, its boundary walk finds no edge and the burrow pops.
-			if (IsStandingOnPlatform(actor) || actor.OverlapsAny(Point2.Zero, this)
-				|| (!actor.Grounded() && (actor.OverlapsAny(Point2.Left, this) || actor.OverlapsAny(Point2.Right, this))))
-				riders.Add(actor);
-		}
-
-		var savedMask = Mask;
-		Mask = Masks.None;
-
-		Position += step;
-		Game.ActorMoved(this, step);
-
-		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
-		{
-			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
-			// top, carry it. Both move by the same delta with the actor's own collision, so they
-			// scrape to a stop against walls instead of clipping through.
-			if (actor.OverlapsAny(Point2.Zero, this) || riders.Contains(actor))
-				actor.MovePixels(step);
-		}
-
-		Mask = savedMask;
-	}
-
 	float standingWeightValue = 0;
 
 	bool HasStandingWeight()
@@ -319,8 +254,8 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		var hasWeight = false;
 		foreach (var actor in Game.Actors)
 		{
-			if (!CanRidePlatform(actor)) continue;
-			if (IsStandingOnPlatform(actor))
+			if (!CanRide(actor)) continue;
+			if (IsStandingOn(actor))
 			{
 				hasWeight = true;
 				break;
@@ -334,12 +269,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		return hasWeight;
 	}
 
-	bool CanRidePlatform(Actor actor)
-		=> actor.AttachmentTarget != this && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
-
-	bool IsStandingOnPlatform(Actor actor)
-		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);
-
 	bool IsBurrowingOnPlatform(Actor actor) {
 		var rect = Hitbox.Rect.Inflate(2) + Position; // not sure about this
 		if (actor is Pawn pawn)
@@ -349,22 +278,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		return false;
 	}
 
-	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
-	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
-	public bool CastsShadow => Visible;
-
-	public void AppendOccluderSegments(List<ShadowSegment> segments) => this.AppendOccluders(segments);
-
 	public override void Render(Batcher batcher)
 	{
 		RenderMaterial(batcher, normals: false, Color.White);
 		RenderActivationLightColor(batcher, 1);
 	}
-	// Spriteless, so the Actor default RenderShadow (which stamps the sprite silhouette into the
-	// particle-collision coverage mask) draws nothing and particles pass straight through. Stamp the
-	// dual-tile art instead: the CoverageMask shader keys off texture alpha, so the mask picks up the
-	// rounded blob corners rather than a bare rectangle.
-	public override void RenderShadow(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
 	public override void RenderNormals(Batcher batcher)
 	{
 		RenderMaterial(batcher, normals: true, Color.White);
@@ -379,30 +297,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * alpha);
 		}
 	}
-	// Position, Visible and Material are Actor fields, which can't satisfy interface properties.
-	Point2 IDualGridRect.Position => Position;
-	bool IDualGridRect.Visible => Visible;
-	string IDualGridRect.Material => Material;
-
-	internal Point2 DitherAnchorPosition => originalPosition;
-	public Vector2 DitherAnchorOffset => originalPosition - Position;
-	public Point2 VariantTileOrigin => originalPosition / Game.TileSize;
-	public override bool CastsReflection => true;
 	public override void RenderReflection(Batcher batcher, Color color)
 	{
 		RenderMaterial(batcher, normals: false, color);
 		RenderActivationLightColor(batcher, color.A / 255.0f);
 	}
-
-	// Spriteless, so the sprite-based default is a zero rect; report the real footprint so
-	// reflection culling (and any other visual-bounds consumer) sees the whole platform.
-	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);
-
-	// When skinned with a reflective material the top face mirrors sprites like a metal floor would.
-	// See Game.Rendering DrawPlatformSurfaceReflections.
-	public RectInt SurfaceReflectionBounds => this.Bounds();
-
-	void RenderMaterial(Batcher batcher, bool normals, Color color) => this.Render(batcher, normals, color);
 
 	static float ActivationLightInset => 5;
 	static float ActivationLightRadius => 3;
@@ -464,7 +363,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		return new(normal * 0.5f + Vector3.One * 0.5f);
 	}
 
-	Point2 MaterialSize => new(this.TileColumns() * Game.TileSize, this.TileRows() * Game.TileSize);
+	Point2 MaterialSize => new Point2(TileColumns(), TileRows()) * Game.TileSize;
 
 #if EDITOR
 	sealed class Editor : Manager.ActorEditor<MovingPlatform>

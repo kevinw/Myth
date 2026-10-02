@@ -218,7 +218,7 @@ public partial class Manager
 		{
 			var targetLocal = (Vector2)liveActorStartPosition + worldMouse - liveActorPressWorld;
 			var shiftDown = Input.Keyboard.Shift;
-			var snap = liveActorSnapsByDefault ? !shiftDown : shiftDown;
+			var snap = LocksToTileGrid(authored) || (liveActorSnapsByDefault ? !shiftDown : shiftDown);
 			var local = snap
 				? SnapRoomActorLocalPosition(targetLocal, GetRoomActorPaletteOffset(authored))
 				: (Point2)targetLocal;
@@ -226,8 +226,7 @@ public partial class Manager
 		}
 		else
 		{
-			var tile = ((worldMouse - (Vector2)authoredRoom.WorldBounds.TopLeft) / Game.TileSize).FloorToPoint2();
-			ResizeRoomActor(authoredRoom, authored, liveActorResizeHandle, worldMouse, tile, !Input.Keyboard.Shift);
+			ResizeRoomActor(authoredRoom, authored, liveActorResizeHandle, worldMouse, !Input.Keyboard.Shift);
 		}
 
 		SyncLiveActorFromAuthored(runtime, authoredRoom, authored);

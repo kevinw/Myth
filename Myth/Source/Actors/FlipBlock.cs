@@ -10,25 +10,20 @@ namespace Myth;
 // brightens as its next flip approaches, so the timing can be read before it lands.
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Icon = "wave-square",
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, LiveResizable = true)]
-class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
+class FlipBlock : DualGridRect
 {
-	public Point2 Size { get; set; } = DefaultSize;
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 3, Game.TileSize);
 	[Multiline(2)] public string Phases = "1 0";
 	[I(0.05f, 4)] public float CyclesPerSecond = 0.5f;
 	[I(0, 1)] public float Telegraph = 0.4f;
-	public string Material = "metal-dual";
 
 	static float GhostAlpha => 0.6f.T();
 	static Color WarningColor => new(0xff9d5c);
 	static Color GhostGlowColor => new(0x79cfff);
 
-	Point2 IDualGridRect.Position => Position;
-	bool IDualGridRect.Visible => Visible;
-	string IDualGridRect.Material => Material;
-	// Authored in place, so its tile variants and dither come from where it sits.
-	public Point2 VariantTileOrigin => Position / Game.TileSize;
-	public Vector2 DitherAnchorOffset => Vector2.Zero;
+	// Authored in place (and live-moved in the editor), so its tile variants and dither come from where it sits.
+	public override Point2 VariantTileOrigin => Position / Game.TileSize;
+	public override Vector2 DitherAnchorOffset => Vector2.Zero;
 
 	readonly PatternClock clock = new();
 	readonly List<Hap<Value>> haps = [];
@@ -37,18 +32,7 @@ class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 	bool solid = true;
 	float charge;
 
-	public FlipBlock()
-	{
-		Mask = Masks.Solid;
-		CollidesWithSolids = false;
-	}
-
-	public override void Added()
-	{
-		base.Added();
-		// Size is applied from the spec before Added, like MovingPlatform's.
-		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
-	}
+	public FlipBlock() : base(DefaultSize) => CollidesWithSolids = false;
 
 	public override void Update()
 	{
@@ -136,8 +120,6 @@ class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 			//batcher.Rect(new Rect(0, 0, Size.X, Size.Y), GhostGlowColor * (charge * 0.5f));
 	}
 
-	void RenderMaterial(Batcher batcher, bool normals, Color color) => this.Render(batcher, normals, color);
-
 	// A ghosted block is not-quite-real, so it is sorted: it starts dripping apart just before it
 	// goes and pulls itself back together as its return approaches.
 	public override void StirPixelSort(PixelSortCanvas canvas)
@@ -149,11 +131,6 @@ class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 	}
 
 	// Only a solid block casts a shadow, occludes light, dithers into the tile field or reflects.
-	public bool CastsShadow => Visible && solid;
-	public void AppendOccluderSegments(List<ShadowSegment> segments) => this.AppendOccluders(segments);
+	public override bool CastsShadow => Visible && solid;
 	public override bool CastsReflection => solid;
-	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
-
-	// Spriteless, so the sprite-based default is a zero rect; report the real footprint.
-	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);
 }

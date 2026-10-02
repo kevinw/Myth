@@ -458,6 +458,12 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	// Falling out of the room takes him out of play for FallRespawnDelay before he turns back up
 	// where he came in. Hidden and non-colliding for the wait (the same shape as the room-entry
 	// delay), so the player can't catch or burrow-ride a Bud who is mid-respawn.
+	protected override void CrushRecovered()
+	{
+		Game.Create<Pop>(Position);
+		BeginFallRespawn();
+	}
+
 	void BeginFallRespawn()
 	{
 		Stop();

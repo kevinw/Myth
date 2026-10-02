@@ -3,75 +3,188 @@ using Foster.Framework;
 
 namespace Myth;
 
-// A rectangle of actor skinned with a dual-grid tileset, so it lights, shadows, dithers and
-// reflects like the solid tiles around it (MovingPlatform, FlipBlock). The render passes in
+// A solid rectangle of actor skinned with a dual-grid tileset, so it lights, shadows, dithers and
+// reflects like the solid tiles around it (MovingPlatform, Crusher, FlipBlock). The render passes in
 // Game.Rendering walk actors as these rather than by type.
-public interface IDualGridRect
-{
-	Point2 Position { get; }
-	Point2 Size { get; }
-	bool Visible { get; }
-	string Material { get; }
-
-	// Tile variants are picked from the authored cell, so a block that moves keeps its look.
-	Point2 VariantTileOrigin { get; }
-
-	// How far the skin has travelled from where it was authored, so the dither pattern travels with
-	// it instead of swimming underneath it.
-	Vector2 DitherAnchorOffset { get; }
-}
-
-public static class DualGridRects
+abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 {
 	// Matches the metal tile's reflectionOpacity.
 	public const float SurfaceReflectionOpacity = 0.7f;
 
-	public static int TileColumns(this IDualGridRect rect) => Math.Max(1, rect.Size.X / Game.TileSize);
-	public static int TileRows(this IDualGridRect rect) => Math.Max(1, rect.Size.Y / Game.TileSize);
-	public static RectInt Bounds(this IDualGridRect rect) => new(rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y);
+	public Point2 Size { get; set; }
+	// Editor-pickable; see Manager.Editor material picker.
+	public string Material = "metal-dual";
+
+	protected Point2 originalPosition;
+	static readonly List<Actor> riders = [];  // reusable scratch: actors carried along this step
+	static readonly List<Actor> crushed = [];
+
+	protected DualGridRect(Point2 defaultSize)
+	{
+		Size = defaultSize;
+		Mask = Masks.Solid;
+	}
+
+	public override void Added()
+	{
+		base.Added();
+		// Size is applied from the spec before Added (editor resizes write it), so build the
+		// hitbox here to match the authored footprint rather than the construction-time default.
+		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
+		originalPosition = Position;
+	}
+
+	// Tile variants are picked from the authored cell, so a block that moves keeps its look.
+	public virtual Point2 VariantTileOrigin => originalPosition / Game.TileSize;
+
+	// How far the skin has travelled from where it was authored, so the dither pattern travels with
+	// it instead of swimming underneath it.
+	public virtual Vector2 DitherAnchorOffset => originalPosition - Position;
+
+	// Shakes every pass of the skin together (color, normals, shadow, reflection) without moving the solid.
+	protected virtual Vector2 RenderOffset => Vector2.Zero;
+
+	public int TileColumns() => Math.Max(1, Size.X / Game.TileSize);
+	public int TileRows() => Math.Max(1, Size.Y / Game.TileSize);
+	public RectInt Bounds() => new(Position, Size);
 
 	// The top face mirrors sprites the way a metal floor would. See DrawPlatformSurfaceReflections.
-	public static bool ReflectsSurface(this IDualGridRect rect) => rect.Material == "metal-dual";
+	public bool ReflectsSurface() => Material == "metal-dual";
 
 	// The tile character whose dual tileset is this material; ties the skin to the tile kit so it
 	// picks up the same variants and field colors as hand-placed tiles.
-	public static char MaterialTile(this IDualGridRect rect)
+	public char MaterialTile()
 	{
 		var result = '0';
 		var found = false;
 		foreach (var (tile, entry) in Factory.Entries)
-			if (entry.DualTilesetName == rect.Material && (!found || tile < result))
+			if (entry.DualTilesetName == Material && (!found || tile < result))
 				(found, result) = (true, tile);
 		return result;
 	}
 
 	// Draws the cols x rows blob, or a flat fill when the material is missing.
-	public static void Render(this IDualGridRect rect, Batcher batcher, bool normals, Color color)
+	protected void RenderMaterial(Batcher batcher, bool normals, Color color)
 	{
-		if (Assets.GetTileset(rect.Material) is { } tileset)
-			DualGrid.RenderRect(batcher, tileset, rect.TileColumns(), rect.TileRows(), normals, color, rect.VariantTileOrigin, rect.MaterialTile());
+		var offset = RenderOffset;
+		if (offset != Vector2.Zero)
+			batcher.PushMatrix(offset);
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.RenderRect(batcher, tileset, TileColumns(), TileRows(), normals, color, VariantTileOrigin, MaterialTile());
 		else
-			batcher.Rect(new Rect(0, 0, rect.Size.X, rect.Size.Y), color);
-	}
-
-	// Occlude light like the tiles it is skinned with, so shadows follow the rounded corners rather
-	// than a bare rectangle.
-	public static void AppendOccluders(this IDualGridRect rect, List<ShadowSegment> segments)
-	{
-		if (Assets.GetTileset(rect.Material) is { } tileset)
-			DualGrid.AppendRectOccluders(segments, tileset, rect.TileColumns(), rect.TileRows(),
-				new Vector2(rect.Position.X, rect.Position.Y), rect.VariantTileOrigin, rect.MaterialTile());
-		else
-			OccluderShape.FromRect(rect.Bounds()).AppendSegments(segments);
+			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
+		if (offset != Vector2.Zero)
+			batcher.PopMatrix();
 	}
 
 	// Stamps into the TileField with per-tile field colors, so its dither variation matches the
 	// stone next to it instead of reading as one flat block.
-	public static void RenderTileField(this IDualGridRect rect, Batcher batcher, Func<Point2, Color> colorForTile)
+	public void RenderTileField(Batcher batcher, Func<Point2, Color> colorForTile)
 	{
-		if (Assets.GetTileset(rect.Material) is { } tileset)
-			DualGrid.RenderRectTileField(batcher, tileset, rect.TileColumns(), rect.TileRows(), rect.VariantTileOrigin, rect.MaterialTile(), colorForTile);
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.RenderRectTileField(batcher, tileset, TileColumns(), TileRows(), VariantTileOrigin, MaterialTile(), colorForTile);
 		else
-			batcher.Rect(new Rect(0, 0, rect.Size.X, rect.Size.Y), colorForTile(rect.VariantTileOrigin));
+			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), colorForTile(VariantTileOrigin));
 	}
+
+	// Occlude light like the tiles it is skinned with: DualGrid traces occluder segments from the
+	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
+	public virtual bool CastsShadow => Visible;
+
+	public void AppendOccluderSegments(List<ShadowSegment> segments)
+	{
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.AppendRectOccluders(segments, tileset, TileColumns(), TileRows(), (Vector2)Position, VariantTileOrigin, MaterialTile());
+		else
+			OccluderShape.FromRect(Bounds()).AppendSegments(segments);
+	}
+
+	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
+	// Spriteless, so the Actor default RenderShadow (which stamps the sprite silhouette into the
+	// particle-collision coverage mask) draws nothing and particles pass straight through. Stamp the
+	// dual-tile art instead: the CoverageMask shader keys off texture alpha, so the mask picks up the
+	// rounded blob corners rather than a bare rectangle.
+	public override void RenderShadow(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
+	public override bool CastsReflection => true;
+	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+
+	// Spriteless, so the sprite-based default is a zero rect; report the real footprint so
+	// reflection culling (and any other visual-bounds consumer) sees the whole block.
+	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);
+
+	// An actor we pushed or carried is still inside us after the move: it was pinned against a solid.
+	protected virtual void Pinned(Actor actor, Point2 step) { }
+
+	// Move by a whole-pixel delta, carrying actors riding on top and pushing any caught in our path.
+	// While moving actors we go intangible (Mask cleared) so a carried rider isn't "grounded" on us
+	// (lets it follow us down) and a pushed actor only collides with real walls (so it can squish,
+	// not snag on us).
+	protected void MoveSolid(Point2 step)
+	{
+		// TODO: riders are re-derived from overlap probes every step, so each new way of holding on
+		// (side huggers, burrowers) needs another probe here. The replacement is an explicit
+		// attachment: whoever grabs a surface records the actor and its offset -- the burrow walk
+		// already knows which actor's face it is on -- and applies that actor's per-frame delta
+		// itself. That drops the guessing below, survives diagonal motion (circle mode steps X and Y
+		// together, so a rider straddling a face can lose contact on both axes at once), and gives
+		// riders a defined order against their own movement instead of one that depends on where the
+		// platform lands in Game.Actors.
+		riders.Clear();
+		foreach (var actor in Game.Actors) if (CanRide(actor))
+		{
+			// A burrower in the seam we closed on it travels with the side it's following: our outline
+			// carries it, the solid we pinned it to leaves it where it is.
+			if (actor is Pawn pawn && pawn.BurrowSeam == this)
+			{
+				if (pawn.FollowsBurrowSeam)
+					riders.Add(actor);
+				continue;
+			}
+
+			// Riding = standing on top, embedded in us, or — while airborne — hugging a side face (a
+			// wall-slide). Carrying side huggers keeps the player glued as we move, so wall-slide
+			// contact doesn't flicker open 1px at a time (which toggles the slow-slide gravity and
+			// makes the player vibrate). The !Grounded gate excludes things merely standing beside us.
+			//
+			// Embedded is the burrowing player: its 2x2 hitbox straddles our face by a single pixel,
+			// so a step away from the trailing face breaks contact outright. The post-move push below
+			// only catches the leading face (we move into that one), and the wall-hug branch can't
+			// help because a burrower on a vertical face reads as Grounded -- its box shifted down
+			// still overlaps us. Left behind, its boundary walk finds no edge and the burrow pops.
+			if (IsStandingOn(actor) || actor.OverlapsAny(Point2.Zero, this)
+				|| (!actor.Grounded() && (actor.OverlapsAny(Point2.Left, this) || actor.OverlapsAny(Point2.Right, this))))
+				riders.Add(actor);
+		}
+
+		var savedMask = Mask;
+		Mask = Masks.None;
+
+		Position += step;
+		Game.ActorMoved(this, step);
+
+		crushed.Clear();
+		foreach (var actor in Game.Actors) if (CanRide(actor))
+		{
+			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
+			// top, carry it. Both move by the same delta with the actor's own collision, so they
+			// scrape to a stop against walls instead of clipping through.
+			if (riders.Contains(actor) || !(actor is Pawn pawn && pawn.BurrowSeam == this) && actor.OverlapsAny(Point2.Zero, this))
+			{
+				actor.MovePixels(step);
+				if (actor.OverlapsAny(Point2.Zero, this))
+					crushed.Add(actor);
+			}
+		}
+
+		Mask = savedMask;
+		foreach (var actor in crushed)
+			Pinned(actor, step);
+	}
+
+	protected bool CanRide(Actor actor)
+		=> actor.AttachmentTarget != this && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
+
+	protected bool IsStandingOn(Actor actor)
+		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);
 }

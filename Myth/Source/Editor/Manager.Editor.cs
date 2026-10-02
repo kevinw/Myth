@@ -439,7 +439,7 @@ public partial class Manager
 		using (CaptureRoomUndo("Nudge Actor", room))
 		{
 			var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
-			ActorSpecs.SetProperty(actor, "Position", ActorSpecs.ToJsonNode(position + offset));
+			ActorSpecs.SetProperty(actor, "Position", ActorSpecs.ToJsonNode(position + offset * (LocksToTileGrid(actor) ? Game.TileSize : 1)));
 			ClearEditorDragState();
 			editorSelectionRect = null;
 			editorGameDirty = true;
@@ -2111,6 +2111,10 @@ public partial class Manager
 		return result;
 	}
 
+	// Dual-grid skins draw whole tiles, so their position and size stay on the tile grid whatever the modifiers.
+	static bool LocksToTileGrid(JsonObject actor)
+		=> typeof(DualGridRect).IsAssignableFrom(ActorSpecs.GetActorType(ActorSpecs.GetTypeName(actor) ?? ""));
+
 	static bool IsResizableRoomRectActor(JsonObject actor)
 		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.GetTypeName(actor) ?? "");
 
@@ -2734,6 +2738,7 @@ public partial class Manager
 			return;
 		var offset = GetRoomActorPaletteOffset(actor);
 		EditorFor(actor)?.BeforeMove(new EditorActor(room, actor));
+		snap |= LocksToTileGrid(actor);
 
 		var targetLocal = (Vector2)editorDrag.ActorStartPosition + world - pressWorld;
 		var local = snap
@@ -2942,22 +2947,30 @@ public partial class Manager
 			(int)MathF.Floor(adjusted.Y / Game.TileSize) * Game.TileSize + offset.Y);
 	}
 
-	void ResizeHiddenWallActor(Room room, int actorIndex, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
+	void ResizeHiddenWallActor(Room room, int actorIndex, ResizeHandle handle, Vector2 world, bool snap)
 	{
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count || handle == ResizeHandle.None)
 			return;
 
-		ResizeRoomActor(room, room.Actors[actorIndex], handle, world, tile, snap);
+		ResizeRoomActor(room, room.Actors[actorIndex], handle, world, snap);
 	}
 
-	void ResizeRoomActor(Room room, JsonObject actor, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
+	void ResizeRoomActor(Room room, JsonObject actor, ResizeHandle handle, Vector2 world, bool snap)
 	{
 		if (!IsResizableRoomRectActor(actor))
 			return;
 
 		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var size = ActorSpecs.ReadResolvedPoint(actor, nameof(IResizable.Size)) ?? ResizableRoomRectDefaultSize(actor);
-		var cursor = snap ? tile * Game.TileSize : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
+		if (LocksToTileGrid(actor))
+		{
+			snap = true;
+			position = (position / (float)Game.TileSize).RoundToPoint2() * Game.TileSize;
+			size = Point2.Max((size / (float)Game.TileSize).RoundToPoint2(), Point2.One) * Game.TileSize;
+		}
+		// Edges snap to the nearest grid line, so grabbing a handle a pixel either side of it doesn't jump a tile.
+		var local = world - (Vector2)room.WorldBounds.TopLeft;
+		var cursor = snap ? (local / Game.TileSize).RoundToPoint2() * Game.TileSize : (Point2)local;
 		var bottomCenter = string.Equals(ActorSpecs.GetTypeName(actor), nameof(Door), StringComparison.OrdinalIgnoreCase);
 
 		var left = bottomCenter ? position.X - size.X / 2 : position.X;
@@ -4806,7 +4819,7 @@ public partial class Manager
 				else
 				{
 					OpenPendingRoomUndo(ActorMoveUndoSlot, "Resize Actor", editing);
-					ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, !Input.Keyboard.Shift);
+					ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, !Input.Keyboard.Shift);
 				}
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.RoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)

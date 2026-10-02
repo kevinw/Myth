@@ -755,8 +755,8 @@ public sealed partial class GameView
 		// Flat reflections need no distortion pass. Draw directly so the room reflections
 		// survive until CompositeFlatReflections, after water has been drawn.
 		foreach (var actor in rendering)
-			if (actor is IDualGridRect { Visible: true } skin && skin.ReflectsSurface())
-				DrawReflectedActors(target, skin.Bounds(), skin.Position.Y, DualGridRects.SurfaceReflectionOpacity, skip: actor);
+			if (actor is DualGridRect { Visible: true } skin && skin.ReflectsSurface())
+				DrawReflectedActors(target, skin.Bounds(), skin.Position.Y, DualGridRect.SurfaceReflectionOpacity, skip: actor);
 	}
 
 	RectInt GetReflectionScissor(RectInt rect)
@@ -1296,7 +1296,7 @@ public sealed partial class GameView
 				continue;
 			}
 
-			if (actor is not IDualGridRect { Visible: true } skin)
+			if (actor is not DualGridRect { Visible: true } skin)
 				continue;
 
 			// Anchor slots are limited, so only a skin that has travelled from where it was authored

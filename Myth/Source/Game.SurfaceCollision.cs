@@ -18,6 +18,8 @@ public struct BurrowCursor
 	public int Direction;
 	public Vector2 LineHeading;
 	public bool Blocked;      // at a line's end inside solid, with no surface to take and no room to pop out
+	public Actor? Seam;       // sealed between this crusher and what it closed on (see Pawn.UpdateBurrowSeam)
+	public bool SeamFollow;   // walking the crusher's own outline rather than the solid it pinned us to
 
 	public readonly Vector2 Travel => Line != null ? LineHeading : Heading;
 
@@ -49,6 +51,7 @@ public partial class Game
 	// and through the line's junctions by the held `intent`. `doors` takes the game through a burrow door.
 	public BurrowTravel TravelBurrow(ref Point2 at, ref BurrowCursor burrow, int pixels, Vector2 intent, bool doors, out float remaining)
 	{
+		using var _ = WalkingSeam(burrow.Seam, burrow.SeamFollow);
 		remaining = pixels;
 		if (burrow.Line == null && TryEnterBurrowLine(at, burrow.Heading, burrow.LineExit, BurrowLineAttachDistance, intent,
 			out var enteredLine, out burrow.Segment, out burrow.T, out burrow.Direction, out var entryPoint, out burrow.LineHeading))
@@ -654,8 +657,44 @@ public partial class Game
 
 	bool InRoom(Point2 cell) => room?.WorldBounds.Contains(cell) ?? false;
 
+	// The one place two touching solids read apart: in a seam the walk sees either just the crusher's outline,
+	// or everything but the crusher.
+	Actor? seam;
+	bool seamFollow;
+
+	internal SeamWalk WalkingSeam(Actor? seam, bool follow) => new(this, seam, follow);
+
+	internal readonly ref struct SeamWalk
+	{
+		readonly Game game;
+		public SeamWalk(Game game, Actor? seam, bool follow) => (this.game, game.seam, game.seamFollow) = (game, seam, follow);
+		public void Dispose() => game.seam = null;
+	}
+
+	// No air on either side of the burrow point's face: something closed over it.
+	internal bool Buried(Point2 vertex, Vector2 toward, out Point2 a, out Point2 b)
+	{
+		var across = new Vector2(toward.Y, -toward.X) * 0.5f;
+		a = CellAt(vertex - toward * 0.5f + across);
+		b = CellAt(vertex - toward * 0.5f - across);
+		return SolidPixel(a) && SolidPixel(b);
+	}
+
+	internal Crusher? BuryingCrusher(Point2 vertex, Vector2 toward)
+	{
+		if (!Buried(vertex, toward, out var a, out var b))
+			return null;
+		foreach (var actor in Actors)
+			if (actor is Crusher crusher && (crusher.Hitbox.Contains(a - crusher.Position) || crusher.Hitbox.Contains(b - crusher.Position)))
+				return crusher;
+		return null;
+	}
+
 	bool SolidPixel(Point2 cell)
 	{
+		if (seamFollow && seam != null)
+			return seam.Hitbox.Contains(cell - seam.Position);
+
 		var point = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
 		if (RoomCollisionContains(point))
 			return true;
@@ -664,7 +703,7 @@ public partial class Game
 		{
 			// ICarryable actors (crates, buds) are transparent to the burrow surface walk so
 			// the player can travel underneath them; they're still solid for normal physics.
-			if (other is Grid || other is ICarryable || !other.Mask.Has(Actor.Masks.Solid))
+			if (other is Grid || other is ICarryable || other == seam || !other.Mask.Has(Actor.Masks.Solid))
 				continue;
 
 			if (other.Hitbox.Contains(cell - other.Position))
@@ -682,6 +721,8 @@ public partial class Game
 
 	Actor? JumpthruAt(Point2 cell)
 	{
+		if (seamFollow && seam != null)
+			return null;
 		foreach (var other in Actors)
 			if (other is not Grid && other.Mask.Has(Actor.Masks.Jumpthru) && other.Hitbox.Contains(cell - other.Position))
 				return other;
