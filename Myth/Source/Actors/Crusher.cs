@@ -196,6 +196,7 @@ class Crusher : DualGridRect
 		? (new Vector2(MathF.Sin(Time.SecondsF * TrembleRate), MathF.Cos(Time.SecondsF * TrembleRate * 1.3f)) * TrembleAmount * Menace).RoundToPoint2()
 		: Vector2.Zero;
 
+	/*
 	public override void RenderEmissive(Batcher batcher)
 	{
 		if (Menace <= 0)
@@ -203,6 +204,7 @@ class Crusher : DualGridRect
 		var (a, b) = Face(heading);
 		batcher.Rect(RectInt.Between(a - heading, b) - Position + RenderOffset.RoundToPoint2(), HeatColor * Menace);
 	}
+	*/
 
 #if EDITOR
 	sealed class Editor : Manager.ActorEditor<Crusher>

@@ -233,6 +233,18 @@
       ],
       "AttachedToActorId": "8473ff374af46a92",
       "AttachmentOffset": [15, 254]
+    },
+    {
+      "Id": "0deb700a2638a80d",
+      "Type": "PlayerStart",
+      "Position": [64, 406]
+    },
+    {
+      "Id": "3b5bd97c71a31ce9",
+      "Type": "LightningTrap",
+      "Position": [251, 348],
+      "AttachedToActorId": "ad3f07894c4ef948",
+      "AttachmentOffset": [33, 134]
     }
   ]
 }
