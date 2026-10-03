@@ -223,12 +223,21 @@ public sealed partial class GameView : IDisposable
 		foreach (var (rect, time) in game.CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var it in Actors)
+		{
 			if (!game.destroying.Contains(it))
 			{
 				if (it.Hitbox.Rect != new RectInt())
 					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
 				it.RenderCollisionDebug(Batcher);
 			}
+		}
+
+		if (game.Save.LastSafeGrounded is { } respawn) {
+			if (respawn.RoomId == room.Id) {
+				Batcher.Circle(respawn.Position, 5.0f, 10, Color.White);
+			}
+			//Batcher.RectLine(lastGrounded.Hitbox.Rect + lastGrounded.Position, 1, Color.Red);
+		}
 	}
 
 	private void DrawStorySpeech(Target target)

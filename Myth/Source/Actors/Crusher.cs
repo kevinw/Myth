@@ -133,6 +133,18 @@ class Crusher : DualGridRect
 
 	protected override void Pinned(Actor actor, Point2 step) => actor.Crushed(this, step);
 
+	// Nowhere we can reach is safe footing: the corridor swept from home, plus the lane still ahead
+	// of each flagged face. Keeps respawns out from under a crusher that only looks idle.
+	internal override bool UnsafeFooting(in RectInt standing)
+	{
+		if (Bounds().Conflate(new RectInt(originalPosition, Size)).Overlaps(standing))
+			return true;
+		foreach (var (flag, dir) in Lanes)
+			if (Direction.Has(flag) && Lane(dir, Reach(dir)).Overlaps(standing))
+				return true;
+		return false;
+	}
+
 	// The nearest-first lane holding the player, if any. Each flagged face's lane is checked against the
 	// room-long strip first, so the solid sweep only runs once the player is lined up.
 	Point2? SpotPlayer()

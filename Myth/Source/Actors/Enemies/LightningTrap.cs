@@ -91,7 +91,7 @@ public class LightningTrap : Actor, IRoomInversionListener
 	{
 		base.Update();
 		phaseTime += Time.Delta;
-		if (phase != Phase.Wait)
+		if (phase != Phase.Wait || segments.Count == 0)
 			TraceBeam();
 		switch (phase)
 		{
@@ -284,6 +284,16 @@ public class LightningTrap : Actor, IRoomInversionListener
 	}
 
 	void ClearHurtbox() => Hitbox = new(new RectInt(0, 0, 0, 0));
+
+	// The whole beam path is unsafe footing between fires too, hurtbox or not -- waking up in a lane
+	// that lights up a second later is just a slower death.
+	internal override bool UnsafeFooting(in RectInt standing)
+	{
+		foreach (var seg in segments)
+			if (SegmentWorldRect(seg).Overlaps(standing))
+				return true;
+		return false;
+	}
 
 	float GatherProgress => Math.Clamp(phaseTime / MathF.Max(0.0001f, GatherTime), 0, 1);
 	float FireProgress => Math.Clamp(phaseTime / MathF.Max(0.0001f, FireTime), 0, 1);

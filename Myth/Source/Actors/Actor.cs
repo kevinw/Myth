@@ -625,6 +625,9 @@ public class Actor
 
 	public virtual bool BlocksAttack(Actor attacker, in RectInt attackPath) => false;
 	internal virtual bool OverlapsCombatBounds(in RectInt bounds) => Hitbox.Overlaps(bounds - Position);
+	// Ground we can reach or cover, even when our hurtbox is currently off or elsewhere -- a crusher's
+	// lane, a lightning beam's path. Keeps Game.NoteSafeGrounded from remembering it as a respawn.
+	internal virtual bool UnsafeFooting(in RectInt standing) => false;
 	internal virtual void RenderCollisionDebug(Batcher batcher) { }
 
 	/// Called ones per frame, updates our Sprite and Timer

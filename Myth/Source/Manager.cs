@@ -635,7 +635,7 @@ public partial class Manager : App
 #endif
 		if (args.playRoomId != null)
 			selectedRoomId = args.playRoomId;
-		else if (saveState.LastGrounded is { } respawn && Assets.GetRoom(respawn.RoomId) != null)
+		else if (saveState.LastSafeGrounded is { } respawn && Assets.GetRoom(respawn.RoomId) != null)
 			selectedRoomId = respawn.RoomId;
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
@@ -2627,7 +2627,7 @@ public partial class Manager : App
 		// can attempt each goal from each start. This wins over any remembered/editor position.
 		if (gymStartOverride is { } gymStart)
 			initialPlayerPosition = gymStart;
-		else if (initialPlayerPosition == null && args.playRoomId == null && saveState.LastGrounded is { } respawn && respawn.RoomId == room.Id)
+		else if (initialPlayerPosition == null && args.playRoomId == null && saveState.LastSafeGrounded is { } respawn && respawn.RoomId == room.Id)
 			initialPlayerPosition = respawn.Position;
 
 		// In the gym, carry the live background music across the dispose/recreate so it

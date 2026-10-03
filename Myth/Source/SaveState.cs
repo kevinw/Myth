@@ -16,7 +16,7 @@ public sealed class SaveState
 	public HashSet<string> ReadInspectPoints = [];
 	public Dictionary<PickupKind, int> Pickups = [];
 	public MinimapState Map = new();
-	public RespawnState? LastGrounded;
+	public RespawnState? LastSafeGrounded;
 	// Save points the player has activated (touched), by actor id, in activation order,
 	// and the id of the most recent one — where death returns the player. Positions are
 	// resolved from the live room spec at warp/respawn time (see Game.ResolveSavePoint),

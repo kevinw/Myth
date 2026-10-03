@@ -245,7 +245,7 @@ public partial class Game : IDisposable
 	// room and would otherwise overwrite it with the spot they just placed the player, walking
 	// the respawn deeper into the room with every death.
 	RespawnState? roomRespawnPoint;
-	// First safe footing found since entering the room. Save.LastGrounded trails the player, so
+	// First safe footing found since entering the room. Save.LastSafeGrounded trails the player, so
 	// it would put a pit death right back on the lip of the pit; this is where the room started
 	// being survivable, and it's what a mid-air arrival falls back to.
 	RespawnState? firstGroundedInRoom;
@@ -1167,27 +1167,57 @@ public partial class Game : IDisposable
 		RequestRoomTransitionGc(kind);
 	}
 
-	public void NoteSafeGroundedRespawn(Point2 position)
+	// A respawn marker only needs to step once the footing is meaningfully elsewhere; rewriting it
+	// every pixel of a walk churns the save and re-runs the safety sweep for nothing.
+	static int SafeGroundedStep => TileSize / 2;
+	// Nothing lethal may sit this close to footing we are about to remember.
+	static int SafeGroundedClearance => TileSize;
+
+	// Remembers footing as the respawn point, if it is somewhere new and nothing can reach the
+	// player there. Called every frame the player is settled on ground, so the cheap gates run first.
+	public void NoteSafeGrounded(Point2 position, RectInt standing)
 	{
 		if (room == null || nextRoom != null || Simulating)
 			return;
-		deathsWithoutSafeGround = 0;
+		deathsWithoutSafeGround = 0; // standing on anything at all is proof we are not falling in a loop
+		if (Save.LastSafeGrounded is { RoomId: var lastRoom, Position: var lastPosition } &&
+			lastRoom == room.Id && (lastPosition - position).LengthSquared() < SafeGroundedStep * SafeGroundedStep)
+			return;
+		if (!IsSafeFooting(standing))
+			return;
+
 		var respawn = new RespawnState(room.Id, position);
 		firstGroundedInRoom ??= respawn;
-		if (Save.LastGrounded == respawn)
-			return;
-		Save.LastGrounded = respawn;
+		Save.LastSafeGrounded = respawn;
 		MarkSaveDirty(autosave: false, captureMap: false);
 	}
 
-	public bool TryRespawnPlayerAtSafeGroundedRespawn(Player player)
+	// Footing is only worth remembering if nothing lethal sits within a tile of it and nothing can
+	// reach it where it stands -- a crusher's lane, a lightning beam's path (see Actor.UnsafeFooting).
+	bool IsSafeFooting(RectInt standing)
+	{
+		var near = standing.Inflate(SafeGroundedClearance);
+		for (var i = 0; i < Actors.Count; i++)
+		{
+			var actor = Actors[i];
+			if (destroying.Contains(actor))
+				continue;
+			if (actor.Mask.Has(Actor.Masks.Enemy | Actor.Masks.Hazard) && actor.OverlapsCombatBounds(near))
+				return false;
+			if (actor.UnsafeFooting(standing))
+				return false;
+		}
+		return true;
+	}
+
+	public bool TryRespawnPlayerAtLastSafeGrounded(Player player)
 	{
 		if (room == null)
 			return false;
 
 		var target = RespawnsAtRoomStart
 			? RoomStartRespawn()
-			: roomEntryDirection.Y != 0 ? Save.LastGrounded : null;
+			: roomEntryDirection.Y != 0 ? Save.LastSafeGrounded : null;
 		if (target is not { } respawn)
 			return false;
 
@@ -1198,14 +1228,14 @@ public partial class Game : IDisposable
 	// The demo is deliberately forgiving; flip this back for the real game.
 	static DeathRespawnMode DeathRespawn => DeathRespawnMode.NearWhereYouDied;
 
-	public void RespawnPlayerAtLastGrounded(bool restartMusic = false)
+	public void RespawnPlayerAtLastSafeGrounded(bool restartMusic = false)
 	{
 		if (restartMusic)
 			StopMusic(true);
 
 		var target = RespawnsAtRoomStart
 			? RoomStartRespawn() ?? SavePointRespawn()
-			: SavePointRespawn() ?? Save.LastGrounded;
+			: SavePointRespawn() ?? Save.LastSafeGrounded;
 
 		if (GetFirst<Player>() is { } player && target is { } respawn && RespawnPlayerAt(player, respawn, reloadRoom: true))
 		{
@@ -1249,7 +1279,7 @@ public partial class Game : IDisposable
 	// Every respawn target can end up hanging over a pit -- a room edited out from under the
 	// player, or a room start the player can no longer survive -- so each respawn falls straight
 	// back to its death and the loop never breaks on its own. Deaths with no safe grounding in
-	// between count up (NoteSafeGroundedRespawn resets); after a few, break out. The editor moves
+	// between count up (NoteSafeGrounded resets); after a few, break out. The editor moves
 	// the player to the nearest supported footing (the room is being edited, so that is the fix);
 	// anywhere else, fall back to the save point.
 	int deathsWithoutSafeGround;
@@ -1266,7 +1296,7 @@ public partial class Game : IDisposable
 		{
 			player.Position = safe;
 			player.Stop();
-			NoteSafeGroundedRespawn(safe);
+			NoteSafeGrounded(safe, Player.StandingHitboxRect + safe);
 			EnsureBudForPlayer(repositionExisting: true);
 			DisplayMessage("death loop detected: moved player to safe ground");
 			return;

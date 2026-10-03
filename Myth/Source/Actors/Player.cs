@@ -197,7 +197,7 @@ public abstract partial class Pawn : Actor
 	static float RopeCreakRumbleDuration => 0.08f;
 	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
 
-	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
+	internal static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
 	protected static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
 	// While burrowing the player is effectively a point that rides the surface, so the
 	// follower probes with a tiny 2x2 footprint: the burrow center sits on the surface
@@ -1837,7 +1837,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	void FallOffCliff()
 	{
 		Game.HitStun(0.4f);
-		if (!Game.TryRespawnPlayerAtSafeGroundedRespawn(this))
+		if (!Game.TryRespawnPlayerAtLastSafeGrounded(this))
 		{
 			TryInsetRespawnPoint(Game.RoomEntryPosition, out var inset);
 			Position = inset;
@@ -1909,7 +1909,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	}
 
 #if EDITOR
-	// Death-loop rescue (see Game.RespawnPlayerAtLastGrounded): nearest tile-aligned spot in the
+	// Death-loop rescue (see Game.RespawnPlayerAtLastSafeGrounded): nearest tile-aligned spot in the
 	// current room with supported footing. Tile-aligned candidates land exactly on flat tile
 	// ground, which is all a rescue needs.
 	public bool TryFindSafeFootingNear(Point2 from, out Point2 result)
@@ -1940,14 +1940,20 @@ public partial class Player : Pawn, INeuralTextureAgent
 	}
 #endif
 
-	bool IsSafeGroundedRespawn()
+	// Footing has to hold for a moment before it counts: a one-frame touchdown mid-platforming is
+	// not somewhere we want to wake up, and the dwell gives telegraphed hazards time to arm.
+	static float SafeGroundedDwell => 0.2f;
+	float safeGroundedTimer;
+
+	bool IsSettledOnGround()
 		=> Health > 0 && grounded && State != States.Burrow && State != States.Climb &&
 		 OverlapsFirst(Point2.Down, Masks.Solid) is not (MovingPlatform or Crusher);
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
 	{
-		if (IsSafeGroundedRespawn())
-			Game.NoteSafeGroundedRespawn(Position);
+		safeGroundedTimer = IsSettledOnGround() ? safeGroundedTimer + Time.Delta : 0;
+		if (safeGroundedTimer >= SafeGroundedDwell)
+			Game.NoteSafeGrounded(Position, StandingHitboxRect + Position);
 
 		UpdateDeathRecovery();
 		ClampPositionToRoomOrTransitionRooms();
@@ -2471,7 +2477,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (deathTimer >= DeathDuration)
 		{
 			deathTimer = 0;
-			Game.RespawnPlayerAtLastGrounded(restartMusic: true);
+			Game.RespawnPlayerAtLastSafeGrounded(restartMusic: true);
 		}
 	}
 
