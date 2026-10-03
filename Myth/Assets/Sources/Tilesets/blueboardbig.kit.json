@@ -1,0 +1,8 @@
+{
+  "substance": "Brick",
+  "char": "e",
+  "mask": "stone-kit",
+  "seed": 1,
+  "wobble": 0.6,
+  "source": "terrain"
+}

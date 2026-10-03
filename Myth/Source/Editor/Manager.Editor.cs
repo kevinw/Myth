@@ -985,8 +985,19 @@ public partial class Manager
 		var bounds = room.WorldBounds;
 		var view = GameViewRect;
 		camera = bounds.Center;
-		zoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
+		zoom = ClampEditorZoom(FitZoom(view, bounds));
 	}
+
+	static float FitZoom(Rect view, Rect bounds)
+	{
+		var fit = view.Size / bounds.Size;
+		return MathF.Min(fit.X, fit.Y);
+	}
+
+	// Past 8x only for a room too small to fill the view by then, so zooming in always gets far enough
+	// to leave room-arrange mode (see UpdateRoomEditModeFromZoom).
+	float ClampEditorZoom(float zoom)
+		=> Math.Clamp(zoom, 0.15f, CurrentRoom is { } room ? MathF.Max(8.0f, FitZoom(GameViewRect, room.WorldBounds)) : 8.0f);
 
 	void UpdateEditorCameraTween()
 	{
@@ -1039,11 +1050,11 @@ public partial class Manager
 		// gameViewWindowRect still describes play mode. The computed dock centre is already exact.
 		var view = EditorCenterRect;
 		var playView = GameOpenRect;
-		var playZoom = Math.Clamp(Math.Min(playView.Width / play.Width, playView.Height / play.Height), 0.15f, 8.0f);
+		var playZoom = ClampEditorZoom(FitZoom(playView, play));
 		editorCameraTweenFrom = play.Center + (view.Center - playView.Center) / playZoom;
 		editorCameraTweenTo = play.Center;
 		editorZoomTweenFrom = playZoom;
-		editorZoomTweenTo = Math.Clamp(Math.Min(view.Width / play.Width, view.Height / play.Height), 0.15f, 8.0f);
+		editorZoomTweenTo = ClampEditorZoom(FitZoom(view, play));
 		editorCamera = editorCameraTweenFrom;
 		editorZoom = editorZoomTweenFrom;
 		editorZoomTarget = editorZoom;
@@ -3848,7 +3859,7 @@ public partial class Manager
 			{
 				editorCameraTween = 1.0f;
 				var before = ScreenToEditorWorld(cursor, inner);
-				editorZoomTarget = Math.Clamp(editorZoomTarget * scale, 0.15f, 8.0f);
+				editorZoomTarget = ClampEditorZoom(editorZoomTarget * scale);
 				editorZoom = editorZoomTarget;
 				editorCamera = before - (cursor - inner.Center) / editorZoom;
 			}
@@ -3884,7 +3895,7 @@ public partial class Manager
 					else if (wheel.Y != 0)
 					{
 						editorCameraTween = 1.0f;
-						editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheel.Y), 0.15f, 8.0f);
+						editorZoomTarget = ClampEditorZoom(editorZoomTarget * MathF.Pow(1.15f, wheel.Y));
 					}
 				}
 			}
@@ -3923,7 +3934,7 @@ public partial class Manager
 		if (zoomScale > 0 && MathF.Abs(zoomScale - 1.0f) > 0.0001f)
 		{
 			var before = ScreenToEditorWorld(center, inner);
-			editorZoomTarget = Math.Clamp(editorZoomTarget * zoomScale, 0.15f, 8.0f);
+			editorZoomTarget = ClampEditorZoom(editorZoomTarget * zoomScale);
 			editorZoom = editorZoomTarget;
 			editorCamera = before - (center - inner.Center) / editorZoom;
 		}

@@ -45,8 +45,7 @@ public class Bouncer : Actor, IResizable
 	Vector2[] rest = [];
 	Point2 builtSize;
 	float lastDelta = 1f / 60f;
-	HashSet<Actor> inside = [];
-	HashSet<Actor> insideNow = [];
+	readonly ZoneSensor<Actor> contact = new();
 
 	public Bouncer()
 	{
@@ -98,16 +97,11 @@ public class Bouncer : Actor, IResizable
 				SimulateStep(dt, scale);
 		}
 
-		insideNow.Clear();
-		foreach (var actor in Game.Actors)
-		{
-			if (!Affects(actor) || !actor.Hitbox.Overlaps(WorldRect - actor.Position))
-				continue;
-			insideNow.Add(actor);
-			if (!inside.Contains(actor))
-				Bounce(actor);
-		}
-		(inside, insideNow) = (insideNow, inside);
+		contact.Zones.Clear();
+		contact.Zones.Add(WorldRect);
+		contact.Update(Game.Actors, static a => Affects(a) ? a.Hitbox.Rect + a.Position : null);
+		foreach (var actor in contact.Entered)
+			Bounce(actor);
 	}
 
 	void SimulateStep(float dt, float displacementScale)
@@ -183,7 +177,7 @@ public class Bouncer : Actor, IResizable
 		return Calc.AngleToVector(angle);
 	}
 
-	bool Affects(Actor actor)
+	static bool Affects(Actor actor)
 		=> actor switch
 		{
 			Player player => player.State != Pawn.States.Burrow,

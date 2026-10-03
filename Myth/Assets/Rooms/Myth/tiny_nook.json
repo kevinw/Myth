@@ -1,0 +1,46 @@
+{
+  "position": [-101, 103],
+  "size": [21, 12],
+  "backdropColor": "301C36",
+  "ambientColor": "FFFFFF",
+  "ambientIntensity": 0,
+  "lightNoise": 0.547,
+  "sporeFogStrength": 0.732,
+  "reverb": 0.489,
+  "ditherStrength": 0.147,
+  "zoom": 2,
+  "sun": {
+    "strength": 0,
+    "color": "FFE5B7",
+    "direction": [
+      -0.19165435,
+      0.9814625
+    ]
+  },
+  "legend": {
+    "R": "ruin"
+  },
+  "tiles": [
+    "RRRRRRRRRRRRRRRRRRRRR",
+    "RRRR0000RR0000RRR00RR",
+    "RRRR0000RR0000RRR00RR",
+    "RR000000RR000000000RR",
+    "RR000000RR000000000RR",
+    "RR00000000000000000RR",
+    "RR00000000000000000RR",
+    "RR00000000000000000RR",
+    "RR0000000000000000000",
+    "RR0000000000000000000",
+    "RR0000000000000000000",
+    "RRRRRRRRRRRRRRRRRRRRR"
+  ],
+  "actors": [
+    {
+      "Id": "c11f4aec4fcf9948",
+      "Type": "BurrowLine",
+      "Position": [87, 51],
+      "Points": [[1, 37],[1, 45]
+      ]
+    }
+  ]
+}

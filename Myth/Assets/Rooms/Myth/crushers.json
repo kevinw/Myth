@@ -3,7 +3,7 @@
   "size": [120, 69],
   "backdropColor": "301C36",
   "ambientColor": "FFFFFF",
-  "ambientIntensity": 0.528,
+  "ambientIntensity": 0.374,
   "lightNoise": 0.547,
   "sporeFogStrength": 0.732,
   "ditherStrength": 0.147,
@@ -27,6 +27,7 @@
     "a": "ajdkl",
     "d": "debris",
     "i": "gates",
+    "s": "Glow Shells",
     "t": "testjunkbg1",
     "u": "Myth Runes"
   },
@@ -91,9 +92,9 @@
     "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "00000000000000000000000000000000000000000000000000000000000000000000000WW00000000000000000000000000000000000000000000000",
-    "00000000000000000000000000000000000000000000000000000000000000000000000WW00000000000000000000000000000000000000000000000",
-    "iiiddddiddddddiiiiiii00000000000000000000i00000000000000000000000000000WW00000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "iiiddddiddddddiiiiiii00000000sd000000000dddd000000000000dddd00000d000000000000000000000000000000000000000000000000000000",
     "WWWWWWWWWWWWWWWWWWWWWW000000WWWW00000WWWWWWWWWWW00WWWWWWWWWWWWWWWWWWWWWWWWWWWWW00000000000000000000000000000000000000000",
     "WWW00WWW0WWWWWWWWWWWWW000000WWWW00000WWWWW0000WW00WWWWW%%%%%WWW%%%%%WWWWW%WWWWW00000000000000000000000000000000000000000",
     "WWW00WWW0WWWWW0WWWWWWW000000WWWW00000WWWWW0000WW00WWWWW%%%%%%%W%%%%%%%%%%%%WWWW00000000000000000000000000000000000000000",
@@ -176,8 +177,8 @@
     {
       "Id": "ad3f07894c4ef948",
       "Type": "Crusher",
-      "Position": [224, 216],
-      "Size": [32, 224],
+      "Position": [216, 216],
+      "Size": [48, 224],
       "Material": "crackedcement-dual",
       "Direction": "Up, Down"
     },
@@ -223,26 +224,26 @@
     {
       "Id": "8473ff374af46a92",
       "Type": "Crusher",
-      "Position": [648, 208],
+      "Position": [688, 208],
       "Size": [48, 232],
-      "Material": "stone-dual"
+      "Material": "crackedcement-dual"
     },
     {
       "Id": "0e53e114293f4b63",
       "Type": "Crusher",
-      "Position": [648, 504],
+      "Position": [688, 504],
       "Size": [48, 48],
-      "Material": "stone-dual",
-      "Direction": "Up"
+      "Direction": "Up",
+      "Material": "crackedcement-dual"
     },
     {
       "Id": "e1fe05acaabd109b",
       "Type": "BurrowLine",
-      "Position": [663, 462],
+      "Position": [709, 466],
       "Points": [[0, -24],[0, -253]
       ],
       "AttachedToActorId": "8473ff374af46a92",
-      "AttachmentOffset": [15, 254]
+      "AttachmentOffset": [25, 254]
     },
     {
       "Id": "3b5bd97c71a31ce9",
@@ -254,11 +255,12 @@
     {
       "Id": "04a2cf1a3d31a345",
       "Type": "Crusher",
-      "Position": [560, 128],
+      "Position": [612, 132],
       "Direction": "Left",
       "Size": [24, 24],
       "MaxSpeed": 214.611,
-      "Acceleration": 309.939
+      "Acceleration": 309.939,
+      "Material": "crackedcement-dual"
     },
     {
       "Id": "f0961c08507facab",
@@ -274,7 +276,7 @@
     {
       "Id": "c12a0ed200cf50c7",
       "Type": "Rope",
-      "Position": [570, 143],
+      "Position": [622, 147],
       "Size": [8, 65],
       "AttachedToActorId": "04a2cf1a3d31a345",
       "AttachmentOffset": [6, 11],
@@ -290,7 +292,7 @@
     {
       "Id": "dbc689ce2b7b344a",
       "From": "FloLight",
-      "Position": [572, 152],
+      "Position": [624, 156],
       "DrawSprite": false,
       "AttachedToActorId": "04a2cf1a3d31a345",
       "AttachmentOffset": [12, 24]
@@ -404,6 +406,20 @@
       "Points": [[-76, 0],[76, 0]
       ],
       "WobbleSpeed": 0.308
+    },
+    {
+      "Id": "9fd27ad93b2a65fd",
+      "Type": "Light",
+      "Position": [608, 390],
+      "Radius": 152.108,
+      "Intensity": 0.411
+    },
+    {
+      "Id": "ca24b7b7393bb88a",
+      "Type": "BurrowLine",
+      "Position": [298, 159],
+      "Points": [[-59, 6],[-58, -159]
+      ]
     }
   ]
 }

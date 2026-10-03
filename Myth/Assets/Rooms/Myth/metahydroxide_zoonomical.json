@@ -1,0 +1,214 @@
+{
+  "position": [-208, 128],
+  "size": [48, 33],
+  "backdropColor": "301C36",
+  "backdropColor2": "3A140D",
+  "ambientColor": "FFFFFF",
+  "ambientIntensity": 0.377,
+  "lightNoise": 0.547,
+  "sporeFogStrength": 0.732,
+  "reverb": 0.843,
+  "ditherStrength": 0.147,
+  "sun": {
+    "strength": 0,
+    "color": "FFE5B7",
+    "direction": [
+      -0.19165435,
+      0.9814625
+    ]
+  },
+  "legend": {
+    "#": "back",
+    "H": "sporgy",
+    "t": "testjunkbg1"
+  },
+  "tiles": [
+    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+    "0000000000000000000000000HHHHHHHHHHHHHHHHHHHHHHH",
+    "0000000000000000000000000HHHHHHHHHHHHHHHHHHHHHHH",
+    "0000000000000000000000000HHHHHHHHHHHHHHHHHHHHHHH",
+    "000000000000000000000000000HHHHHHHHHHHHHHHHHHHHH",
+    "000000000000000000000000000HHHHHHHHHHHHHHHHHHHHH",
+    "0000000000000000000000000000HHHHHHHHHHHHHHHHHHHH",
+    "000000000000000000000000000000HHHHHHHHHHHHHHHHHH",
+    "000000000000000000000000000000HHHHHHHHHHHHHHHHHH",
+    "00000000000000000000000000000000HHHHHHHHHHHHHHHH",
+    "0000000000000000000000000000000000HHHHHHHHHHHHHH",
+    "0000000000000000000000000000000000000000000HHHHH",
+    "00000000000000000000000000000000000000000000000H",
+    "00000000000000000000000000000000000000000000000H",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "00000000000000000000000000000000000000000000000H",
+    "0000000000000000000000000000000000000000000000HH",
+    "0000000000000000000000000000000000000000000000HH",
+    "0000000000000000000000000000000000000000000000HH",
+    "000000000000000000000000000000000000000000000HHH",
+    "000000000000000000000000000000000000000000000HHH",
+    "000000000000000000000000000000000000000000000HHH",
+    "0000000000000000000000000000000000000000000HHHHH",
+    "0000000000000000000000000000000000000000000HHHHH",
+    "0000000000000000000000000000000000000000000HHHHH",
+    "000000000000000000000000000000000000000000HHHHHH",
+    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+  ],
+  "backgroundTiles": [
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "0000000000ttttttttttttttttttttttttttttttttttttt0",
+    "000000000tttttttttttttttttttttttttttttttttttttt0",
+    "000000000tttttttttttttttttttttttttttttttttttttt0",
+    "000000000ttttttttttttttttttttttttttttttt00000000",
+    "00000000000ttttttttttttttttttttttttttttt00000000",
+    "00000000000ttttttttttttttttttttttttttttt00000000",
+    "00000000000ttttttttttttttttttttttttttttt00000000",
+    "00000000000ttttttttttttttttttttttttttttt00000000",
+    "00000000000tttttttttttttttttttttttttttt000000000",
+    "00000000000tttttttttttttttttttttttttttt000000000",
+    "00000000000ttttttttttttttttttt000000ttt000000000",
+    "00000000000ttttttttttttttttttt000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000##0000000000000000000000",
+    "000000000000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000000000000"
+  ],
+  "actors": [
+    {
+      "Id": "b4f277a723ed1129",
+      "Type": "Crusher",
+      "Position": [300, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "dd10a01ba77f78a6",
+      "Type": "Crusher",
+      "Position": [284, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "e940a47218094f49",
+      "Type": "Crusher",
+      "Position": [268, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "83b05136ade3c609",
+      "Type": "Crusher",
+      "Position": [252, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "6aba4bd15a2e50d9",
+      "Type": "Crusher",
+      "Position": [236, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "66fe9f024dddfd38",
+      "Type": "Crusher",
+      "Position": [220, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "6f571ece2e1eb8f7",
+      "Type": "Crusher",
+      "Position": [204, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "e6a7f1eb83c486dc",
+      "Type": "Crusher",
+      "Position": [188, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "c857730315482294",
+      "Type": "Crusher",
+      "Position": [172, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "026f767eb77bef06",
+      "Type": "Crusher",
+      "Position": [156, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "26e79948f92189f8",
+      "Type": "Crusher",
+      "Position": [140, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "d95d22d6d863e448",
+      "Type": "Crusher",
+      "Position": [124, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "3538d720201881e2",
+      "Type": "Crusher",
+      "Position": [108, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "673044e069eafdd0",
+      "Type": "Crusher",
+      "Position": [92, 92],
+      "Size": [16, 80],
+      "Material": "crackedcement-dual",
+      "Delay": 0
+    },
+    {
+      "Id": "9d0407879cb5ef52",
+      "Type": "Light",
+      "Position": [201, 212]
+    }
+  ]
+}

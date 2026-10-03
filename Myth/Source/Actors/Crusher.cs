@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Myth;
 
 // Watches the lanes off its flagged faces -- each runs from the face to the first solid -- and once the player
-// steps into one, it winds up (trembling, its leading edge heating) and slams along the lane, accelerating until
+// or an enemy steps into one, it winds up (trembling, its leading edge heating) and slams along the lane, accelerating until
 // it hits solid. Whatever it pins is crushed; a burrower caught underneath is sealed into the seam instead and can
 // travel it (see Pawn.UpdateBurrowSeam). Then it rests and grinds back home.
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Anchor = SpriteAnchor.TopLeft)]
@@ -55,7 +55,7 @@ class Crusher : DualGridRect
 		switch (state)
 		{
 			case States.Idle:
-				if (SpotPlayer() is { } lane)
+				if (SpotIntruder() is { } lane)
 				{
 					heading = lane;
 					(state, timer) = (States.Windup, Delay);
@@ -181,17 +181,30 @@ class Crusher : DualGridRect
 		return false;
 	}
 
-	// The nearest-first lane holding the player, if any. Each flagged face's lane is checked against the
-	// room-long strip first, so the solid sweep only runs once the player is lined up.
-	Point2? SpotPlayer()
+	readonly ZoneSensor<Actor> watch = new();
+
+	// The first flagged lane holding a live player or enemy, if any. Everyone is screened against the room-long
+	// strips first, so the solid sweep only runs once somebody is lined up.
+	Point2? SpotIntruder()
 	{
-		if (Game.GetFirst<Player>() is not { Health: > 0 } player)
-			return null;
-		var target = player.Hitbox.Rect + player.Position;
 		var roomSpan = Math.Max(Game.Bounds.Width, Game.Bounds.Height);
+		watch.Zones.Clear();
 		foreach (var (flag, dir) in Lanes)
-			if (Direction.Has(flag) && Lane(dir, roomSpan).Overlaps(target) && Lane(dir, Reach(dir)).Overlaps(target))
-				return dir;
+			if (Direction.Has(flag))
+				watch.Zones.Add(Lane(dir, roomSpan));
+		watch.Update(Game.Actors, static a => a is Player { Health: > 0 } || a.Mask.Has(Masks.Enemy) ? a.Hitbox.Rect + a.Position : null);
+		if (watch.Inside.Count == 0)
+			return null;
+
+		foreach (var (flag, dir) in Lanes)
+		{
+			if (!Direction.Has(flag))
+				continue;
+			var lane = Lane(dir, Reach(dir));
+			foreach (var (_, bounds) in watch.Inside)
+				if (lane.Overlaps(bounds))
+					return dir;
+		}
 		return null;
 	}
 
