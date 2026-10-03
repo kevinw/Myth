@@ -184,7 +184,7 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 	}
 
 	protected bool CanRide(Actor actor)
-		=> actor.AttachmentTarget != this && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
+		=> !actor.IsAttachedTo(this) && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
 
 	protected bool IsStandingOn(Actor actor)
 		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);

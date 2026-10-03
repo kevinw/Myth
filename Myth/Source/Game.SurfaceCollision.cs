@@ -718,6 +718,18 @@ public partial class Game
 
 	static bool Covers(Actor actor, Point2 cell) => actor.Hitbox.Contains(cell - actor.Position);
 
+	// A crusher holds any of the four cells around the burrow point. Buried in one is never a dead end to
+	// escape from: it closed over us and it will lift off again (see Pawn.CanPopHere).
+	internal bool CrusherCovers(Point2 vertex)
+	{
+		foreach (var actor in Actors)
+			if (actor is Crusher)
+				foreach (var cell in (ReadOnlySpan<Point2>)[vertex, vertex + Point2.Left, vertex + Point2.Up, vertex + Point2.Left + Point2.Up])
+					if (Covers(actor, cell))
+						return true;
+		return false;
+	}
+
 	// Which side of a crusher seam the burrow walks, picked fresh from the geometry around `vertex` every frame,
 	// so crushers meeting, parting and carrying us can't leave a stale choice behind. Only while the walk is
 	// buried -- no edge through the touching solids -- and a crusher is one of them: follow the crusher's own

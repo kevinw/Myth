@@ -275,13 +275,13 @@ public class Actor
 	public bool OverlapsAny(Masks mask) => OverlapsAny(Point2.Zero, mask);
 
 	/// Checks to see if we overlap any actors of the given mask
-	public bool OverlapsAny(Point2 offset, Masks mask)
+	public bool OverlapsAny(Point2 offset, Masks mask, Actor? ignoringAttachmentsOf = null)
 	{
 		if (mask.Has(Masks.Solid) &&
 			(Game.OverlapsEnemyRoomBoundary(this, offset) || Game.OverlapsRoomCollision(this, offset)))
 			return true;
 
-		return OverlapsFirst(offset, mask) != null;
+		return OverlapsFirst(offset, mask, ignoringAttachmentsOf) != null;
 	}
 
 	/// Checks to see if we overlap the given actor
@@ -290,8 +290,10 @@ public class Actor
 	/// Finds the first overlapping actor of the given mask
 	public Actor? OverlapsFirst(Masks mask) => OverlapsFirst(Point2.Zero, mask);
 
-	/// Finds the first overlapping actor of the given mask
-	public Actor? OverlapsFirst(Point2 offset, Masks mask)
+	/// Finds the first overlapping actor of the given mask. Anything attached (however deeply) to
+	/// `ignoringAttachmentsOf` is skipped: a rig of solids moves as one piece, so its own parts
+	/// aren't obstacles to it (see Crusher.Clear).
+	public Actor? OverlapsFirst(Point2 offset, Masks mask, Actor? ignoringAttachmentsOf = null)
 	{
 		var actors = (mask & ~(Masks.Solid | Masks.Jumpthru)) == 0 ? CollisionActors : Game.Actors;
 		foreach (var other in actors)
@@ -302,6 +304,9 @@ public class Actor
 			// An actor being destroyed this frame no longer blocks: its removal is deferred to the
 			// next frame (see Game.RemoveDestroyedActors), but it's already logically gone.
 			if (Game.destroying.Contains(other))
+				continue;
+
+			if (ignoringAttachmentsOf != null && other.IsAttachedTo(ignoringAttachmentsOf))
 				continue;
 
 			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))
@@ -584,6 +589,16 @@ public class Actor
 	{
 		// Console.WriteLine($"Actor added: {this}");
 		Play();
+	}
+
+	// True when `other` is our attachment anchor, or our anchor's anchor, and so on. The chain is
+	// kept cycle-free by Game.ResolveActorAttachments, so this always terminates.
+	internal bool IsAttachedTo(Actor other)
+	{
+		for (var target = AttachmentTarget; target != null; target = target.AttachmentTarget)
+			if (target == other)
+				return true;
+		return false;
 	}
 
 	internal void ApplyAttachmentMovement(Point2 delta)

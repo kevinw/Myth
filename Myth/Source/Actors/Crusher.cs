@@ -110,8 +110,10 @@ class Crusher : DualGridRect
 		return false;
 	}
 
-	// RectInt.Contains is strict, so the room is grown a pixel: resting flush against its edge still counts as inside.
-	bool Clear(Point2 offset) => !OverlapsAny(offset, Masks.Solid) && Game.Bounds.Inflate(1).Contains(Bounds() + offset);
+	// Solids attached to us (a belt bolted to our face, say) ride along as part of the crusher, so they
+	// don't stop it. RectInt.Contains is strict, so the room is grown a pixel: resting flush against its
+	// edge still counts as inside.
+	bool Clear(Point2 offset) => !OverlapsAny(offset, Masks.Solid, this) && Game.Bounds.Inflate(1).Contains(Bounds() + offset);
 
 	void Impact()
 	{

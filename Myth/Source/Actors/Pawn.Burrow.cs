@@ -602,9 +602,11 @@ public abstract partial class Pawn
 	}
 
 	// Popping out needs room for at least a crouch; otherwise we keep burrowing. Buried with nowhere to walk at
-	// all is the exception: better out than held forever.
+	// all is the exception: better out than held forever. Not when a crusher is what buried us, though -- whether
+	// we're in a seam it reads apart or sunk inside its body, popping would stand us up in solid, and it lifts
+	// off on its own soon enough.
 	bool CanPopHere(out bool crouch)
-		=> RoomToPop(out crouch) || burrow.Seam == null && !Game.BurrowCanWalk(Position, burrow);
+		=> RoomToPop(out crouch) || !Game.CrusherCovers(Position) && !Game.BurrowCanWalk(Position, burrow);
 
 	void FlickerTorchesAlongBurrow(Point2 previousPosition)
 	{
@@ -642,7 +644,9 @@ public abstract partial class Pawn
 		var exitDir = burrow.Toward;
 		if (Game.BurrowTraceEnabled)
 			Game.TraceBurrow(
-				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrow.Line?.ActorId ?? "none"}");
+				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrow.Line?.ActorId ?? "none"} " +
+				$"sealed={burrowSealed} seam={burrow.Seam?.ActorId ?? "none"} roomToPop={RoomToPop(out _)} canWalk={Game.BurrowCanWalk(Position, burrow)} " +
+				$"standingClear={!Game.OverlapsSolid(this, StandingHitboxRect + Position)}");
 
 		// Burrow-leap coyote: if we just rounded off a top surface (down a corner) within the
 		// window, pop upward as if we were still on top instead of getting the sideways pop off
