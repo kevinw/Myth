@@ -325,6 +325,18 @@ public sealed class ParticleSystem : IDisposable
 			spreadRadians: spreadRadians);
 	}
 
+	// A Line emitter's `spread` is a cross-line width in world pixels rather than an angle (ParticleUpdate.hlsl,
+	// shape 3), which is what a Line-authored effect's SpreadDegrees holds. Anything else authored SpreadDegrees
+	// as a cone angle, so reading it as a width smears the burst that many pixels off the line -- a 115-degree
+	// dust cone became a 115px band straddling the crusher's face. Those fall back to the emitter's own radius.
+	static float LineCrossWidth(ParticleEffect effect)
+		=> effect.Shape == ParticleEmitterShape.Line ? effect.SpreadDegrees : effect.EmitterRadius;
+
+	// Particles per unit of line. A Line-authored effect keeps its authored length in EmitterRadius, so its
+	// density comes out as drawn; anything else has no length to speak of, and spends its burst over a tile.
+	static float LineDensityUnit(ParticleEffect effect)
+		=> MathF.Max(1, effect.Shape == ParticleEmitterShape.Line ? effect.EmitterRadius : Game.TileSize);
+
 	public void EmitLine(int effectIndex, Vector2 origin, Vector2 direction, float lineLength = -1f, Vector2 baseVelocity = default)
 	{
 		if (GetEffect(effectIndex, 1) is not { } effect)
@@ -333,7 +345,7 @@ public sealed class ParticleSystem : IDisposable
 			(uint)ParticleEmitterShape.Line,
 			MathF.Atan2(direction.Y, direction.X),
 			effect.SpeedMin, effect.SpeedMax,
-			radius: lineLength == -1f ? effect.EmitterRadius : lineLength, spreadRadians: effect.SpreadDegrees, baseVelocity: baseVelocity);
+			radius: lineLength == -1f ? effect.EmitterRadius : lineLength, spreadRadians: LineCrossWidth(effect), baseVelocity: baseVelocity);
 	}
 
 	public void EmitLineBetween(int effectIndex, Vector2 from, Vector2 to)
@@ -341,12 +353,12 @@ public sealed class ParticleSystem : IDisposable
 		if (GetEffect(effectIndex, 1) is not { } effect)
 			return;
 		var delta = to - from;
-		var count = Math.Max(1, (int)MathF.Round(effect.BurstCount * delta.Length() / MathF.Max(1, effect.EmitterRadius)));
+		var count = Math.Max(1, (int)MathF.Round(effect.BurstCount * delta.Length() / LineDensityUnit(effect)));
 		QueueEmit(effectIndex, effect, from, count,
 			(uint)ParticleEmitterShape.Line,
 			MathF.Atan2(delta.Y, delta.X),
 			effect.SpeedMin, effect.SpeedMax,
-			radius: delta.Length(), spreadRadians: effect.SpreadDegrees);
+			radius: delta.Length(), spreadRadians: LineCrossWidth(effect));
 	}
 
 	static readonly List<int> edgeScratch = [];

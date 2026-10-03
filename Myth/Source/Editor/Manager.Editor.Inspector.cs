@@ -379,6 +379,14 @@ public partial class Manager
 					return true;
 				}
 			}
+			if (points.Length > 0 && livePropertyTarget == null)
+			{
+				SameLine();
+				if (SmallButton("Reposition to Center"))
+					return RecenterPathPoints(specId, room, actor, property, points);
+				if (IsItemHovered())
+					SetTooltip("Move the origin to the average of the points, keeping the path where it is");
+			}
 		}
 		else if (property.Type == typeof(bool))
 		{
@@ -461,6 +469,57 @@ public partial class Manager
 			EndPopup();
 		}
 		return changed;
+	}
+
+	// Pulls the actor origin onto the middle of its own path and shifts the points back by the same amount, so
+	// the shape doesn't move. Worth having because the origin is what everything else sees -- gizmos, the
+	// attachment offset, and any solid whose rider sweep can snag it -- and a path authored far from its anchor
+	// leaves that origin somewhere arbitrary.
+	bool RecenterPathPoints(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, Point2[] points)
+	{
+		var sum = Point2.Zero;
+		foreach (var point in points)
+			sum += point;
+		var center = ((Vector2)sum / points.Length).RoundToPoint2();
+		if (center == Point2.Zero)
+			return false;
+
+		var centered = new Point2[points.Length];
+		for (var i = 0; i < points.Length; i++)
+			centered[i] = points[i] - center;
+
+		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		(string, JsonNode?) path = (property.JsonName, ActorSpecs.ToJsonNode(centered));
+		(string, JsonNode?) moved = ("Position", ActorSpecs.ToJsonNode(position + center));
+		// An attached actor is placed from its target plus the offset every frame, so that has to move with it.
+		if (string.IsNullOrWhiteSpace(ActorSpecs.ReadResolvedString(actor, nameof(Actor.AttachedToActorId))))
+			SetActorProperties(specId, room, actor, "Center Path Points", [path, moved]);
+		else
+		{
+			var offset = ActorSpecs.ReadPoint(actor, nameof(Actor.AttachmentOffset)) ?? Point2.Zero;
+			SetActorProperties(specId, room, actor, "Center Path Points",
+				[path, moved, (nameof(Actor.AttachmentOffset), ActorSpecs.ToJsonNode(offset + center))]);
+		}
+		return true;
+	}
+
+	// Several authored properties under one undo entry. The live inspector writes straight to the runtime actor,
+	// so callers gate on livePropertyTarget rather than routing live edits through here.
+	void SetActorProperties(string? specId, Room? room, JsonObject actor, string undoName,
+		ReadOnlySpan<(string JsonName, JsonNode? Value)> values)
+	{
+		if (specId != null)
+		{
+			using (CapturePrefabUndo(undoName, specId))
+				foreach (var (jsonName, value) in values)
+					ActorSpecs.SetProperty(specId, jsonName, value);
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo(undoName, room))
+				foreach (var (jsonName, value) in values)
+					ActorSpecs.SetProperty(actor, jsonName, value);
+		}
 	}
 
 	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, bool continuous)

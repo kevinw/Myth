@@ -169,11 +169,8 @@
       "Position": [404, 148],
       "Radius": 62.8,
       "Height": 13.29,
-      "DrawSprite": true,
       "Intensity": 1.361,
-      "TintSprite": false,
-      "TintSaturation": 0,
-      "TintVividness": 0
+      "TintSaturation": 0
     },
     {
       "Id": "47fbf51bec2b801e",

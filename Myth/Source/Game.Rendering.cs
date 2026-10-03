@@ -469,7 +469,7 @@ public sealed partial class GameView
 
 	void DrawWorldActor(Actor actor, bool background, bool atlasWander)
 	{
-		Batcher.PushMatrix(actor.Position);
+		Batcher.PushMatrix(actor.RenderPosition);
 		var actorMaterial = !atlasWander && PushWorldActorMaterial(actor, background);
 		actor.Render(Batcher);
 		if (actorMaterial)
@@ -670,7 +670,7 @@ public sealed partial class GameView
 			if (IsBackgroundActor(actor) != background)
 				continue;
 
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			var decal = PushPropDecalMaterial(actor);
 			Batcher.PushBlend(EmissiveOccluderBlend);
 			actor.RenderEmissiveOccluder(Batcher);
@@ -736,8 +736,8 @@ public sealed partial class GameView
 			if (!ActorCanReflectIn(actor, bounds))
 				continue;
 
-			Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.RenderPosition.X, surfaceTop)));
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.RenderReflection(Batcher, Color.White * opacity);
 			Batcher.PopMatrix();
 			Batcher.PopMatrix();
@@ -1046,7 +1046,7 @@ public sealed partial class GameView
 		{
 			if (!actor.Visible || !actor.HasWorldDistortion)
 				continue;
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.RenderWorldDistortion(Batcher);
 			Batcher.PopMatrix();
 		}
@@ -1154,7 +1154,7 @@ public sealed partial class GameView
 			if (!actor.Visible || !IsBackgroundActor(actor) || actor is not Grid and not DualGrid)
 				continue;
 
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.Render(Batcher);
 			Batcher.PopMatrix();
 		}
@@ -1312,7 +1312,7 @@ public sealed partial class GameView
 
 			tileFieldStampTile = skin.MaterialTile();
 			tileFieldStampAnchor = anchorId;
-			Batcher.PushMatrix(skin.Position);
+			Batcher.PushMatrix(skin.RenderPosition);
 			skin.RenderTileField(Batcher, tileFieldStampColor);
 			Batcher.PopMatrix();
 		}
@@ -1377,7 +1377,7 @@ public sealed partial class GameView
 			if (amount >= 0.999f)
 				continue;
 
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.RenderShadow(Batcher, new Color(amount, amount, amount, 1.0f));
 			Batcher.PopMatrix();
 		}
@@ -1417,7 +1417,7 @@ public sealed partial class GameView
 				Batcher.Rect(actor.Hitbox.Rect + actor.Position, Color.Red);
 				continue;
 			}
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.RenderShadow(Batcher, Color.Red);
 			Batcher.PopMatrix();
 		}
@@ -1608,15 +1608,15 @@ public sealed partial class GameView
 		gpuLightEmitters.Clear();
 		gatherGpuLightAction ??= (position, radius, intensity, height, color) =>
 		{
-			if (gpuLighting!.AddLight(position, radius, intensity, height, color))
+			if (gpuLighting!.AddLight(position + gatheringGpuLightActor!.VisualOffset, radius, intensity, height, color))
 				gpuLightEmitters.Add(gatheringGpuLightActor!);
 		};
 		foreach (var actor in Actors)
 		{
-			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
+			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.RenderPosition)))
 			{
 				var added = renderer.AddLight(
-					light.Position,
+					light.RenderPosition,
 					light.RenderRadius,
 					light.RenderIntensity,
 					light.Height,
@@ -1685,7 +1685,7 @@ public sealed partial class GameView
 		foreach (var actor in Actors)
 			if (actor.Visible && actor.CastsSpriteShadow && actor is not Grid && !gpuLightEmitters.Contains(actor))
 			{
-				Batcher.PushMatrix(actor.Position);
+				Batcher.PushMatrix(actor.RenderPosition);
 				actor.RenderShadow(Batcher, Color.White);
 				Batcher.PopMatrix();
 			}
@@ -1862,13 +1862,16 @@ public sealed partial class GameView
 
 		Batcher.PushBlend(NormalBufferBlend);
 		PushWorldMatrix();
+		// Grids, and background dual tiles with them: they come after the procedural walls (so a tile painted
+		// over a MachineWall is lit by its own art, not by the greebles behind it) and before the foreground
+		// caches below, which is the only order that keeps a background tile off a foreground one.
 		foreach (var actor in rendering)
 		{
-			if (actor is not Grid || !actor.Visible)
+			if (actor is not (Grid or DualGrid { Layer: Factory.TileLayer.Background }) || !actor.Visible)
 				continue;
 			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
 				continue;
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			actor.RenderNormals(Batcher);
 			Batcher.PopMatrix();
 		}
@@ -1883,14 +1886,12 @@ public sealed partial class GameView
 
 		foreach (var actor in rendering)
 		{
-			if (!actor.Visible || actor is Grid)
+			if (!actor.Visible || actor is Grid or DualGrid { Layer: Factory.TileLayer.Background }) // drawn above
 				continue;
 			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
 				continue;
-			if (actor is DualGrid { Layer: Factory.TileLayer.Background })
-				continue;
 
-			Batcher.PushMatrix(actor.Position);
+			Batcher.PushMatrix(actor.RenderPosition);
 			var decal = PushPropDecalMaterial(actor);
 			actor.RenderNormals(Batcher);
 			if (decal)

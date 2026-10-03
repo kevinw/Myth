@@ -109,7 +109,13 @@ public partial class Manager
 			draw.AddCircleFilled(Screen(at), MathF.Max(2, pixel * 0.4f), ImGuiColor(1, 1, 1, 1));
 
 			label.Clear();
-			label.Append(burrow.Seam != null ? (burrow.SeamFollow ? "seam: follow " : "seam: other side of ") : "no seam");
+			label.Append(burrow.Seam != null ? (burrow.SeamFollow ? "seam: follow " : "seam: other side of ")
+				: game.ProbeBurrowSeam(at, burrow, pawn.BurrowIntent, Pawn.BurrowTangentDeadzone) switch
+				{
+					Game.SeamMiss.NotBuried => "no seam: not buried",
+					Game.SeamMiss.NoCrusher => "no seam: nothing here is a crusher",
+					_ => "no seam: no walkable side",
+				});
 			if (burrow.Seam != null)
 				label.Append(burrow.Seam.ActorId ?? burrow.Seam.GetType().Name);
 			label.Append("\ntoward ");
@@ -122,7 +128,7 @@ public partial class Manager
 			label.Append(burrow.Blocked ? "  BLOCKED" : "");
 			label.Append(burrow.Line != null ? "  on line" : "");
 			label.Append(pawn.BurrowSealed ? "  sealed" : "");
-			label.Append(!pawn.RoomToPop(out var crouch) ? "  pop: no room" : crouch ? "  pop: crouch" : "  pop: stand");
+			label.Append(!pawn.RoomToPop(out var crouch, out _) ? "  pop: no room" : crouch ? "  pop: crouch" : "  pop: stand");
 			label.Append("\ntimer ");
 			label.Append(pawn.BurrowTimeLeft, "0.00");
 			label.Append("  speed ");

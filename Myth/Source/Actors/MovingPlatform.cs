@@ -254,7 +254,7 @@ class MovingPlatform : DualGridRect
 		var hasWeight = false;
 		foreach (var actor in Game.Actors)
 		{
-			if (!CanRide(actor)) continue;
+			if (!CanCarry(actor)) continue;
 			if (IsStandingOn(actor))
 			{
 				hasWeight = true;

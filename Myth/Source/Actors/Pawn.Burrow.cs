@@ -53,7 +53,7 @@ public abstract partial class Pawn
 	const float BurrowSquashNormal = 0.45f;    // peak compression into the surface at the end of the window
 	const float BurrowSquashTangent = 1.6f;    // peak spread along the surface at the end of the window
 	const float BurrowExitGrace = 0.1f;        // suppress the landing squish briefly so the pop squish survives
-	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
+	internal const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
 
 	float burrowEnterTimer;
 	protected float burrowExitTimer;
@@ -584,20 +584,33 @@ public abstract partial class Pawn
 				: $"seam position={Position} follow={burrow.SeamFollow} normal={burrow.Toward}");
 	}
 
-	// Where popping out would leave us: the hitbox slides out from the surface up to a body's height (a ceiling
-	// pop drops a full body below it, a wall pop steps clear of the wall), standing if that fits anywhere along
-	// the way, else crouched. False when not even a crouch fits -- popping would only bury us in solid.
-	internal bool RoomToPop(out bool crouch)
+	static int PopSlide => 6; // how far along the surface a pop may slide to find room
+
+	// Where popping out would leave us, as the nearest free placement for the body: out along the surface normal
+	// first (a ceiling pop drops a full body below it, a wall pop steps clear of the wall), then a little along
+	// the surface. That slide is what gets us out of a corner where another solid blocks the way straight out but
+	// the floor beside it is open -- without it the gate refuses spots the per-frame TryUnstick would have reached
+	// anyway. Both bounds stay small so a pop can't squeeze the body through a wall into whatever is past it.
+	// False when not even a crouch fits: popping would only bury us in solid.
+	internal bool RoomToPop(out bool crouch, out Point2 at)
 	{
 		var outward = -burrow.Toward;
+		var along = new Vector2(outward.Y, -outward.X);
 		foreach (var hitbox in (ReadOnlySpan<RectInt>)[StandingHitboxRect, DuckingHitboxRect])
-			for (var step = 0; step <= StandingHitboxRect.Height; step++)
-				if (!Game.OverlapsSolid(this, hitbox + (Position + outward * step).RoundToPoint2()))
-				{
-					crouch = hitbox == DuckingHitboxRect;
-					return true;
-				}
-		crouch = false;
+			for (var distance = 0; distance <= StandingHitboxRect.Height; distance++)
+				for (var slide = 0; slide <= PopSlide; slide++)
+					foreach (var side in (ReadOnlySpan<int>)[1, -1])
+					{
+						if (slide == 0 && side < 0)
+							continue;
+						at = (Position + outward * distance + along * (slide * side)).RoundToPoint2();
+						if (!Game.OverlapsSolid(this, hitbox + at))
+						{
+							crouch = hitbox == DuckingHitboxRect;
+							return true;
+						}
+					}
+		(crouch, at) = (false, Position);
 		return false;
 	}
 
@@ -606,7 +619,7 @@ public abstract partial class Pawn
 	// we're in a seam it reads apart or sunk inside its body, popping would stand us up in solid, and it lifts
 	// off on its own soon enough.
 	bool CanPopHere(out bool crouch)
-		=> RoomToPop(out crouch) || !Game.CrusherCovers(Position) && !Game.BurrowCanWalk(Position, burrow);
+		=> RoomToPop(out crouch, out _) || !Game.CrusherCovers(Position) && !Game.BurrowCanWalk(Position, burrow);
 
 	void FlickerTorchesAlongBurrow(Point2 previousPosition)
 	{
@@ -645,7 +658,7 @@ public abstract partial class Pawn
 		if (Game.BurrowTraceEnabled)
 			Game.TraceBurrow(
 				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrow.Line?.ActorId ?? "none"} " +
-				$"sealed={burrowSealed} seam={burrow.Seam?.ActorId ?? "none"} roomToPop={RoomToPop(out _)} canWalk={Game.BurrowCanWalk(Position, burrow)} " +
+				$"sealed={burrowSealed} seam={burrow.Seam?.ActorId ?? "none"} roomToPop={RoomToPop(out _, out _)} canWalk={Game.BurrowCanWalk(Position, burrow)} " +
 				$"standingClear={!Game.OverlapsSolid(this, StandingHitboxRect + Position)}");
 
 		// Burrow-leap coyote: if we just rounded off a top surface (down a corner) within the
@@ -655,14 +668,12 @@ public abstract partial class Pawn
 		if (leapCoyote)
 			exitDir = burrowLeapExitDir;
 
-		// This is a bit of a hard coded hack: if we're exiting downwards,
-		// move the hitbox down so that its top is at the edge of the surface we
-		// are exiting from.
-		if (burrow.Line == null && exitDir.Y < 0)
-		{
-			// RoomToPop already chose standing or crouched for the space below.
-			Position += new Point2(0, (ducking ? DuckingHitboxRect : StandingHitboxRect).Height);
-		}
+		// The 2x2 burrow point sits on the surface, so a body left there is half inside it. Stand up where
+		// RoomToPop found the room instead -- out along the normal and, in a corner, a little to the side. It
+		// picked the same posture `ducking` carries, so the two agree on which box has to fit.
+		if (burrow.Line == null && Game.OverlapsSolid(this, (ducking ? DuckingHitboxRect : StandingHitboxRect) + Position)
+			&& RoomToPop(out _, out var placement))
+			Position = placement;
 
 		// Popping up underneath a Carryable at rest catches it overhead — the burrow is the
 		// lift verb. Resolved before the launch so the catch can soften it (dampened below,

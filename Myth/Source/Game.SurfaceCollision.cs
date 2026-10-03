@@ -737,11 +737,17 @@ public partial class Game
 	// it pinned us to. Our current hand is tried before the flipped one. False, with no seam, when nothing is
 	// buried here or no choice gives the walk an edge.
 	internal bool ResolveBurrowSeam(Point2 vertex, ref BurrowCursor burrow, Vector2 intent, float deadzone)
+		=> ResolveBurrowSeam(vertex, ref burrow, intent, deadzone, out _);
+
+	// Same, reporting why it found nothing. Only the burrow debug overlay wants the reason.
+	internal bool ResolveBurrowSeam(Point2 vertex, ref BurrowCursor burrow, Vector2 intent, float deadzone, out SeamMiss miss)
 	{
 		var previous = burrow;
 		burrow.Seam = null;
+		miss = SeamMiss.NotBuried;
 		if (BurrowCanWalk(vertex, burrow))
 			return false;
+		miss = SeamMiss.NoCrusher;
 
 		FaceCells(vertex, burrow.Toward, out var ahead0, out var ahead1);
 		FaceCells(vertex, -burrow.Toward, out var behind0, out var behind1);
@@ -773,8 +779,20 @@ public partial class Game
 					return true;
 				}
 			}
+			miss = SeamMiss.NoWalkableSide;
 		}
 		return false;
+	}
+
+	// Why a burrow point isn't in a seam: the walk isn't buried at all, nothing buried here is a crusher, or one
+	// is but neither its own outline nor the solid it pinned us to gives the walk an edge.
+	internal enum SeamMiss { NotBuried, NoCrusher, NoWalkableSide }
+
+	// A read-only run of the above for the overlay: takes the cursor by value so nothing is re-picked.
+	internal SeamMiss ProbeBurrowSeam(Point2 vertex, BurrowCursor burrow, Vector2 intent, float deadzone)
+	{
+		ResolveBurrowSeam(vertex, ref burrow, intent, deadzone, out var miss);
+		return miss;
 	}
 
 	bool SolidPixel(Point2 cell)
@@ -844,6 +862,63 @@ public partial class Game
 				return true;
 		}
 
+		return false;
+	}
+
+	static readonly List<Actor> solidRangeCandidates = [];
+
+	// The stretches of `band` that are actually on solid -- room geometry plus solid actors -- as sub-rects of
+	// it, in order along its long axis. Anything attached to `actor` rides with it, so it isn't contact, the same
+	// rule that decides what stops the thing in the first place (see Crusher.Clear). `into` is the caller's, so a
+	// reusable scratch list keeps this allocation-free.
+	public void SolidRanges(Actor actor, in RectInt band, List<RectInt> into)
+	{
+		into.Clear();
+		if (band.Width <= 0 || band.Height <= 0)
+			return;
+
+		// The solids that could touch us at all, found once: the pixel walk below would otherwise re-scan every
+		// actor in the room for every pixel of a face that can be hundreds of pixels long.
+		var actorRoom = CollisionRoomFor(actor);
+		solidRangeCandidates.Clear();
+		foreach (var other in Actors)
+			if (other != actor && other is not Grid && !destroying.Contains(other) && other.Room == actorRoom &&
+				other.Mask.Has(Actor.Masks.Solid) && !other.IsAttachedTo(actor) && other.Hitbox.Overlaps(band - other.Position))
+				solidRangeCandidates.Add(other);
+
+		// Walk the long axis a pixel at a time. Exact rather than tile-wise: a slope only bites across part of
+		// its tile, and OverlapsRoomCollision answers that for a single cell.
+		var horizontal = band.Width >= band.Height;
+		var along = horizontal ? Point2.Right : Point2.Down;
+		var length = horizontal ? band.Width : band.Height;
+		var cell = horizontal ? new RectInt(band.TopLeft, 1, band.Height) : new RectInt(band.TopLeft, band.Width, 1);
+		var runStart = -1;
+		for (var i = 0; i <= length; i++)
+		{
+			if (i < length && SolidRangeCell(cell + along * i, actorRoom))
+			{
+				if (runStart < 0)
+					runStart = i;
+				continue;
+			}
+			if (runStart < 0)
+				continue;
+			into.Add(horizontal
+				? new RectInt(band.Left + runStart, band.Top, i - runStart, band.Height)
+				: new RectInt(band.Left, band.Top + runStart, band.Width, i - runStart));
+			runStart = -1;
+		}
+		solidRangeCandidates.Clear();
+	}
+
+	// One step of the walk above, against the room and the candidates SolidRanges just gathered.
+	bool SolidRangeCell(in RectInt cell, Room? actorRoom)
+	{
+		if (actorRoom != null && OverlapsRoomCollision(actorRoom, cell))
+			return true;
+		foreach (var other in solidRangeCandidates)
+			if (other.Hitbox.Overlaps(cell - other.Position))
+				return true;
 		return false;
 	}
 

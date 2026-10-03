@@ -381,8 +381,24 @@ public class Actor
 			MovePixel(new Point2(0, Math.Sign(step.Y)));
 	}
 
+	// A whole-pixel move with no collision, for riders whose own travel doesn't collide either -- the burrow
+	// probe (see DualGridRect.MoveSolid). Everything else a solid moves goes through MovePixels.
+	public void MoveRaw(Point2 step)
+	{
+		if (step == Point2.Zero)
+			return;
+		Position += step;
+		Game.ActorMoved(this, step);
+	}
+
 	// What a moving solid will push or carry: everything but level geometry and other solids.
 	internal bool IsCarryable(Actor actor) => actor != this && actor is not Grid && !actor.Mask.Has(Masks.Solid);
+
+	// What a moving surface carries on top, pushes out of its way, or pins. An actor held by an attachment is
+	// driven by its anchor alone -- a cable bolted to one crusher has to ignore another sweeping past its anchor
+	// point, or it gets dragged a step and snapped back every frame.
+	internal bool CanCarry(Actor actor)
+		=> actor.AttachmentTarget == null && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
 
 	// A single step-up/step-down is a (±1, ∓1) diagonal covering √2 px along the slope, but the
 	// X loop only debits 1 px of horizontal budget for it. Charging the √2-1 shortfall keeps the
@@ -590,6 +606,26 @@ public class Actor
 		// Console.WriteLine($"Actor added: {this}");
 		Play();
 	}
+
+	// A render-only displacement: the crusher's windup tremble, say. It never touches Position, so collision,
+	// audio and particles keep reading one sim truth while every render pass draws from RenderPosition.
+	internal virtual Vector2 LocalVisualOffset => Vector2.Zero;
+
+	// Ours plus our anchor's, so a rig bolted to a trembling solid -- lights, cables, belts -- shakes with it as
+	// one object. The chain is kept cycle-free by Game.ResolveActorAttachments.
+	internal Vector2 VisualOffset
+	{
+		get
+		{
+			var offset = LocalVisualOffset;
+			for (var target = AttachmentTarget; target != null; target = target.AttachmentTarget)
+				offset += target.LocalVisualOffset;
+			return offset;
+		}
+	}
+
+	// Where to draw us: whole pixels, so the art stays on the pixel grid.
+	internal Point2 RenderPosition => Position + VisualOffset.RoundToPoint2();
 
 	// True when `other` is our attachment anchor, or our anchor's anchor, and so on. The chain is
 	// kept cycle-free by Game.ResolveActorAttachments, so this always terminates.

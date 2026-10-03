@@ -56,7 +56,7 @@ public class ConveyorBelt : Actor, IResizable
 		// Standing on top = touching at the down-offset but not overlapping us — the same rule
 		// jumpthru grounding uses, so an actor mid-way through a JumpThrough belt isn't dragged.
 		foreach (var actor in Game.Actors)
-			if ((IsCarryable(actor) || actor is ICarryable { CarriedBy: null }) && actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this))
+			if (CanCarry(actor) && actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this))
 				actor.MovePixels(new Point2(step, 0));
 	}
 

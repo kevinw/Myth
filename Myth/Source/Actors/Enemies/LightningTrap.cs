@@ -57,15 +57,18 @@ public class LightningTrap : Actor, IRoomInversionListener
 		CollidesWithSolids = false;
 		Mask = Masks.Hazard;
 		Depth = -6;
-		ClearHurtbox();
 	}
+
+	// Only the beam hurts. ApplyDamage drives that from the traced path, so the trap itself never presents a
+	// hurtbox: an empty Hitbox isn't enough, since a zero-size rect still reads as the point it sits on
+	// (RectInt.Overlaps compares X + Width > other.X), and brushing the housing landed on that point.
+	internal override bool OverlapsCombatBounds(in RectInt bounds) => false;
 
 	public override void Added()
 	{
 		seed = Position.X * 397 ^ Position.Y;
 		phase = Phase.Wait;
 		phaseTime = -MathF.Max(0, StartDelay); // stagger the first fire
-		ClearHurtbox();
 		sparkEffect = AcquireParticleEffect("lightning_spark");
 	}
 
@@ -282,8 +285,6 @@ public class LightningTrap : Actor, IRoomInversionListener
 		foreach (var impact in impacts)
 			particles.Emit(sparkEffect, impact.Point, 8, impact.Angle, 1f, SparkSpread);
 	}
-
-	void ClearHurtbox() => Hitbox = new(new RectInt(0, 0, 0, 0));
 
 	// The whole beam path is unsafe footing between fires too, hurtbox or not -- waking up in a lane
 	// that lights up a second later is just a slower death.

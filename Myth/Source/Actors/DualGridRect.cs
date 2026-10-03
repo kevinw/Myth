@@ -37,12 +37,9 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 	// Tile variants are picked from the authored cell, so a block that moves keeps its look.
 	public virtual Point2 VariantTileOrigin => originalPosition / Game.TileSize;
 
-	// How far the skin has travelled from where it was authored, so the dither pattern travels with
-	// it instead of swimming underneath it.
-	public virtual Vector2 DitherAnchorOffset => originalPosition - Position;
-
-	// Shakes every pass of the skin together (color, normals, shadow, reflection) without moving the solid.
-	protected virtual Vector2 RenderOffset => Vector2.Zero;
+	// How far the skin has travelled from where it was authored, so the dither pattern travels with it instead
+	// of swimming underneath it. Keyed off RenderPosition, so a tremble carries the pattern along too.
+	public virtual Vector2 DitherAnchorOffset => originalPosition - RenderPosition;
 
 	public int TileColumns() => Math.Max(1, Size.X / Game.TileSize);
 	public int TileRows() => Math.Max(1, Size.Y / Game.TileSize);
@@ -66,15 +63,10 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 	// Draws the cols x rows blob, or a flat fill when the material is missing.
 	protected void RenderMaterial(Batcher batcher, bool normals, Color color)
 	{
-		var offset = RenderOffset;
-		if (offset != Vector2.Zero)
-			batcher.PushMatrix(offset);
 		if (Assets.GetTileset(Material) is { } tileset)
 			DualGrid.RenderRect(batcher, tileset, TileColumns(), TileRows(), normals, color, VariantTileOrigin, MaterialTile());
 		else
 			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
-		if (offset != Vector2.Zero)
-			batcher.PopMatrix();
 	}
 
 	// Stamps into the TileField with per-tile field colors, so its dither variation matches the
@@ -93,8 +85,9 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 
 	public void AppendOccluderSegments(List<ShadowSegment> segments)
 	{
+		// From RenderPosition, so a trembling block's shadow trembles with it rather than standing still.
 		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.AppendRectOccluders(segments, tileset, TileColumns(), TileRows(), (Vector2)Position, VariantTileOrigin, MaterialTile());
+			DualGrid.AppendRectOccluders(segments, tileset, TileColumns(), TileRows(), (Vector2)RenderPosition, VariantTileOrigin, MaterialTile());
 		else
 			OccluderShape.FromRect(Bounds()).AppendSegments(segments);
 	}
@@ -131,7 +124,7 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 		// riders a defined order against their own movement instead of one that depends on where the
 		// platform lands in Game.Actors.
 		riders.Clear();
-		foreach (var actor in Game.Actors) if (CanRide(actor))
+		foreach (var actor in Game.Actors) if (CanCarry(actor))
 		{
 			// A burrower sealed in a seam rides only the side it's following: the crusher's outline, or the
 			// solid the crusher pinned it to. With two crushers meeting, the other side is a crusher too, and
@@ -165,14 +158,24 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 		Game.ActorMoved(this, step);
 
 		crushed.Clear();
-		foreach (var actor in Game.Actors) if (CanRide(actor))
+		foreach (var actor in Game.Actors) if (CanCarry(actor))
 		{
 			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
 			// top, carry it. Both move by the same delta with the actor's own collision, so they
 			// scrape to a stop against walls instead of clipping through.
-			if (riders.Contains(actor) || actor is not Pawn { BurrowSeam: not null } && actor.OverlapsAny(Point2.Zero, this))
+			var carried = riders.Contains(actor);
+			if (carried || actor is not Pawn { BurrowSeam: not null } && actor.OverlapsAny(Point2.Zero, this))
 			{
-				actor.MovePixels(step);
+				// A carried burrower is a 2x2 probe sitting on our face, not a body, and its own travel never
+				// collides either. Pushing it with MovePixels loses the last pixel as two crushers close -- the
+				// probe no longer fits in the closing gap, so it stops while our face moves on and ends up inside
+				// us, where no seam reads apart (Game.ResolveBurrowSeam) and the burrow is stuck. It rides our
+				// face exactly instead. A burrower we ran into is still pushed, so it can't be shoved through
+				// whatever is behind it.
+				if (carried && actor is Pawn { State: Pawn.States.Burrow })
+					actor.MoveRaw(step);
+				else
+					actor.MovePixels(step);
 				if (actor.OverlapsAny(Point2.Zero, this))
 					crushed.Add(actor);
 			}
@@ -182,9 +185,6 @@ abstract class DualGridRect : Actor, IResizable, IShapeOccluder
 		foreach (var actor in crushed)
 			Pinned(actor, step);
 	}
-
-	protected bool CanRide(Actor actor)
-		=> !actor.IsAttachedTo(this) && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
 
 	protected bool IsStandingOn(Actor actor)
 		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);

@@ -120,17 +120,51 @@ class Crusher : DualGridRect
 		var strength = speed / MaxSpeed;
 		Game.Shake(ImpactShake * strength, strength);
 		AudioEvent("tile_break");
-		if (Game.Particles is { } particles)
-		{
-			// Dust squirts out of both ends of the seam, harder the faster we landed.
-			var (a, b) = Face(heading);
-			var along = Vector2.Normalize(b - a);
-			particles.EmitLineBetween(dustEffect, a, b);
-			var count = (int)(12 * strength) + 2;
-			particles.Emit(dustEffect, a, count, (-along).Angle(), 1 + 2 * strength, MathF.PI / 4);
-			particles.Emit(dustEffect, b, count, along.Angle(), 1 + 2 * strength, MathF.PI / 4);
-		}
+		EmitImpactDust(strength);
 		(state, timer, speed, remainder) = (States.Hold, ReturnDelay, 0, 0);
+	}
+
+	static readonly List<RectInt> contacts = []; // reusable scratch: the stretches of our face that landed
+
+	// Dust comes off the stretches of the leading face that actually landed on something, so a crusher stopped
+	// across a single pillar cracks dust off the pillar rather than along its whole width. Touching nothing at
+	// all (we stopped on the room's edge) puffs the whole face, which is what every impact used to do.
+	void EmitImpactDust(float strength)
+	{
+		if (Game.Particles is not { } particles)
+			return;
+
+		var (a, b) = Face(heading);
+		var step = (b - a).Sign();
+		var onFace = -Point2.Min(heading, Point2.Zero); // travelling negative the band sits a pixel out; put the dust back on the face
+		Game.SolidRanges(this, ContactBand(a, b), contacts);
+		foreach (var run in contacts)
+		{
+			var from = run.TopLeft + onFace;
+			EmitSeamDust(particles, from, from + step * Math.Max(run.Width, run.Height), strength);
+		}
+		if (contacts.Count == 0)
+			EmitSeamDust(particles, a, b, strength);
+	}
+
+	// The 1px sliver of world just beyond the leading face, between its two corners. A rect's max edge is
+	// exclusive, so travelling positive the sliver starts on the face and travelling negative it starts a
+	// pixel before it.
+	RectInt ContactBand(Point2 a, Point2 b)
+		=> new(RectInt.Between(a, b).TopLeft + Point2.Min(heading, Point2.Zero),
+			Math.Max(1, Math.Abs(b.X - a.X)), Math.Max(1, Math.Abs(b.Y - a.Y)));
+
+	// One stretch of seam: dust along it, plus a burst off each end angled 45 degrees out of the contact (along
+	// the face and back the way we came), so it escapes rather than crawling along the surface we hit -- which,
+	// slamming sideways into a wall, read as dust climbing it.
+	void EmitSeamDust(ParticleSystem particles, Vector2 from, Vector2 to, float strength)
+	{
+		var along = Vector2.Normalize(to - from);
+		var back = -(Vector2)heading;
+		var count = (int)(12 * strength) + 2;
+		particles.EmitLineBetween(dustEffect, from, to);
+		particles.Emit(dustEffect, from, count, Vector2.Normalize(back - along).Angle(), 1 + 2 * strength, MathF.PI / 4);
+		particles.Emit(dustEffect, to, count, Vector2.Normalize(back + along).Angle(), 1 + 2 * strength, MathF.PI / 4);
 	}
 
 	protected override void Pinned(Actor actor, Point2 step) => actor.Crushed(this, step);
@@ -206,7 +240,9 @@ class Crusher : DualGridRect
 		_ => 0
 	};
 
-	protected override Vector2 RenderOffset => state == States.Windup
+	// Render-only, and inherited by whatever is bolted to us (Actor.VisualOffset), so the lights, cables and
+	// belts riding this crusher tremble with it instead of hanging still off a shaking block.
+	internal override Vector2 LocalVisualOffset => state == States.Windup
 		? (new Vector2(MathF.Sin(Time.SecondsF * TrembleRate), MathF.Cos(Time.SecondsF * TrembleRate * 1.3f)) * TrembleAmount * Menace).RoundToPoint2()
 		: Vector2.Zero;
 
@@ -216,7 +252,7 @@ class Crusher : DualGridRect
 		if (Menace <= 0)
 			return;
 		var (a, b) = Face(heading);
-		batcher.Rect(RectInt.Between(a - heading, b) - Position + RenderOffset.RoundToPoint2(), HeatColor * Menace);
+		batcher.Rect(RectInt.Between(a - heading, b) - Position, HeatColor * Menace);
 	}
 	*/
 
