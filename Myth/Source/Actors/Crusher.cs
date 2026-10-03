@@ -25,6 +25,8 @@ class Crusher : DualGridRect
 	Point2 heading;
 	SoundInstance? moveSound;
 	int dustEffect = -1;
+	float slamTravel;
+	readonly List<Eye> eyes = [];
 
 	static float TrembleAmount => 1.5f;
 	static float TrembleRate => 60;
@@ -42,12 +44,41 @@ class Crusher : DualGridRect
 	{
 		base.Added();
 		dustEffect = AcquireParticleEffect("elp_ground_dust");
+		SpawnEyes();
 	}
+
+	static int EyeInset => 4;
+	static int EyePairSpan => Game.TileSize * 6;
+
+	// One eye in the middle, or a pair spread along the long axis once there's room for two.
+	void SpawnEyes()
+	{
+		var center = Size / 2;
+		var along = Size.X >= Size.Y ? Point2.UnitX : Point2.UnitY;
+		var span = Math.Max(Size.X, Size.Y);
+		if (span < EyePairSpan)
+		{
+			SpawnEye(center, 0);
+			return;
+		}
+		var spread = along * (span / 2 - EyeInset - Eye.HalfWidth);
+		SpawnEye(center - spread, along.X);
+		SpawnEye(center + spread, -along.X);
+	}
+
+	void SpawnEye(Point2 offset, int slant) => eyes.Add(Game.Create<Eye>(Position + offset, it =>
+	{
+		it.AttachedToActorId = ActorId ?? "";
+		it.AttachmentOffset = offset;
+		it.Slant = slant;
+	}));
 
 	public override void Destroyed()
 	{
 		StopAndReleaseSound(ref moveSound, false);
 		ReleaseParticleEffect(ref dustEffect);
+		foreach (var eye in eyes)
+			Game.Destroy(eye);
 	}
 
 	public override void Update()
@@ -93,7 +124,36 @@ class Crusher : DualGridRect
 		}
 		if (moveSound != null)
 			Game.SetAudioEventPosition(moveSound, Position);
+		UpdateEyes();
 	}
+
+	// Eyes follow whoever's nearest, glare through the windup, shut for the slam and part again as we
+	// grind home -- fully open only once we're back.
+	void UpdateEyes()
+	{
+		var look = NearestTarget();
+		var open = state switch
+		{
+			States.Slam or States.Hold => 0,
+			States.Return => 1 - (Position - originalPosition).Length() / slamTravel,
+			_ => 1
+		};
+		var anger = state == States.Windup ? Menace : 0;
+		foreach (var eye in eyes)
+			(eye.LookAt, eye.Open, eye.Anger) = (look, open, anger);
+	}
+
+	Vector2? NearestTarget()
+	{
+		var center = Bounds().CenterF;
+		Vector2? nearest = null;
+		foreach (var actor in Game.Actors)
+			if (TargetBounds(actor) is { } bounds && (nearest == null || Vector2.DistanceSquared(bounds.CenterF, center) < Vector2.DistanceSquared(nearest.Value, center)))
+				nearest = bounds.CenterF;
+		return nearest;
+	}
+
+	static RectInt? TargetBounds(Actor a) => a is Player { Health: > 0 } || a.Mask.Has(Masks.Enemy) ? a.Hitbox.Rect + a.Position : null;
 
 	// Steps whole pixels toward `dir` at `pixelsPerSecond`. True when solid (or the room's edge) stops us.
 	bool Travel(Point2 dir, float pixelsPerSecond)
@@ -121,6 +181,7 @@ class Crusher : DualGridRect
 		Game.Shake(ImpactShake * strength, strength);
 		AudioEvent("tile_break");
 		EmitImpactDust(strength);
+		slamTravel = Math.Max(1, (Position - originalPosition).Length());
 		(state, timer, speed, remainder) = (States.Hold, ReturnDelay, 0, 0);
 	}
 
@@ -192,7 +253,7 @@ class Crusher : DualGridRect
 		foreach (var (flag, dir) in Lanes)
 			if (Direction.Has(flag))
 				watch.Zones.Add(Lane(dir, roomSpan));
-		watch.Update(Game.Actors, static a => a is Player { Health: > 0 } || a.Mask.Has(Masks.Enemy) ? a.Hitbox.Rect + a.Position : null);
+		watch.Update(Game.Actors, TargetBounds);
 		if (watch.Inside.Count == 0)
 			return null;
 

@@ -248,9 +248,9 @@
     {
       "Id": "3b5bd97c71a31ce9",
       "Type": "LightningTrap",
-      "Position": [251, 348],
+      "Position": [262, 348],
       "AttachedToActorId": "ad3f07894c4ef948",
-      "AttachmentOffset": [33, 134]
+      "AttachmentOffset": [46, 132]
     },
     {
       "Id": "04a2cf1a3d31a345",
