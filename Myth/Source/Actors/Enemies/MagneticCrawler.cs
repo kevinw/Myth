@@ -95,19 +95,34 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	static float StepReach => 7f;
 	static float StepSpeed => 7f;
 	static float StepLift => 5f;
+	static float UpperLeg => 8f;
+	// Getting hit: the head snaps back hardest, the armor less, the knees least (px/s, scaled), all on springs
+	// gone briefly loose so they overshoot and wobble home. The walk eases down to a stagger and back up.
+	static float HeadKick => 122f;
+	static float ArmorKick => 36f;
+	static float KneeKick => 34f;
+	static float HitWobbleTime => 0.7f;
+	static float HitLoosen => 0.5f;
+	static float HitStagger => 0.3f;
+	static float PaceDrop => 0.08f;
+	static float PaceRecover => 0.45f;
+	static float LowerLeg => 9f;
 	static float NeuralFootContactDuration => 0.16f;
 	static Point2 NeuralSize => new(48, 40);
 	static Point2 NeuralOrigin => new(-24, -26);
 	const int PlateVertexCount = 8;
 
 	readonly SurfaceFollower surface;
-	readonly Part[] parts = new Part[6];
-	readonly Leg[] legs = new Leg[4];
+	readonly Part[] parts = new Part[8];
+	readonly Leg[] legs = new Leg[6];
 	Rng rng = new();
 	State state;
 	float stateTimer;
 	float stuckTimer;
 	float eyeHitFlash;
+	float hitWobble;     // 1 just after a hit, easing to 0: loosens the springs
+	float stagger;       // seconds of stagger left after a hit
+	float walkPace = 1;  // 0..1 scale on walking speed, ramping down into a stagger and back up out of it
 	float walkSign;
 	float bodyAngle;
 	Vector2 bodyPosition;
@@ -179,6 +194,9 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		Velocity = Vector2.Zero;
 		base.Update();
 		eyeHitFlash = Calc.Approach(eyeHitFlash, 0, Time.Delta * 4);
+		hitWobble = Calc.Approach(hitWobble, 0, Time.Delta / HitWobbleTime);
+		stagger = MathF.Max(0, stagger - Time.Delta);
+		walkPace = Calc.Approach(walkPace, stagger > 0 ? 0 : 1, Time.Delta / (stagger > 0 ? PaceDrop : PaceRecover));
 		stateTimer += Time.Delta;
 
 		if (state == State.Dying)
@@ -326,6 +344,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	void MoveAlongSurface(int direction, float speed)
 	{
 		walkSign = 0;
+		speed *= Ease.Cube.InOut(walkPace);
 		var stepDirection = surface.Tangent * direction;
 		var lookahead = (stepDirection * MathF.Max(1, speed * Time.Delta + 1)).RoundToPoint2();
 		if (lookahead == Point2.Zero)
@@ -504,7 +523,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	void UpdateBody()
 	{
 		var dt = MathF.Min(Time.Delta, 0.05f);
-		Spring.Step(ref bodyPosition, ref bodyVelocity, ActiveBodyTarget(), BodySpring, BodyDamping, dt);
+		Spring.Step(ref bodyPosition, ref bodyVelocity, ActiveBodyTarget(), BodySpring, BodyDamping * Loosened, dt);
 		bodyAngle = Calc.AngleApproach(bodyAngle, Calc.Angle(surface.Tangent), 7 * dt);
 	}
 
@@ -516,7 +535,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 			ref var part = ref parts[i];
 			part.Detached = Calc.Approach(part.Detached, 0, dt);
 			var spring = part.Detached > 0 ? 13 : PartSpring;
-			var damping = part.Detached > 0 ? 3.5f : PartDamping;
+			var damping = part.Detached > 0 ? 3.5f : PartDamping * Loosened;
 			Spring.Step(ref part.Position, ref part.Velocity, PartTarget(i), spring, damping, dt);
 			part.AngularVelocity += AngleDelta(part.Angle, PartTargetAngle(i)) * spring * 0.18f * dt;
 			part.AngularVelocity *= MathF.Exp(-damping * dt);
@@ -524,14 +543,12 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		}
 	}
 
+	float Loosened => 1 - HitLoosen * hitWobble;
+
 	Vector2 PartTarget(int index)
 	{
 		if (index < 4)
-		{
-			var hip = Hip(index);
-			var foot = legs[index].Foot;
-			return Vector2.Lerp(hip, foot, 0.52f) - surface.TowardSurface * (4 + index % 2 * 1.5f) * Scale;
-		}
+			return Knee(index);
 
 		var side = index == 4 ? -1 : 1;
 		var flare = ArmorFlare();
@@ -564,6 +581,22 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 				return 0.65f;
 		}
 		return 0;
+	}
+
+	// Two-bone IK: upper and lower leg keep their lengths, so the knee is pushed out to the leg's side, spider-
+	// like -- folding high as the body sinks or a foot reaches in, straightening as a step stretches.
+	Vector2 Knee(int index)
+	{
+		var (hip, foot) = (Hip(index), legs[index].Foot);
+		var (upper, lower) = (UpperLeg * Scale, LowerLeg * Scale);
+		var reach = foot - hip;
+		var distance = Math.Clamp(reach.Length(), 0.01f, upper + lower - 0.01f);
+		var along = reach.Normalized(surface.TowardSurface);
+		var bend = along.TurnLeft();
+		if (Vector2.Dot(bend, surface.Tangent * (index < 2 ? -1 : 1) - surface.TowardSurface * 0.5f) < 0)
+			bend = -bend;
+		var a = (upper * upper - lower * lower + distance * distance) / (2 * distance);
+		return hip + along * a + bend * MathF.Sqrt(MathF.Max(0, upper * upper - a * a));
 	}
 
 	Vector2 Hip(int index)
@@ -689,6 +722,13 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 			return;
 		}
 
+		// The whole rig snaps back from the blow, the head hardest; one part is knocked loose on top of that.
+		var away = (bodyPosition - (Vector2)by.Position).Normalized(-surface.TowardSurface);
+		bodyVelocity += away * HeadKick * Scale;
+		for (var i = 0; i < parts.Length; i++)
+			parts[i].Velocity += away * (i < 4 ? KneeKick : ArmorKick) * Scale;
+		(hitWobble, stagger) = (1, HitStagger);
+
 		var index = rng.Int(parts.Length);
 		ref var part = ref parts[index];
 		var recoil = (part.Position - (Vector2)by.Position).Normalized(-surface.TowardSurface);
@@ -698,7 +738,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		part.AngularVelocity += rng.Float(-12, 12);
 		eyeHitFlash = 1;
 		EmitSparks(part.Position, 12);
-		SetState(State.Hunting);
+		if (state != State.Hunting) // a hit mid-hunt shouldn't restart the lunge
+			SetState(State.Hunting);
 	}
 	public override float HitKnockback => 70f;
 
