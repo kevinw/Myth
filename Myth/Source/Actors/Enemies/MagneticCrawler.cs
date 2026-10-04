@@ -14,7 +14,9 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	{
 		Patrol,
 		Hunting,
-		Dying
+		Dying,
+		Dormant,          // sunk low, armor tucked, eye dark, untouchable: waiting on its siblings
+		WakeUpFromDormant // rising, eye sputtering on, seams lighting up, armor unfolding -- then the hunt
 	}
 
 	struct Part
@@ -42,6 +44,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	public ContentRef<SurfaceContent> SurfaceId = new("");
 	public bool ClimbsWallsAndCeilings = true;
 	public bool CanWalkOnMovingPlatforms;
+	// Sleeps (Dormant) until every other crawler in the room is dead, then wakes and hunts.
+	public bool WaitsForSiblingsToDie;
 	[I(1, 12)] public int Health = 4;
 	[I(0.5f, 4)] public float Scale = 1;
 	[I(5, 32)] public float PatrolSpeed = 15;
@@ -79,6 +83,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	static float HuntWindup => 0.12f;
 	static float HuntBurst => 0.95f;
 	static float HuntRecover => 0.12f;
+	static float WakeDuration => 1.8f;
+	static float DormantSink => 5f;
 	static float RoamRadius => 96f;
 	static float RouteSearchInterval => 0.5f;
 	static float BodyHeight => 9f;
@@ -125,7 +131,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	public MagneticCrawler()
 	{
 		Sprite = null;
-		Depth = -5;
+		Depth = Depths.Enemy;
 		Facing = Signs.Positive;
 		surface = new(this);
 	}
@@ -150,8 +156,10 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		InitializeParts();
 		UpdateHitbox();
 		sparkEffect = AcquireParticleEffect("sparks");
-		Mask = Masks.Enemy;
-		SetState(State.Patrol);
+		Mask = WaitsForSiblingsToDie ? Masks.None : Masks.Enemy;
+		if (WaitsForSiblingsToDie)
+			Depth = Depths.BehindPlayer; // part of the scenery behind the fight until it wakes
+		SetState(WaitsForSiblingsToDie ? State.Dormant : State.Patrol);
 		SyncNeuralSkin();
 	}
 
@@ -176,6 +184,15 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		if (state == State.Dying)
 		{
 			UpdateDying();
+			return;
+		}
+		if (state is State.Dormant or State.WakeUpFromDormant)
+		{
+			UpdateDormant();
+			UpdateLegs();
+			UpdateBody();
+			UpdateParts();
+			UpdateHitbox();
 			return;
 		}
 
@@ -233,6 +250,45 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	}
 
 	float HuntCycle => HuntWindup + HuntBurst + HuntRecover;
+
+	void UpdateDormant()
+	{
+		if (state == State.Dormant)
+		{
+			if (SiblingsAlive())
+				return;
+			SetState(State.WakeUpFromDormant);
+			Game.Shake(0.35f, 0.5f * Scale);
+			EmitSparks(bodyPosition, 20);
+			AudioEvent("enemies/magnetic_crawler/hit");
+			return;
+		}
+		if (stateTimer < WakeDuration)
+			return;
+		Mask = Masks.Enemy;
+		Depth = Depths.Enemy;
+		Game.Shake(0.25f, 0.8f * Scale);
+		EmitSparks(bodyPosition, 30);
+		if (Game.GetFirst<Player>() is { } player)
+			FacePlayer(player);
+		SetState(State.Hunting);
+	}
+
+	bool SiblingsAlive()
+	{
+		foreach (var actor in Game.Actors)
+			if (actor is MagneticCrawler { WaitsForSiblingsToDie: false, state: not State.Dying } sibling && sibling.Room == Room)
+				return true;
+		return false;
+	}
+
+	// 0..1 through the wake-up.
+	float WakeProgress => state switch
+	{
+		State.Dormant => 0,
+		State.WakeUpFromDormant => MathF.Min(1, stateTimer / WakeDuration),
+		_ => 1
+	};
 
 	void SyncNeuralSkin()
 	{
@@ -425,7 +481,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		var drift = Vector2.Zero;
 		for (var i = 0; i < legs.Length; i++)
 			drift += legs[i].Foot - DesiredFoot(i);
-		return (Vector2)Position - surface.TowardSurface * (BodyHeight - crouch * 4) * Scale + stride + drift * 0.12f;
+		var sink = DormantSink * (1 - Ease.Back.Out(WakeProgress));
+		return (Vector2)Position - surface.TowardSurface * (BodyHeight - crouch * 4 - sink) * Scale + stride + drift * 0.12f;
 	}
 
 	float CrouchAmount()
@@ -492,6 +549,12 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	float ArmorFlare()
 	{
+		if (state is State.Dormant or State.WakeUpFromDormant)
+		{
+			// Tucked shut while it sleeps, then unfolding past flat into a full flare as it comes to.
+			var wake = WakeProgress;
+			return wake < 0.6f ? -0.45f * (1 - wake / 0.6f) : 0.65f * Ease.Cube.Out((wake - 0.6f) / 0.4f);
+		}
 		if (state == State.Hunting)
 		{
 			var phase = stateTimer % HuntCycle;
@@ -611,7 +674,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
-		if (state == State.Dying)
+		if (state is State.Dying or State.Dormant or State.WakeUpFromDormant)
 			return;
 
 		var by = hitInfo.By;
@@ -695,8 +758,15 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	{
 		get
 		{
-			if (state == State.Dying)
+			if (state is State.Dying or State.Dormant)
 				return 0;
+			if (state == State.WakeUpFromDormant)
+			{
+				// Sputters on: flickering through the first half, then holding and swelling as it rises.
+				var wake = WakeProgress;
+				var flicker = Hash32.Mix(visualSeed ^ (uint)(stateTimer * 22)) % 3 != 0;
+				return wake < 0.5f ? (flicker ? wake * 1.6f : 0) : 0.8f + wake * 0.4f;
+			}
 			if (state == State.Hunting)
 			{
 				var phase = stateTimer % HuntCycle;
@@ -725,7 +795,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 			DrawPart(pen, i, focus);
 
 		var radius = 6.2f * Scale;
-		pen.Ball(center, radius, new Vector2(0, -BodyHeight) * Scale, Color.Lerp(new Color(0x30343d), MetalColor, 0.16f), MetalEdgeColor);
+		pen.Ball(center, radius, new Vector2(0, -BodyHeight) * Scale, Color.Lerp(new Color(0x30343d), MetalColor, 0.16f), MetalEdgeColor, round: true);
 		var rivets = Math.Max(6, (int)(MathF.Tau * radius / RivetSpacing));
 		for (var i = 0; i < rivets; i++)
 			if (ShapeUnit(i, 30) < 0.7f)
@@ -751,6 +821,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	// burst, easing off during the recovery.
 	float Focus()
 	{
+		if (state == State.WakeUpFromDormant)
+			return Ease.Cube.In(WakeProgress); // the seams light up last, as the eye comes fully on
 		if (state != State.Hunting)
 			return 0;
 		var phase = stateTimer % HuntCycle;

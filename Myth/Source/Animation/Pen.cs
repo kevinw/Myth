@@ -66,6 +66,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	static float RimTilt => 0.75f;
 	static float RimNormalAmount => 0.85f;   // rims over the material's normals, so they keep a little grit
 	static float FacetTilt => 0.4f;          // a ball's inner facets
+	static float Roundness => 0.9f;          // a round ball's rim lean
 	static float GrooveTilt => 0.6f;
 	static float Grit => 0.45f;              // how dark the material's darks print
 	static float GritNormals => 0.35f;
@@ -127,9 +128,10 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	}
 
 	// A faceted dome -- a body, a knuckle -- printed at `material` (its center on the rest pose).
-	public void Ball(Vector2 center, float radius, Vector2 material, Color fill, Color outline)
+	// `round` swaps the facets for a smooth sphere -- a head, an eyeball -- keeping the grit and the rim's shading.
+	public void Ball(Vector2 center, float radius, Vector2 material, Color fill, Color outline, bool round = false)
 	{
-		var steps = Math.Clamp((int)(radius * 1.2f), 6, 18);
+		var steps = round ? Math.Clamp((int)(radius * 3), 12, 32) : Math.Clamp((int)(radius * 1.2f), 6, 18);
 		Span<Vector2> ring = stackalloc Vector2[steps];
 		Span<Vector2> ringMaterial = stackalloc Vector2[steps];
 		for (var i = 0; i < steps; i++)
@@ -141,6 +143,12 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		if (pass != PenPass.Normals)
 		{
 			Plate(ring, ringMaterial, fill, outline);
+			return;
+		}
+		if (round)
+		{
+			RigDraw.DrawSphereNormals(batcher, center, radius, steps, Roundness, 0, 0);
+			Print(ring, ringMaterial, center, material, fill);
 			return;
 		}
 
