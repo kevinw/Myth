@@ -3,7 +3,7 @@
   "size": [21, 12],
   "backdropColor": "301C36",
   "ambientColor": "FFFFFF",
-  "ambientIntensity": 0,
+  "ambientIntensity": 0.161,
   "lightNoise": 0.547,
   "sporeFogStrength": 0.732,
   "reverb": 0.489,

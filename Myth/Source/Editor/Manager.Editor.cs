@@ -5622,38 +5622,46 @@ public partial class Manager
 
 	void DrawDeleteRoomPopup()
 	{
+		const string TITLE = "Delete Room";
+		
 		if (deleteRoomPopupRequested)
 		{
 			deleteRoomPopupRequested = false;
-			OpenPopup("Delete Room?");
+			OpenPopup(TITLE);
 		}
 
 		var open = true;
-		if (!BeginPopupModal("Delete Room?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+		if (!BeginPaddedPopupModal(TITLE, ref open, ImGuiWindowFlags.AlwaysAutoResize))
 			return;
 
 		Text(pendingDeleteRoomIds.Count switch
 		{
 			0 => "Room no longer exists.",
-			1 => $"Delete room '{pendingDeleteRoomIds[0]}'?",
-			var count => $"Delete {count} rooms?"
+			1 => $"Are you sure you want to delete room\n'{pendingDeleteRoomIds[0]}'?",
+			var count => $"Are you sure you want to delete {count} rooms?"
 		});
 		Spacing();
+		Spacing();
 
-		if (Button("Delete", new Vector2(90, 0)))
+		PushStyleColor(ImGuiCol.Button, new Vector4(0.55f, 0.16f, 0.16f, 1));
+		PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.72f, 0.22f, 0.22f, 1));
+		PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.42f, 0.11f, 0.11f, 1));
+		var delete = Button(EditorIcons.DeleteMenuItem, new Vector2(100, 0));
+		PopStyleColor(3);
+		if (delete)
 		{
 			DeleteRooms(pendingDeleteRoomIds);
 			pendingDeleteRoomIds.Clear();
 			CloseCurrentPopup();
 		}
 		SameLine();
-		if (Button("Cancel", new Vector2(90, 0)) || !open)
+		if (Button("Cancel", new Vector2(100, 0)) || !open)
 		{
 			pendingDeleteRoomIds.Clear();
 			CloseCurrentPopup();
 		}
 
-		EndPopup();
+		EndPaddedPopup();
 	}
 
 	void DrawResizeRoomPopup()

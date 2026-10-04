@@ -711,12 +711,8 @@ public abstract partial class Pawn
 			if (Velocity.Y < 50 && (shortBurrow || caught || input.MoveY > 0))
 				Velocity.Y *= 0.5f;
 
-			// Burrow glide can exceed normal air speed; let the carried horizontal
-			// momentum persist briefly (then normal air clamping reins it in) instead of
-			// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
-			// cap (RollJumpSpeed) matches BurrowMaxSpeed.
-			if (MathF.Abs(travel.X) > MaxAirSpeed)
-				rollJumpCarryTimer = RollJumpCarryTime;
+			// Burrow glide can exceed normal air speed; carry it out rather than snapping to MaxAirSpeed.
+			Launch();
 			Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
 		}
 

@@ -624,6 +624,22 @@ public class Actor
 		}
 	}
 
+	// How fast we carry whatever stands on us -- a belt's drag, a crusher's slam. A rider keeps it when it
+	// leaves or we stop under it (Pawn.UpdateLift), so a belt flings you off its end.
+	internal virtual Vector2 LocalLiftVelocity => Vector2.Zero;
+
+	// Ours plus our anchor's, like VisualOffset: a belt bolted to a rising crusher lifts as well as drags.
+	internal Vector2 LiftVelocity
+	{
+		get
+		{
+			var velocity = LocalLiftVelocity;
+			for (var target = AttachmentTarget; target != null; target = target.AttachmentTarget)
+				velocity += target.LocalLiftVelocity;
+			return velocity;
+		}
+	}
+
 	// Where to draw us: whole pixels, so the art stays on the pixel grid.
 	internal Point2 RenderPosition => Position + VisualOffset.RoundToPoint2();
 

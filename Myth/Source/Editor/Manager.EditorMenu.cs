@@ -24,7 +24,7 @@ public partial class Manager
 	}
 	static bool BeginPaddedPopupModal(string id, ref bool open, ImGuiWindowFlags flags)
 	{
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(16, 12));
 		var begun = ImGui.BeginPopupModal(id, ref open, flags);
 		if (!begun) ImGui.PopStyleVar();
 		return begun;

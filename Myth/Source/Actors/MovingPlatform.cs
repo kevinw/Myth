@@ -141,6 +141,19 @@ class MovingPlatform : DualGridRect
 			Game.SetAudioEventPosition(moveSound, Position);
 	}
 
+	internal override Vector2 LocalLiftVelocity
+	{
+		get
+		{
+			if (motion.Wait > 0)
+				return Vector2.Zero;
+			if (Mode != MovementMode.Circle)
+				return (Mode == MovementMode.Vertical ? Vector2.UnitY : Vector2.UnitX) * motion.Direction * motion.Speed;
+			var radius = motion.CircleOffset - circleCenterOffset; // the orbit's angle grows, so travel is a quarter turn ahead
+			return radius == Vector2.Zero ? Vector2.Zero : new Vector2(-radius.Y, radius.X) / radius.Length() * motion.Speed;
+		}
+	}
+
 	// The route for navigation: top-left positions about `spacing` px of travel apart, in the order we travel them
 	// (a circle's evenly spaced around it).
 	internal void RoutePoints(List<Point2> into, int spacing)

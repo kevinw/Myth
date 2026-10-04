@@ -164,7 +164,7 @@ public abstract partial class Pawn : Actor
 	protected static float RollJumpForce => -82;
 	protected static float RollJumpTime => 0.11f;
 	protected static float RollJumpSpeed => 150;
-	protected static float RollJumpCarryTime => 0.28f;
+	static float AirDrag => 150; // how fast launched speed above MaxAirSpeed bleeds away
 	static float AirborneRollDistance => Game.TileSize * 2f;
 	protected static float DashSpeed => 250;
 	protected static float DashDuration => 0.15f;
@@ -242,7 +242,8 @@ public abstract partial class Pawn : Actor
 	protected bool dashCancelBraking;
 	protected float jumpForce = JumpForce;
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
-	protected float rollJumpCarryTimer;
+	float carrySpeed; // launched speed the air clamp only bleeds down from (see Launch)
+	Vector2 lift; // what the ground under us is carrying us at (Actor.LiftVelocity)
 	float airborneRollDistance;
 	protected PawnInput input;
 	internal Vector2 ButtonPressIntent => new(input.MoveX, input.MoveY);
@@ -356,6 +357,7 @@ public abstract partial class Pawn : Actor
 
 		FollowDeformingGround();
 		RefreshGrounded(previousVelocity);
+		UpdateLift();
 		if (!grounded)
 		{
 			if (coyoteJumpTimer > 0)
@@ -365,8 +367,8 @@ public abstract partial class Pawn : Actor
 			if (wallJumpCoyoteTimer > 0)
 				wallJumpCoyoteTimer = Calc.Approach(wallJumpCoyoteTimer, 0, Time.Delta);
 		}
-		if (!grounded && rollJumpCarryTimer > 0)
-			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
+		if (!grounded) // a wall, or braking against it, takes the floor down with the speed
+			carrySpeed = MathF.Min(Calc.Approach(carrySpeed, 0, AirDrag * Time.Delta), MathF.Abs(Velocity.X));
 		if (dashCooldownTimer > 0)
 			dashCooldownTimer = Calc.Approach(dashCooldownTimer, 0, Time.Delta);
 		if (jumpBufferTimer > 0)
@@ -562,7 +564,7 @@ public abstract partial class Pawn : Actor
 		wallJumpInputLockTimer = 0;
 		wallJumpCoyoteTimer = 0;
 		wallJumpCoyoteDirection = 0;
-		rollJumpCarryTimer = 0;
+		carrySpeed = 0;
 	}
 
 	void UpdateHitbox()
@@ -764,10 +766,8 @@ public abstract partial class Pawn : Actor
 		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
 		if (dashCancelBraking)
 			maxSpeed = MathF.Max(maxSpeed, MathF.Abs(Velocity.X));
-		if (!grounded && wallJumpInputLockTimer > 0)
-			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
-		if (!grounded && rollJumpCarryTimer > 0)
-			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
+		if (!grounded)
+			maxSpeed = MathF.Max(maxSpeed, carrySpeed);
 		if (MathF.Abs(Velocity.X) > maxSpeed)
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
 		if (dashCancelBraking)
@@ -1148,7 +1148,6 @@ public abstract partial class Pawn : Actor
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.75f, 1.25f);
 			Velocity.X = Facing * MathF.Max(MathF.Abs(Velocity.X), RollJumpSpeed);
-			rollJumpCarryTimer = RollJumpCarryTime;
 			StartJump(RollJumpForce, RollJumpTime);
 			State = States.Normal;
 			OnPawnJump();
@@ -1474,6 +1473,28 @@ public abstract partial class Pawn : Actor
 		jumpCutImmune = false; // normal jumps can be cut short by releasing
 		Velocity.Y = force;
 		OutOfBreath = Math.Clamp(OutOfBreath + JumpOutOfBreath, 0, 1);
+		Launch();
+	}
+
+	// Leaving ground that was carrying us, or it stopping under us, hands its motion to us: off a belt's end
+	// we sail on rather than drop, and a rising crusher that halts throws us on up. Ground moving down
+	// isn't kept, so a slam ending under our feet doesn't land like a fall.
+	void UpdateLift()
+	{
+		var next = grounded && State != States.Burrow && HitTestUnderneath()?.Actor is { } ground ? ground.LiftVelocity : Vector2.Zero;
+		if (next == Vector2.Zero && lift != Vector2.Zero)
+			Launch();
+		lift = next;
+	}
+
+	// Leaving with speed -- a jump, a burrow pop, ground that carried us -- takes any lift along, and whatever we
+	// leave at becomes a floor the air clamp can't rein in below; it only bleeds away at AirDrag. Roll jumps, wall
+	// jumps and crusher flings all keep their momentum the same way.
+	protected void Launch()
+	{
+		Velocity += lift with { Y = MathF.Min(lift.Y, 0) };
+		lift = Vector2.Zero;
+		carrySpeed = MathF.Max(carrySpeed, MathF.Abs(Velocity.X));
 	}
 
 	bool CanCoyoteJump()

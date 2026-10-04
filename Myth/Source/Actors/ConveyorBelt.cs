@@ -60,6 +60,8 @@ public class ConveyorBelt : Actor, IResizable
 				actor.MovePixels(new Point2(step, 0));
 	}
 
+	internal override Vector2 LocalLiftVelocity => new(Facing * Speed, 0);
+
 	public override void Render(Batcher batcher)
 	{
 		if (Size.X <= 0 || Size.Y <= 0)

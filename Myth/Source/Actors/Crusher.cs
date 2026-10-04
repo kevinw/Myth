@@ -155,6 +155,13 @@ class Crusher : DualGridRect
 
 	static RectInt? TargetBounds(Actor a) => a is Player { Health: > 0 } || a.Mask.Has(Masks.Enemy) ? a.Hitbox.Rect + a.Position : null;
 
+	internal override Vector2 LocalLiftVelocity => state switch
+	{
+		States.Slam => heading * speed,
+		States.Return => -heading * ReturnSpeed,
+		_ => Vector2.Zero
+	};
+
 	// Steps whole pixels toward `dir` at `pixelsPerSecond`. True when solid (or the room's edge) stops us.
 	bool Travel(Point2 dir, float pixelsPerSecond)
 	{
