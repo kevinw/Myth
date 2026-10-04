@@ -326,6 +326,7 @@ sealed class ProceduralWallRenderer : IDisposable
 		hash = unchecked(hash * 31 + wall.Size.GetHashCode());
 		hash = unchecked(hash * 31 + wall.Seed);
 		hash = unchecked(hash * 31 + wall.TextureScale.GetHashCode());
+		hash = unchecked(hash * 31 + wall.MaskVersion);
 		if (wall is MachineWall machine)
 		{
 			hash = unchecked(hash * 31 + machine.MetalColor.GetHashCode());
@@ -1058,15 +1059,8 @@ sealed class ProceduralWallRenderer : IDisposable
 			return;
 
 		var tint = (Vector4)wall.MetalColor;
-		data.Instances.Add(new Instance
-		{
-			Rect = new(wall.Position.X + wall.Size.X * 0.5f, wall.Position.Y + wall.Size.Y * 0.5f, wall.Size.X, wall.Size.Y),
-			DepthMotion = new(1, 0, 0, 0),
-			AxisAmount = new(0, 0, 1, 0),
-			TintRoughness = new(tint.X * 0.52f, tint.Y * 0.56f, tint.Z * 0.60f, 0.82f),
-			Uv = new(0, 0, MathF.Max(wall.Size.X / 48f, 1) * MathF.Max(wall.TextureScale, 0.01f),
-				MathF.Max(wall.Size.Y / 48f, 1) * MathF.Max(wall.TextureScale, 0.01f)),
-		});
+		AddBackplate(wall, data, new(tint.X * 0.52f, tint.Y * 0.56f, tint.Z * 0.60f, 0.82f),
+			Vector2.Max((Vector2)wall.Size / 48f, Vector2.One) * MathF.Max(wall.TextureScale, 0.01f) / (Vector2)wall.Size);
 
 		var moduleSize = Math.Max(2, (int)MathF.Round(BaseModuleSize * MathF.Max(wall.GreebleScale, 0.25f)));
 		var columns = Math.Max(1, (wall.Size.X + moduleSize - 1) / moduleSize);
@@ -1077,6 +1071,12 @@ sealed class ProceduralWallRenderer : IDisposable
 		Array.Clear(occupied, 0, cells);
 
 		var rng = new Rng(wall.Seed);
+		// Erased modules are taken before packing, so blocks grow around the painted shape. Each module rolls its
+		// own threshold, so a soft brush's skirt thins them out into a ragged fringe instead of a clean cut.
+		if (wall.HasMask)
+			for (var y = 0; y < rows; y++)
+				for (var x = 0; x < columns; x++)
+					occupied[y * columns + x] = wall.Erased(wall.Position + (new Vector2(x, y) + Vector2.One * 0.5f) * moduleSize) > rng.Float();
 		for (var y = 0; y < rows; y++)
 			for (var x = 0; x < columns; x++)
 			{
@@ -1100,6 +1100,56 @@ sealed class ProceduralWallRenderer : IDisposable
 
 		AddPipes(wall, data, ref rng);
 		AddControlPanels(wall, data, ref rng, tint);
+	}
+
+	static float BackplateErase => 0.35f; // backplate ends inside the fringe, so surviving greebles overhang its edge
+	static float RouteErase => 0.5f;
+
+	// The wall's base slab. Masked, it's rebuilt as one slab per run of unerased cells in each row, with the
+	// texture continuing across them as if it were still one piece.
+	void AddBackplate(ProceduralWall wall, WallData data, Vector4 tint, Vector2 uvPerPixel)
+	{
+		if (!wall.HasMask)
+		{
+			AddBackplateRun(wall, data, new(Point2.Zero, wall.Size), tint, uvPerPixel);
+			return;
+		}
+		var cell = Game.TileSize;
+		for (var top = 0; top < wall.Size.Y; top += cell)
+			for (var left = 0; left < wall.Size.X;)
+			{
+				var right = left;
+				while (right < wall.Size.X && wall.Erased(wall.Position + new Vector2(right + cell * 0.5f, top + cell * 0.5f)) < BackplateErase)
+					right += cell;
+				if (right > left)
+					AddBackplateRun(wall, data, RectInt.Between(new(left, top), Point2.Min(new(right, top + cell), wall.Size)), tint, uvPerPixel);
+				left = right + cell;
+			}
+	}
+
+	static void AddBackplateRun(ProceduralWall wall, WallData data, RectInt run, Vector4 tint, Vector2 uvPerPixel)
+		=> data.Instances.Add(new Instance
+		{
+			Rect = new(wall.Position.X + run.X + run.Width * 0.5f, wall.Position.Y + run.Y + run.Height * 0.5f, run.Width, run.Height),
+			DepthMotion = new(1, 0, 0, 0),
+			AxisAmount = new(0, 0, 1, 0),
+			TintRoughness = tint,
+			Uv = new(run.X * uvPerPixel.X, run.Y * uvPerPixel.Y, run.Width * uvPerPixel.X, run.Height * uvPerPixel.Y),
+		});
+
+	// Whether the wall grows (erase under `limit`) everywhere along a route, sampled every few pixels.
+	static bool Grows(ProceduralWall wall, ReadOnlySpan<Vector2> route, float limit)
+	{
+		if (!wall.HasMask)
+			return true;
+		for (var i = 0; i < route.Length - 1; i++)
+		{
+			var steps = Math.Max(1, (int)(Vector2.Distance(route[i], route[i + 1]) / 4));
+			for (var step = 0; step <= steps; step++)
+				if (wall.Erased(Vector2.Lerp(route[i], route[i + 1], step / (float)steps)) >= limit)
+					return false;
+		}
+		return true;
 	}
 
 	int LargestBlockThatFits(int x, int y, int preferred, int columns, int rows)
@@ -1133,7 +1183,9 @@ sealed class ProceduralWallRenderer : IDisposable
 	{
 		var motionRoll = rng.Float();
 		var motionType = motionRoll < 0.55f ? 0 : motionRoll < 0.75f ? 1 : motionRoll < 0.825f ? 2 : motionRoll < 0.90f ? 3 : 4;
-		var depth = (2.5f + block * 1.6f + rng.Float(0, 3.5f)) * MathF.Max(wall.GreebleDepth, 0);
+		// Thinning toward an erased edge, so the wall tapers off into its fringe.
+		var taper = 1 - wall.Erased(wall.Position + new Vector2(left + width * 0.5f, top + height * 0.5f)) * 0.6f;
+		var depth = (2.5f + block * 1.6f + rng.Float(0, 3.5f)) * MathF.Max(wall.GreebleDepth, 0) * taper;
 		var amount = motionType switch
 		{
 			1 => depth * 0.45f,
@@ -1202,6 +1254,8 @@ sealed class ProceduralWallRenderer : IDisposable
 			points[3] = horizontal ? new(c, y1) : new(y1, c);
 			for (var p = 0; p < points.Length; p++)
 				points[p] += wall.Position;
+			if (!Grows(wall, points, RouteErase))
+				continue;
 
 			var minRadius = MathF.Max(0.5f, MathF.Min(wall.PipeMinWidth, wall.PipeMaxWidth) * 0.5f);
 			var maxRadius = MathF.Max(minRadius, MathF.Max(wall.PipeMinWidth, wall.PipeMaxWidth) * 0.5f);
@@ -1269,6 +1323,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				wall.Position.X + rng.Float(2, wall.Size.X - width - 2),
 				wall.Position.Y + rng.Float(2, wall.Size.Y - height - 2));
 			var depth = 14 + rng.Float(0, 3);
+			if (!Grows(wall, [position, position + new Vector2(width, 0), position + new Vector2(width, height), position + new Vector2(0, height), position], BackplateErase))
+				continue;
 			AddStaticBlock(data, position + new Vector2(width, height) * 0.5f, new(width, height), depth,
 				new(wallTint.X * 0.28f, wallTint.Y * 0.30f, wallTint.Z * 0.32f, 0.78f));
 

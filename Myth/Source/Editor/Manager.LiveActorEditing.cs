@@ -468,6 +468,9 @@ public partial class Manager
 		var position = (runtime.Room?.WorldBounds.TopLeft ?? authoredRoom.WorldBounds.TopLeft) + local;
 		if (runtime is NeuralTextureActor texture && ActorSpecs.ReadResolvedPoint(authored, nameof(IResizable.Size)) is { } textureSize && textureSize != texture.Size)
 			texture.ResizeWindow(textureSize, position - runtime.Position);
+		if (runtime is ProceduralWall wall && (ActorSpecs.GetResolvedProperty(authored, nameof(ProceduralWall.PaintedMask))?.GetValue<string>() ?? "") is var mask
+			&& wall.PaintedMask.Name != mask)
+			wall.PaintedMask = mask;
 		runtime.Position = position;
 		runtime.Velocity = Vector2.Zero;
 		if (runtime is IResizable resizable && ActorSpecs.ReadResolvedPoint(authored, nameof(IResizable.Size)) is { } size)
@@ -657,7 +660,7 @@ public partial class Manager
 			var hasPosition = authored != null && JsonUtil.TryGetProperty(authored, "Position", out position);
 			var hasSize = authored != null && JsonUtil.TryGetProperty(authored, "Size", out size);
 			JsonObject? neuralWindow = null;
-			if (authored != null && IsNeuralTextureActor(authored))
+			if (authored != null && (IsNeuralTextureActor(authored) || IsProceduralWall(authored)))
 			{
 				neuralWindow = new JsonObject();
 				foreach (var property in NeuralWindowProperties)
@@ -702,6 +705,8 @@ public partial class Manager
 					texture.FlowOrigin = JsonUtil.ReadVector2(window[nameof(NeuralTextureActor.FlowOrigin)]) ?? Vector2.Zero;
 					texture.DetailOrigin = JsonUtil.ReadVector2(window[nameof(NeuralTextureActor.DetailOrigin)]) ?? Vector2.Zero;
 				}
+				if (runtime is ProceduralWall wall && state["neuralWindow"] is JsonObject wallWindow)
+					wall.PaintedMask = wallWindow[nameof(ProceduralWall.PaintedMask)]?.GetValue<string>() ?? "";
 				runtime.Velocity = Vector2.Zero;
 			}
 		}

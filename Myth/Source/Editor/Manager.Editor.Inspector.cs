@@ -313,7 +313,7 @@ public partial class Manager
 			if (room != null)
 				PreviewNeuralModel(room, actor, weightsSlot, value, preview);
 		}
-		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsNeuralTextureActor(actor))
+		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsMaskPaintable(actor))
 		{
 			if (room != null)
 				DrawMaskPaintControls(room, actor);
@@ -1280,7 +1280,7 @@ public partial class Manager
 		PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 0.24f, 0.55f, 1.0f));
 		Begin("Painting Controls", flags);
 		TextColored(new Vector4(1.0f, 0.4f, 0.65f, 1.0f),
-			colorPainting ? "ROOM COLOR PAINTING ACTIVE" : "NEURAL MASK PAINTING ACTIVE");
+			colorPainting ? "ROOM COLOR PAINTING ACTIVE" : "MASK PAINTING ACTIVE");
 		Separator();
 		PushItemWidth(220);
 		if (colorPainting)
@@ -1318,6 +1318,11 @@ public partial class Manager
 		if (Button("Stop Painting"))
 		{
 			EndMaskPainting();
+			return;
+		}
+		if (IsProceduralWall(actor))
+		{
+			DrawWallMaskPaintOverlay(room, actor, actorId);
 			return;
 		}
 		Button("Hold to Show Mask");
@@ -1375,6 +1380,23 @@ public partial class Manager
 			MarkRoomPreviewDirty(room);
 		}
 		TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. P or Esc stops.");
+	}
+
+	void DrawWallMaskPaintOverlay(Room room, JsonObject actor, string actorId)
+	{
+		maskPaintSlot = 0; // any slot erases the wall; right-drag grows it back
+		SliderFloat("Radius", ref maskPaintRadius, 2.0f, 96.0f);
+		SliderFloat("Softness", ref maskPaintSoftness, 0.05f, 1.0f);
+		SliderFloat("Strength", ref maskPaintStrength, 0.05f, 1.0f);
+		if (Button("Clear Mask"))
+		{
+			using (CaptureRoomUndo("Clear Wall Mask", room))
+				ActorSpecs.SetProperty(actor, nameof(ProceduralWall.PaintedMask), JsonValue.Create(""));
+			if (FindLiveMaskActor(actorId) is ProceduralWall live)
+				live.PaintedMask = "";
+			MarkRoomPreviewDirty(room);
+		}
+		TextDisabled("Drag to erase the wall. Right-drag grows it back.\nSofter brushes leave a ragged edge. P or Esc stops.");
 	}
 
 	static int NeuralTextureWeightsSlot(JsonObject actor, ActorSpecs.EditableProperty property)

@@ -830,7 +830,7 @@ public partial class Manager
 			if (Input.Keyboard.Pressed(Keys.P) && CurrentRoom is { } room)
 			{
 				if (selectedRoomActorIndex >= 0 && selectedRoomActorIndex < room.Actors.Count &&
-					IsNeuralTextureActor(room.Actors[selectedRoomActorIndex]) &&
+					IsMaskPaintable(room.Actors[selectedRoomActorIndex]) &&
 					ActorSpecs.ReadString(room.Actors[selectedRoomActorIndex], "Id") is { } actorId)
 				{
 					ToggleMaskPainting(actorId);
@@ -1135,6 +1135,8 @@ public partial class Manager
 			slopePaint = false;
 			return;
 		}
+		if (maskPaintActorId != null || roomColorFieldPainter.Active)
+			return; // the painting controls own this corner
 
 		var flags =
 			ImGuiWindowFlags.NoDecoration |
@@ -1912,6 +1914,12 @@ public partial class Manager
 
 	static bool IsNeuralTextureActor(JsonObject actor)
 		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(NeuralTextureActor), StringComparison.OrdinalIgnoreCase);
+
+	static bool IsMaskPaintable(JsonObject actor)
+		=> typeof(IPaintedMask).IsAssignableFrom(ActorSpecs.GetActorType(ActorSpecs.GetTypeName(actor) ?? ""));
+
+	static bool IsProceduralWall(JsonObject actor)
+		=> typeof(ProceduralWall).IsAssignableFrom(ActorSpecs.GetActorType(ActorSpecs.GetTypeName(actor) ?? ""));
 
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.GetTypeName(actor) == nameof(LinkedDoor);
@@ -3071,6 +3079,12 @@ public partial class Manager
 				ActorSpecs.SetProperty(actor, property, ActorSpecs.ToJsonNode(origin - offset));
 			}
 		}
+		else if (IsProceduralWall(actor) && (resized != size || new Point2(left, top) != position))
+		{
+			var mask = ActorSpecs.GetResolvedProperty(actor, nameof(ProceduralWall.PaintedMask))?.GetValue<string>() ?? "";
+			ActorSpecs.SetProperty(actor, nameof(ProceduralWall.PaintedMask),
+				JsonValue.Create(ProceduralWall.ReframeMask(mask, resized, new Point2(left, top) - position)));
+		}
 		actor["Position"] = bottomCenter ? new JsonArray(left + resized.X / 2, bottom) : new JsonArray(left, top);
 		actor["Size"] = new JsonArray(resized.X, resized.Y);
 		editorGameDirty = true;
@@ -4134,12 +4148,15 @@ public partial class Manager
 		return null;
 	}
 
+	IPaintedMask? FindLiveMaskActor(string actorId)
+		=> game?.GetActorById(actorId) as IPaintedMask;
+
 	bool UpdateMaskPainting(Rect inner, bool worldMouseBlocked, bool keyboardBlocked)
 	{
 		if (maskPaintActorId == null)
 			return false;
 
-		var live = FindLiveNeuralTextureActor(maskPaintActorId);
+		var live = FindLiveMaskActor(maskPaintActorId);
 		if (live == null || (!keyboardBlocked && Input.Keyboard.Pressed(Keys.Escape)))
 		{
 			EndMaskPainting();
@@ -4240,7 +4257,7 @@ public partial class Manager
 	void EndMaskPainting()
 	{
 		maskPaintPreviewHeld = false;
-		if (maskPaintActorId != null && maskPaintStroke && FindLiveNeuralTextureActor(maskPaintActorId) is { } live)
+		if (maskPaintActorId != null && maskPaintStroke && FindLiveMaskActor(maskPaintActorId) is { } live)
 			CommitMaskStroke(live);
 		maskPaintActorId = null;
 		maskPaintStroke = false;
@@ -4255,7 +4272,7 @@ public partial class Manager
 			maskPaintActorId = actorId;
 	}
 
-	void CommitMaskStroke(NeuralTextureActor live)
+	void CommitMaskStroke(IPaintedMask live)
 	{
 		maskPaintStroke = false;
 		if (CurrentRoom is not { } room)
@@ -4263,9 +4280,9 @@ public partial class Manager
 		foreach (var actor in room.Actors)
 			if (ActorSpecs.ReadString(actor, "Id") == maskPaintActorId)
 			{
-				using (CaptureRoomUndo("Paint Neural Texture Mask", room))
+				using (CaptureRoomUndo("Paint Mask", room))
 					ActorSpecs.SetProperty(actor, nameof(NeuralTextureActor.PaintedMask), JsonValue.Create(live.SerializeMask()));
-				live.SimulateFromSeed(maskPaintPreviewSteps);
+				(live as NeuralTextureActor)?.SimulateFromSeed(maskPaintPreviewSteps);
 				MarkRoomPreviewDirty(room);
 				return;
 			}
@@ -4453,7 +4470,7 @@ public partial class Manager
 			inner.Size / editorZoom);
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms(visibleWorld);
-		if (maskPaintPreviewHeld && maskPaintActorId != null && FindLiveNeuralTextureActor(maskPaintActorId) is { } maskActor)
+		if (maskPaintPreviewHeld && maskPaintActorId != null && FindLiveMaskActor(maskPaintActorId) is NeuralTextureActor maskActor)
 		{
 			if (maskPaintPreviewTexture == null)
 			{
@@ -4980,7 +4997,7 @@ public partial class Manager
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 			if (maskPaintActorId != null)
 			{
-				var brushColor = maskPaintSlot < 0 ? new Color(255, 90, 90, 255) : Color.White;
+				var brushColor = maskPaintSlot < 0 || Input.Mouse.RightDown ? new Color(255, 90, 90, 255) : Color.White;
 				batcher.CircleLine(worldMouse, maskPaintRadius, gridWeight, 48, brushColor);
 				var core = maskPaintRadius * (1.0f - maskPaintSoftness);
 				if (core > 1.0f)

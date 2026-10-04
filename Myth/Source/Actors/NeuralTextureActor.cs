@@ -33,7 +33,7 @@ public enum NeuralTextureSupersampling
 
 [GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3,
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, ShowFacing = false)]
-public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
+public class NeuralTextureActor : Actor, IResizable, IShapeOccluder, IPaintedMask
 {
 	readonly static bool doLog = false;
 
