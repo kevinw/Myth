@@ -38,6 +38,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		public float Delay;
 		public float Lift;
 		public float Contact;
+		public Vector2 Normal, ToNormal; // the surface it stands on, and the one it's stepping to (both outward)
 	}
 
 	public Point2 InitialSurfaceDirection = Point2.Down;
@@ -95,7 +96,21 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	static float StepReach => 7f;
 	static float StepSpeed => 7f;
 	static float StepLift => 5f;
-	static float UpperLeg => 8f;
+	// Shape tweakables, in unscaled pixels (everything below multiplies by Scale).
+	static float UpperLeg => 7f;
+	static float LowerLeg => 8f;
+	static float UpperLegWidth => 3.5f;          // upper/lower widths are the limb's taper
+	static float LowerLegWidth => 3f;
+	static float KneeLift => 0.5f;               // 0 = knees bend straight out to the side, higher = up and away from the surface
+	static float HipSpan => 9.3f;                // how far apart the outermost hips sit along the body
+	static float StanceInner => 5f;              // innermost foot's distance from center...
+	static float StanceSpread => 7f;             // ...and how much farther the outermost one plants
+	static float BodyRadius => 6.1f;
+	static Vector2 ArmorPlate => new(4.8f, 3.2f); // half-extents
+	static float ArmorReach => 5.5f;             // armor plates' distance out from the body center
+	static Vector2 KneePlate => new(3.2f, 1.9f);
+	static float ClawLength => 3.5f;
+	static float ClawSplay => 0.8f;              // how wide the claws fan while the foot is lifted
 	// Getting hit: the head snaps back hardest, the armor less, the knees least (px/s, scaled), all on springs
 	// gone briefly loose so they overshoot and wobble home. The walk eases down to a stagger and back up.
 	static float HeadKick => 122f;
@@ -106,15 +121,16 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	static float HitStagger => 0.3f;
 	static float PaceDrop => 0.08f;
 	static float PaceRecover => 0.45f;
-	static float LowerLeg => 9f;
 	static float NeuralFootContactDuration => 0.16f;
 	static Point2 NeuralSize => new(48, 40);
 	static Point2 NeuralOrigin => new(-24, -26);
 	const int PlateVertexCount = 8;
 
 	readonly SurfaceFollower surface;
-	readonly Part[] parts = new Part[8];
-	readonly Leg[] legs = new Leg[6];
+	const int LegCount = 6; // even: half on each side
+	readonly Part[] parts = new Part[LegCount + 2]; // a knee plate per leg, then the left and right armor
+	readonly Leg[] legs = new Leg[LegCount];
+	readonly float[] legNear = new float[LegCount]; // 0 far side of the body .. 1 near side
 	Rng rng = new();
 	State state;
 	float stateTimer;
@@ -169,6 +185,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		bodyPosition = (Vector2)Position - surface.TowardSurface * BodyHeight * Scale;
 		PlantAllFeet();
 		InitializeParts();
+		for (var i = 0; i < legNear.Length; i++)
+			legNear[i] = NearTarget(i, Facing);
 		UpdateHitbox();
 		sparkEffect = AcquireParticleEffect("sparks");
 		Mask = WaitsForSiblingsToDie ? Masks.None : Masks.Enemy;
@@ -196,6 +214,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		eyeHitFlash = Calc.Approach(eyeHitFlash, 0, Time.Delta * 4);
 		hitWobble = Calc.Approach(hitWobble, 0, Time.Delta / HitWobbleTime);
 		stagger = MathF.Max(0, stagger - Time.Delta);
+		for (var i = 0; i < legNear.Length; i++)
+			legNear[i] = Calc.Approach(legNear[i], NearTarget(i, Facing), Time.Delta / LegSwapTime);
 		walkPace = Calc.Approach(walkPace, stagger > 0 ? 0 : 1, Time.Delta / (stagger > 0 ? PaceDrop : PaceRecover));
 		stateTimer += Time.Delta;
 
@@ -545,22 +565,27 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	float Loosened => 1 - HitLoosen * hitWobble;
 
+	// parts[] holds a knee plate per leg, then the two armor plates (left, right).
+	bool IsKnee(int index) => index < legs.Length;
+	int ArmorSide(int index) => index == legs.Length ? -1 : 1;
+	int LegSide(int index) => index < legs.Length / 2 ? -1 : 1;
+
 	Vector2 PartTarget(int index)
 	{
-		if (index < 4)
+		if (IsKnee(index))
 			return Knee(index);
 
-		var side = index == 4 ? -1 : 1;
+		var side = ArmorSide(index);
 		var flare = ArmorFlare();
-		return bodyPosition + surface.Tangent * side * (5.5f + flare * 3.5f) * Scale
+		return bodyPosition + surface.Tangent * side * (ArmorReach + flare * 3.5f) * Scale
 			+ surface.TowardSurface * (1 - flare * 2) * Scale;
 	}
 
 	float PartTargetAngle(int index)
 	{
-		if (index < 4)
+		if (IsKnee(index))
 			return Calc.Angle(legs[index].Foot - Hip(index));
-		var side = index == 4 ? -1 : 1;
+		var side = ArmorSide(index);
 		return bodyAngle + side * ArmorFlare() * 0.72f;
 	}
 
@@ -593,7 +618,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		var distance = Math.Clamp(reach.Length(), 0.01f, upper + lower - 0.01f);
 		var along = reach.Normalized(surface.TowardSurface);
 		var bend = along.TurnLeft();
-		if (Vector2.Dot(bend, surface.Tangent * (index < 2 ? -1 : 1) - surface.TowardSurface * 0.5f) < 0)
+		if (Vector2.Dot(bend, surface.Tangent * LegSide(index) - surface.TowardSurface * KneeLift) < 0)
 			bend = -bend;
 		var a = (upper * upper - lower * lower + distance * distance) / (2 * distance);
 		return hip + along * a + bend * MathF.Sqrt(MathF.Max(0, upper * upper - a * a));
@@ -601,7 +626,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	Vector2 Hip(int index)
 	{
-		var along = (index - 1.5f) * 3.1f * Scale;
+		var along = (index - (legs.Length - 1) * 0.5f) * HipSpan / (legs.Length - 1) * Scale;
 		return bodyPosition + surface.Tangent * along + surface.TowardSurface * 1.5f * Scale;
 	}
 
@@ -610,7 +635,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		for (var i = 0; i < legs.Length; i++)
 		{
 			var desired = DesiredFoot(i);
-			legs[i].Foot = FindPurchase(desired, out var purchase) ? purchase : desired;
+			legs[i].Foot = FindPurchase(desired, out var purchase, out var normal) ? purchase : desired;
+			legs[i].Normal = legs[i].ToNormal = normal;
 			legs[i].From = legs[i].To = legs[i].Foot;
 			legs[i].Step = 1;
 			legs[i].Lift = 1;
@@ -636,6 +662,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 				lifting++;
 			else
 			{
+				leg.Normal = leg.ToNormal;
 				leg.Contact = NeuralFootContactDuration;
 				AudioEvent("enemies/magnetic_crawler/footstep");
 			}
@@ -660,11 +687,12 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 			return;
 
 		var desired = DesiredFoot(pick) + surface.Tangent * walkSign * StepReach * 0.8f * Scale;
-		if (!FindPurchase(desired, out var purchase) && !FindPurchase(DesiredFoot(pick), out purchase))
+		if (!FindPurchase(desired, out var purchase, out var normal) && !FindPurchase(DesiredFoot(pick), out purchase, out normal))
 			return;
 		ref var step = ref legs[pick];
 		step.From = step.Foot;
 		step.To = purchase;
+		step.ToNormal = normal;
 		step.Step = 0;
 		step.Delay = (pick & 1) * 0.035f;
 		step.Lift = rng.Float(0.8f, 1.35f);
@@ -672,13 +700,14 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	Vector2 DesiredFoot(int index)
 	{
-		var side = index < 2 ? -1 : 1;
-		var pair = index & 1;
-		return (Vector2)Position + surface.Tangent * side * (5 + pair * 6) * Scale + surface.TowardSurface * 2 * Scale;
+		var perSide = legs.Length / 2;
+		var reach = StanceInner + index % perSide * StanceSpread / Math.Max(1, perSide - 1);
+		return (Vector2)Position + surface.Tangent * LegSide(index) * reach * Scale + surface.TowardSurface * 2 * Scale;
 	}
 
-	bool FindPurchase(Vector2 desired, out Vector2 purchase)
+	bool FindPurchase(Vector2 desired, out Vector2 purchase, out Vector2 normal)
 	{
+		normal = -surface.TowardSurface;
 		for (var i = 0; i < 5; i++)
 		{
 			var spread = i switch { 1 => -0.45f, 2 => 0.45f, 3 => -0.8f, 4 => 0.8f, _ => 0 };
@@ -688,6 +717,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 			if (Game.TryFindSurface(this, probe, direction, (int)MathF.Ceiling(20 * Scale), out var hit))
 			{
 				purchase = hit.Point;
+				if (hit.Normal != Vector2.Zero)
+					normal = Vector2.Dot(hit.Normal, surface.TowardSurface) > 0 ? -hit.Normal : hit.Normal;
 				return true;
 			}
 		}
@@ -726,7 +757,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		var away = (bodyPosition - (Vector2)by.Position).Normalized(-surface.TowardSurface);
 		bodyVelocity += away * HeadKick * Scale;
 		for (var i = 0; i < parts.Length; i++)
-			parts[i].Velocity += away * (i < 4 ? KneeKick : ArmorKick) * Scale;
+			parts[i].Velocity += away * (IsKnee(i) ? KneeKick : ArmorKick) * Scale;
 		(hitWobble, stagger) = (1, HitStagger);
 
 		var index = rng.Int(parts.Length);
@@ -827,26 +858,53 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		pen = pen with { Skin = Skin(pen.Pass), Material = PenMaterial.Get(GritTexture) };
 		var center = bodyPosition - Position;
 		var focus = Focus();
+		var alive = state != State.Dying;
 
-		DrawCables(pen, center);
-		if (state != State.Dying)
+		// Back to front, each layer a little nearer: cables, the far legs, the armor, the near legs (over the
+		// armor, under the head their hips sit inside), the body, the eye.
+		DrawCables(At(pen, CableDepth), center);
+		for (var i = 0; i < legs.Length; i++)
+			if (!alive)
+				DrawPart(At(pen, FarLegDepth), i, focus);
+			else if (legNear[i] < 0.5f)
+				DrawLeg(LegPen(pen, i), i, focus);
+		for (var i = legs.Length; i < parts.Length; i++)
+			DrawPart(At(pen, ArmorDepth), i, focus);
+		if (alive)
 			for (var i = 0; i < legs.Length; i++)
-				DrawLeg(pen, i);
-		for (var i = 0; i < parts.Length; i++)
-			DrawPart(pen, i, focus);
+				if (legNear[i] >= 0.5f)
+					DrawLeg(LegPen(pen, i), i, focus);
 
-		var radius = 6.2f * Scale;
-		pen.Ball(center, radius, new Vector2(0, -BodyHeight) * Scale, Color.Lerp(new Color(0x30343d), MetalColor, 0.16f), MetalEdgeColor, round: true);
+		var body = At(pen, BodyDepth);
+		var radius = BodyRadius * Scale;
+		body.Ball(center, radius, new Vector2(0, -BodyHeight) * Scale, Color.Lerp(new Color(0x30343d), MetalColor, 0.16f), MetalEdgeColor, round: true);
 		var rivets = Math.Max(6, (int)(MathF.Tau * radius / RivetSpacing));
 		for (var i = 0; i < rivets; i++)
 			if (ShapeUnit(i, 30) < 0.7f)
-				pen.Rivet(center + Calc.AngleToVector(bodyAngle + i * MathF.Tau / rivets) * (radius - Pen.RimWidth - 1.2f), MetalEdgeColor);
+				body.Rivet(center + Calc.AngleToVector(bodyAngle + i * MathF.Tau / rivets) * (radius - Pen.RimWidth - 1.2f), MetalEdgeColor);
 		var seam = Calc.AngleToVector(bodyAngle + MathF.PI * 0.25f) * radius;
-		pen.Groove(center - seam, center - seam * 0.72f, 1, MetalEdgeColor);
-		pen.Groove(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
-		if (state != State.Dying)
-			DrawEye(pen, center, focus);
+		body.Groove(center - seam, center - seam * 0.72f, 1, MetalEdgeColor);
+		body.Groove(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
+
+		if (alive)
+			DrawEye(At(pen, 0), center, focus);
 	}
+
+	// Depth per layer (see Pen.Depth); the dormant giant sits deeper still, stepping forward out of the dark as
+	// it wakes.
+	static float CableDepth => 0.85f;
+	static float FarLegDepth => 0.6f;
+	static float ArmorDepth => 0.3f;
+	static float BodyDepth => 0.1f;
+	static float DormantDepth => 0.5f;
+	static float LegSwapTime => 0.25f;
+
+	Pen At(Pen pen, float layer) => pen with { Depth = MathF.Min(1, layer + DormantDepth * (1 - Ease.Cube.Out(WakeProgress))) };
+	Pen LegPen(Pen pen, int index) => At(pen, FarLegDepth * (1 - legNear[index]));
+
+	// Alternate legs walk on the near side of the body, the rest on the far side; which is which follows Facing.
+	// The depth eases across a turn and the draw order swaps at the halfway point.
+	static float NearTarget(int index, Signs facing) => ((index & 1) == 0) == (facing > 0) ? 1 : 0;
 
 	// Pixel sizes for the greebles, independent of Scale.
 	static float RivetSpacing => 4f;
@@ -896,45 +954,64 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		var cable = Color.Lerp(MetalEdgeColor, Color.Black, 0.35f);
 		var tendon = Color.Lerp(EyeColor, Color.Black, 0.45f);
 		var along = surface.Tangent * 1.5f * Scale;
-		for (var i = 4; i < parts.Length; i++)
+		for (var i = legs.Length; i < parts.Length; i++)
 		{
 			var to = parts[i].Position - Position;
 			pen.Cable(center + along, to + along, sag, 1, cable);
-			pen.Cable(center - along, to - along, sag * 1.6f, 1, i == 4 ? tendon : cable);
+			pen.Cable(center - along, to - along, sag * 1.6f, 1, ArmorSide(i) < 0 ? tendon : cable);
 		}
 		if (state != State.Dying)
 			for (var i = 0; i < legs.Length; i++)
 				pen.Cable(center, parts[i].Position - Position, sag * 0.6f, 1, (i & 1) == 0 ? cable : tendon);
 	}
 
-	void DrawLeg(Pen pen, int index)
+	void DrawLeg(Pen pen, int index, float glow)
 	{
 		var hip = Hip(index) - Position;
 		var knee = parts[index].Position - Position;
 		var foot = legs[index].Foot - Position;
-		var rest = new Vector2((index - 1.5f) * 9, -4) * Scale;
-		pen.Tube(hip, knee, 3.5f * Scale, rest, MetalColor, MetalEdgeColor, SegmentLength);
-		pen.Tube(knee, foot, 3f * Scale, rest + new Vector2(0, 6 * Scale), MetalColor, MetalEdgeColor, SegmentLength);
+		var rest = new Vector2((index - (legs.Length - 1) * 0.5f) * 27f / (legs.Length - 1), -4) * Scale;
+		pen.Tube(hip, knee, UpperLegWidth * Scale, rest, MetalColor, MetalEdgeColor, SegmentLength);
+		pen.Tube(knee, foot, LowerLegWidth * Scale, rest + new Vector2(0, 6 * Scale), MetalColor, MetalEdgeColor, SegmentLength);
 		pen.Ball(knee, 1.9f * Scale, rest, MetalColor, MetalEdgeColor);
 
 		// Thorns along the upper leg's back, facing away from the surface it clings to.
 		var across = (knee - hip).Normalized(Vector2.UnitY).TurnLeft();
 		if (Vector2.Dot(across, surface.TowardSurface) > 0)
 			across = -across;
-		var edge = across * 1.75f * Scale;
+		var edge = across * UpperLegWidth * 0.5f * Scale;
 		pen.Teeth(hip + edge, knee + edge, across, ToothSize * 0.75f, ThornSpacing, MetalEdgeColor);
 
-		var direction = (foot - knee).Normalized(surface.TowardSurface);
-		var side = new Vector2(-direction.Y, direction.X);
-		var claw = direction * 2.5f * Scale;
-		pen.Facet(foot - side * Scale, foot + claw + side * 2 * Scale, foot + side * 0.3f * Scale, MetalEdgeColor, side * 0.5f);
-		pen.Facet(foot + side * Scale, foot + claw - side * 2 * Scale, foot - side * 0.3f * Scale, MetalEdgeColor, -side * 0.5f);
+		DrawClaws(pen, index, knee, foot);
+		DrawPart(pen, index, glow);
+	}
+
+	// Two claws per foot: splayed down the shin while the foot swings, flattening out along whatever it's
+	// standing on (or about to land on) as it nears the ground, so a planted foot grips the surface's own angle.
+	void DrawClaws(Pen pen, int index, Vector2 knee, Vector2 foot)
+	{
+		ref var leg = ref legs[index];
+		var normal = leg.Step < 0.5f ? leg.Normal : leg.ToNormal;
+		var lifted = leg.Step < 1 ? MathF.Sin(leg.Step * MathF.PI) * leg.Lift : 0;
+		var flat = (1 - MathF.Min(1, lifted)) * (1 - MathF.Min(1, lifted));
+		var down = (foot - knee).Normalized(-normal);
+		var side = down.TurnLeft();
+		var along = normal.TurnLeft();
+		foreach (var k in (ReadOnlySpan<float>)[-1, 1])
+		{
+			var reach = Vector2.Lerp((down + side * k * ClawSplay).Normalized(), along * k, flat).Normalized() * ClawLength * Scale;
+			var thick = reach.TurnLeft().Normalized();
+			if (Vector2.Dot(thick, normal) < 0 && flat > 0.5f)
+				thick = -thick; // lying flat, the claw's body sits on top of the surface rather than in it
+			thick *= MathF.Max(Scale * (1 - flat * 0.5f), 1);
+			pen.Facet(foot, foot + thick, foot + reach, MetalEdgeColor, thick.Normalized() * 0.5f);
+		}
 	}
 
 	void DrawPart(Pen pen, int index, float glow)
 	{
 		var part = parts[index];
-		var half = (index < 4 ? new Vector2(3.8f, 2.2f) : new Vector2(5.2f, 3.4f)) * Scale;
+		var half = (IsKnee(index) ? KneePlate : ArmorPlate) * Scale;
 		Span<Vector2> vertices = stackalloc Vector2[PlateVertexCount];
 		Span<Vector2> material = stackalloc Vector2[PlateVertexCount];
 		PlateAxes(index, part.Angle, half, out var x, out var y);
@@ -973,7 +1050,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		}
 		for (var d = 0; d < part.Damage; d++)
 			pen.Groove(vertices[chipped[d]], Vector2.Lerp(vertices[chipped[d]], center, 0.55f), 1, Color.Lerp(MetalEdgeColor, Color.Black, 0.4f));
-		if (index < 4)
+		if (IsKnee(index))
 			return;
 
 		// Armor: a serrated outer edge, and a bank of vents that grows with the plate.
@@ -1028,9 +1105,9 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 
 	float ShapeSigned(int index, int salt) => ShapeUnit(index, salt) * 2 - 1;
 
-	static Vector2 PlateMaterialCenter(int index) => index < 4
-		? new Vector2((index - 1.5f) * 6.5f, -6.5f + (index & 1) * 1.5f)
-		: new Vector2(index == 4 ? -6 : 6, -BodyHeight);
+	Vector2 PlateMaterialCenter(int index) => IsKnee(index)
+		? new Vector2((index - (legs.Length - 1) * 0.5f) * 19.5f / (legs.Length - 1), -6.5f + (index & 1) * 1.5f)
+		: new Vector2(ArmorSide(index) * 6, -BodyHeight);
 
 	// A camera-iris eye: blades close down to a pinhole as it locks on, so you see it focus on you before it lunges.
 	void DrawEye(Pen pen, Vector2 body, float focus)

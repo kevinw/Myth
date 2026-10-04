@@ -60,13 +60,22 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	public PenPass Pass => pass;
 	public RigSkin Skin { get; init; }
 	public PenMaterial? Material { get; init; }
+	// 0 = front, 1 = deepest: deep shapes fade toward DepthColor (the room's backdrop, darkened), flatten in the
+	// normal buffer and glow dimmer, so one number pushes a part back in color, light and emission at once.
+	public float Depth { get; init; }
+	public Color DepthColor { get; init; }
+
+	static float DepthFade => 0.8f;
+	static float DepthFlatten => 0.5f;
+	static float DepthDim => 0.7f;
+	public static Color DepthColorFor(Color backdrop) => Color.Lerp(backdrop, Color.Black, 0.5f);
 
 	public static float RimWidth => 1.5f;
 	static float RimShade => 0.55f;          // how much a rim darkens toward the outline color
 	static float RimTilt => 0.75f;
 	static float RimNormalAmount => 0.85f;   // rims over the material's normals, so they keep a little grit
 	static float FacetTilt => 0.4f;          // a ball's inner facets
-	static float Roundness => 0.9f;          // a round ball's rim lean
+	static float Roundness => 0.9f;          // how far a round ball's or a tube's edges lean
 	static float GrooveTilt => 0.6f;
 	static float Grit => 0.45f;              // how dark the material's darks print
 	static float GritNormals => 0.35f;
@@ -75,8 +84,15 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	// Solid shapes draw their silhouette in both: a shadow, or (under the occluder blend) a hole in the glow.
 	bool Silhouetting => pass is PenPass.Silhouette or PenPass.Emissive;
 	bool Skinned => Skin.Surface != null || Skin.Texture != null;
-	Color Tinted(Color color) => tint == Color.White ? color : RigDraw.Multiply(color, tint);
-	static Color Normal(Vector2 lateral) => RigDraw.NormalColor(lateral);
+	Color Tinted(Color color)
+	{
+		if (Depth > 0)
+			color = Color.Lerp(color, DepthColor * (color.A / 255f), Depth * DepthFade);
+		return tint == Color.White ? color : RigDraw.Multiply(color, tint);
+	}
+	float Flatten => 1 - Depth * DepthFlatten;
+	Color Normal(Vector2 lateral) => RigDraw.NormalColor(lateral * Flatten);
+	Color Glowing(Color color) => color * (1 - Depth * DepthDim);
 
 	// A star-shaped plate (convex, or chipped a little) fanned from its center.
 	public void Plate(ReadOnlySpan<Vector2> vertices, ReadOnlySpan<Vector2> material, Color fill, Color outline)
@@ -147,7 +163,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		}
 		if (round)
 		{
-			RigDraw.DrawSphereNormals(batcher, center, radius, steps, Roundness, 0, 0);
+			RigDraw.DrawSphereNormals(batcher, center, radius, steps, Roundness * Flatten, 0, 0);
 			Print(ring, ringMaterial, center, material, fill);
 			return;
 		}
@@ -171,8 +187,8 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		}
 	}
 
-	// A limb or rod: a flat spine between two hard-chamfered sides. Its material runs along it from
-	// `material`, so a leg's grit stays put on the leg. `segment` > 0 bands it every that many pixels.
+	// A limb or rod: a cylinder, its outline shading the sides. Its material runs along it from `material`, so a
+	// leg's grit stays put on the leg. `segment` > 0 bands it every that many pixels.
 	public void Tube(Vector2 from, Vector2 to, float width, Vector2 material, Color fill, Color outline, float segment = 0)
 	{
 		var along = (to - from).Normalized(Vector2.UnitY);
@@ -180,7 +196,13 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		var length = Vector2.Distance(from, to);
 		ReadOnlySpan<Vector2> quad = [from + across, to + across, to - across, from - across];
 		ReadOnlySpan<Vector2> quadMaterial = [material, material + new Vector2(length, 0), material + new Vector2(length, width), material + new Vector2(0, width)];
-		Plate(quad, quadMaterial, fill, outline);
+		if (pass == PenPass.Normals)
+		{
+			RigDraw.DrawCylinderNormals(batcher, from, to, width, Roundness * Flatten, 0, 0);
+			Print(quad, quadMaterial, Center(quad), Center(quadMaterial), fill);
+		}
+		else
+			Plate(quad, quadMaterial, fill, outline);
 		if (segment > 0)
 			for (var at = segment; at < length - 1; at += segment)
 				Groove(from + along * at + across, from + along * at - across, 1, outline);
@@ -200,7 +222,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 			else if (Silhouetting)
 				batcher.Line(previous, next, width, tint);
 			else if (pass == PenPass.Normals)
-				RigDraw.DrawCylinderNormals(batcher, previous, next, width, 0.8f, 0, 0);
+				RigDraw.DrawCylinderNormals(batcher, previous, next, width, 0.8f * Flatten, 0, 0);
 			previous = next;
 		}
 	}
@@ -251,7 +273,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		if (pass == PenPass.Color)
 			batcher.Circle(center, 0.8f, 6, Tinted(color));
 		else if (pass == PenPass.Normals)
-			RigDraw.DrawSphereNormals(batcher, center, 1.2f, 6, 0.8f, 0, 0);
+			RigDraw.DrawSphereNormals(batcher, center, 1.2f, 6, 0.8f * Flatten, 0, 0);
 	}
 
 	// Color only: a detail painted onto whatever shape is beneath it (a pupil, a glint), keeping that shape's normals.
@@ -267,7 +289,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		if (pass != PenPass.Emissive)
 			return;
 		batcher.PushBlend(BlendMode.Premultiply);
-		batcher.Circle(center, radius, Math.Clamp((int)(radius * 3), 6, 24), color);
+		batcher.Circle(center, radius, Math.Clamp((int)(radius * 3), 6, 24), Glowing(color));
 		batcher.PopBlend();
 	}
 
@@ -276,7 +298,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		if (pass != PenPass.Emissive)
 			return;
 		batcher.PushBlend(BlendMode.Premultiply);
-		batcher.Line(from, to, width, color);
+		batcher.Line(from, to, width, Glowing(color));
 		batcher.PopBlend();
 	}
 
@@ -300,7 +322,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		for (var i = 0; i < uvs.Length; i++)
 			uvs[i] = (material[i] - (Vector2)Skin.Origin) / (Vector2)Skin.Size;
 		Skin.Push(batcher);
-		Skin.Polygon(batcher, vertices, uvs, pass == PenPass.Normals ? Color.White : fill);
+		Skin.Polygon(batcher, vertices, uvs, pass == PenPass.Normals ? Color.White * Flatten : Tinted(fill));
 		Skin.Pop(batcher);
 	}
 

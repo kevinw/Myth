@@ -873,7 +873,11 @@ public class Actor
 		if (this is not IPenDrawn drawn)
 			return false;
 		batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat)); // pen materials tile, a texel per pixel
-		drawn.Draw(new(batcher, pass, tint) { Material = PenMaterial.Get(PenMaterial.DefaultTexture) });
+		drawn.Draw(new(batcher, pass, tint)
+		{
+			Material = PenMaterial.Get(PenMaterial.DefaultTexture),
+			DepthColor = Pen.DepthColorFor(Room?.BackdropColor ?? Myth.Room.DefaultBackdropColor),
+		});
 		batcher.PopSampler();
 		return true;
 	}
