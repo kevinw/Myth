@@ -35,6 +35,8 @@ public static partial class Assets
 		// Sobel over the whole image on entry to every room with a procedural wall. Living here it
 		// is also invalidated correctly, since a reload replaces the whole bucket.
 		public Texture? MaterialTexture;
+		// The same height split for pen-drawn actors: a shade mask plus normals (see PenMaterial.Get).
+		internal PenMaterial? PenMaterial;
 	}
 
 	public sealed class TextureBucket(Texture thumbnailAtlas, Dictionary<string, BucketTexture> textures, List<string> order) : IDisposable
@@ -54,6 +56,7 @@ public static partial class Assets
 			{
 				t.Texture.Dispose();
 				t.MaterialTexture?.Dispose();
+				t.PenMaterial?.Dispose();
 			}
 		}
 	}

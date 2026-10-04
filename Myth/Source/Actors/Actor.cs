@@ -867,9 +867,40 @@ public class Actor
 
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
-	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
-	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
-	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
+	// An IPenDrawn actor draws every pass from its one Draw; the rest render their sprite.
+	bool DrawWithPen(Batcher batcher, PenPass pass, Color tint)
+	{
+		if (this is not IPenDrawn drawn)
+			return false;
+		batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat)); // pen materials tile, a texel per pixel
+		drawn.Draw(new(batcher, pass, tint) { Material = PenMaterial.Get(PenMaterial.DefaultTexture) });
+		batcher.PopSampler();
+		return true;
+	}
+
+	// A pen-drawn actor occludes shape by shape inside its emissive pass instead (see Pen), so a glow drawn
+	// behind its own body stays hidden.
+	public virtual void RenderEmissive(Batcher batcher)
+	{
+		if (this is not IPenDrawn)
+		{
+			RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
+			return;
+		}
+		batcher.PushBlend(GameView.EmissiveOccluderBlend);
+		DrawWithPen(batcher, PenPass.Emissive, Color.White);
+		batcher.PopBlend();
+	}
+	public virtual void RenderEmissiveOccluder(Batcher batcher)
+	{
+		if (this is not IPenDrawn)
+			Render(batcher);
+	}
+	public virtual void Render(Batcher batcher)
+	{
+		if (!DrawWithPen(batcher, PenPass.Color, Color.White))
+			RenderSpriteSubtexture(batcher, SubtextureType.Color);
+	}
 	public virtual bool HasWorldDistortion => false;
 	public virtual void RenderWorldDistortion(Batcher batcher) { }
 	public virtual void StirPixelSort(PixelSortCanvas canvas) { }
@@ -879,9 +910,21 @@ public class Actor
 		return new(encoded.X * strength, encoded.Y * strength, 0, strength);
 	}
 
-	public virtual void RenderNormals(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Normals);
-	public virtual void RenderShadow(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
-	public virtual void RenderReflection(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+	public virtual void RenderNormals(Batcher batcher)
+	{
+		if (!DrawWithPen(batcher, PenPass.Normals, Color.White))
+			RenderSpriteSubtexture(batcher, SubtextureType.Normals);
+	}
+	public virtual void RenderShadow(Batcher batcher, Color color)
+	{
+		if (!DrawWithPen(batcher, PenPass.Silhouette, color))
+			RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+	}
+	public virtual void RenderReflection(Batcher batcher, Color color)
+	{
+		if (!DrawWithPen(batcher, PenPass.Color, color))
+			RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+	}
 
 	public virtual void ForEachLight(Action<Vector2, float, float, float, Color> action) { }
 	public virtual void ForEachAutomaticLight(Action<Vector2, float, float, float, Color> action) { }

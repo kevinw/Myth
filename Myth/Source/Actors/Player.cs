@@ -175,6 +175,8 @@ public abstract partial class Pawn : Actor
 	// Applies while dash-running under DashEngagesRunOnly, since there's no burst to carry
 	// you up to the raised top speed.
 	protected static float DashRunAccelMultiplier => 1.5f.T();
+	// Letting go of the stick while dash-running keeps you running.
+	protected static bool DashAutoRun => false;
 	// How fast you must already be moving for a neutral stick to keep dash-running you along.
 	protected static float DashRunAutoRunSpeed => 8f.T();
 	// Rope climbing: hold up near a rope to grab on (see Rope + ClimbState). Movement-toy
@@ -724,7 +726,7 @@ public abstract partial class Pawn : Actor
 	// that carry needs motion to carry: without the launch, it would otherwise walk you off
 	// from a standstill the moment you held the button.
 	bool CanAutoRunOnNeutralStick
-		=> !DashEngagesRunOnly || MathF.Abs(Velocity.X) >= DashRunAutoRunSpeed;
+		=> DashAutoRun && (!DashEngagesRunOnly || MathF.Abs(Velocity.X) >= DashRunAutoRunSpeed);
 
 	protected int GetHorizontalMovementInput(out float movementInput)
 	{

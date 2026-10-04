@@ -8,7 +8,7 @@ using ImGuiNET;
 namespace Myth;
 
 [GameActor(Sprite = "saw", Tags = ActorTag.Enemy, LivePositionEditable = true)]
-public class MagneticCrawler : Actor, INeuralTextureAgent
+public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 {
 	enum State
 	{
@@ -24,6 +24,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		public float Angle;
 		public float AngularVelocity;
 		public float Detached;
+		public int Damage;
 	}
 
 	struct Leg
@@ -42,7 +43,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	public bool ClimbsWallsAndCeilings = true;
 	public bool CanWalkOnMovingPlatforms;
 	[I(1, 12)] public int Health = 4;
-	[I(0.5f, 2)] public float Scale = 1;
+	[I(0.5f, 4)] public float Scale = 1;
 	[I(5, 32)] public float PatrolSpeed = 15;
 	[I(32, 100)] public float HuntSpeed = 48;
 	public Color MetalColor = new(0x858d9a);
@@ -52,6 +53,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	[I(4, 64)] public float EyeLightRadius = 28;
 	[I(0, 2)] public float EyeLightIntensity = 0.75f;
 	public RigSkinMode SkinMode;
+	public ContentRef<VisualTextureContent> GritTexture = PenMaterial.DefaultTexture;
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
 	public readonly NeuralSurfaceSettings Neural = new()
 	{
@@ -128,8 +130,11 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		surface = new(this);
 	}
 
+	float randomTimeOffset;
+
 	public override void Added()
 	{
+		randomTimeOffset = Game.rng.Float(0, 60f);
 		visualSeed = VisualSeed();
 		var half = Math.Max(4, (int)MathF.Round(6 * Scale));
 		Hitbox = new(new RectInt(-half, -half, half * 2, half * 2));
@@ -625,6 +630,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		ref var part = ref parts[index];
 		var recoil = (part.Position - (Vector2)by.Position).Normalized(-surface.TowardSurface);
 		part.Detached = 0.62f;
+		part.Damage = Math.Min(part.Damage + 1, MaxDamage);
 		part.Velocity += recoil * 95 + surface.Tangent * rng.Float(-30, 30);
 		part.AngularVelocity += rng.Float(-12, 12);
 		eyeHitFlash = 1;
@@ -696,105 +702,188 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 				var phase = stateTimer % HuntCycle;
 				return phase < HuntWindup ? 0.45f + phase / HuntWindup * 0.75f : phase < HuntWindup + HuntBurst ? 1.15f : 0.55f;
 			}
-			return 0.32f + MathF.Sin(Time.SecondsF * 3.7f) * 0.05f;
+			return 0.82f + MathF.Sin((Time.SecondsF + randomTimeOffset) * 3.7f) * 0.05f;
 		}
 	}
 
-	public override void Render(Batcher batcher)
+	// Shadows, reflections, the normal buffer and the eye's glow all come from this one drawing. Shapes take
+	// their size from Scale but their detail (rims, seams, rivets, teeth) in pixels, so a bigger crawler reads
+	// as a more intricate one rather than a blown-up one.
+	void IPenDrawn.Draw(Pen pen)
 	{
-		if (SpriteBlinkHidden)
+		if (SpriteBlinkHidden && pen.Pass != PenPass.Silhouette)
 			return;
-		DrawRig(batcher, Color.White, shadow: false);
-	}
+		pen = pen with { Skin = Skin(pen.Pass), Material = PenMaterial.Get(GritTexture) };
+		var center = bodyPosition - Position;
+		var focus = Focus();
 
-	public override void RenderShadow(Batcher batcher, Color color) => DrawRig(batcher, color, shadow: true);
-
-	void DrawRig(Batcher batcher, Color tint, bool shadow)
-	{
-		var sourceSurface = Assets.GetSurface(SurfaceId);
-		var neuralTexture = !shadow && SkinMode == RigSkinMode.NCA ? neuralSkin?.OutputTexture : null;
-		if (neuralTexture != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		DrawCables(pen, center);
 		if (state != State.Dying)
 			for (var i = 0; i < legs.Length; i++)
-			{
-				var hip = Hip(i) - Position;
-				var knee = parts[i].Position - Position;
-				var foot = legs[i].Foot - Position;
-				var outline = shadow ? tint : MetalEdgeColor;
-				var metal = shadow ? tint : MetalColor;
-				batcher.Line(hip, knee, 3.5f * Scale, outline);
-				batcher.Line(knee, foot, 3.5f * Scale, outline);
-				batcher.Line(hip, knee, 1.5f * Scale, metal);
-				batcher.Line(knee, foot, 1.5f * Scale, metal);
-				DrawClaw(batcher, knee, foot, outline, metal);
-			}
-
+				DrawLeg(pen, i);
 		for (var i = 0; i < parts.Length; i++)
-			DrawPart(batcher, i, tint, shadow, sourceSurface, neuralTexture);
+			DrawPart(pen, i, focus);
 
-		var center = bodyPosition - Position;
-		batcher.Circle(center, 6.2f * Scale, 18, shadow ? tint : MetalEdgeColor);
-		var coreColor = Color.Lerp(new Color(0x30343d), MetalColor, 0.16f);
-		batcher.Circle(center, 4.8f * Scale, 18, shadow ? tint : coreColor);
-		if (!shadow && SkinMode == RigSkinMode.Surface && sourceSurface != null)
-			DrawSurfaceCircle(batcher, sourceSurface, center, 4.8f * Scale, bodyPosition);
-		else if (!shadow && neuralTexture != null)
-			DrawNeuralCircle(batcher, neuralTexture, center, 4.8f * Scale,
-				NeuralUV(new Vector2(0, -BodyHeight)), coreColor * Neural.NeuralColorAmount);
-		if (!shadow)
-		{
-			var seam = Calc.AngleToVector(bodyAngle + MathF.PI * 0.25f) * 4.8f * Scale;
-			batcher.Line(center - seam, center - seam * 0.72f, 1, MetalColor);
-			batcher.Line(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
-		}
-		if (!shadow && state != State.Dying)
-			DrawEye(batcher, emissive: false);
-		if (neuralTexture != null)
-			batcher.PopSampler();
+		var radius = 6.2f * Scale;
+		pen.Ball(center, radius, new Vector2(0, -BodyHeight) * Scale, Color.Lerp(new Color(0x30343d), MetalColor, 0.16f), MetalEdgeColor);
+		var rivets = Math.Max(6, (int)(MathF.Tau * radius / RivetSpacing));
+		for (var i = 0; i < rivets; i++)
+			if (ShapeUnit(i, 30) < 0.7f)
+				pen.Rivet(center + Calc.AngleToVector(bodyAngle + i * MathF.Tau / rivets) * (radius - Pen.RimWidth - 1.2f), MetalEdgeColor);
+		var seam = Calc.AngleToVector(bodyAngle + MathF.PI * 0.25f) * radius;
+		pen.Groove(center - seam, center - seam * 0.72f, 1, MetalEdgeColor);
+		pen.Groove(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
+		if (state != State.Dying)
+			DrawEye(pen, center, focus);
 	}
 
-	void DrawPart(Batcher batcher, int index, Color tint, bool shadow, Surface? sourceSurface, Texture? neuralTexture)
+	// Pixel sizes for the greebles, independent of Scale.
+	static float RivetSpacing => 4f;
+	static float PanelInset => 2.5f;
+	static float ChipDepth => 2f;
+	static float ToothSize => 2f;
+	static float ToothSpacing => 2.5f;
+	static float ThornSpacing => 3.5f;
+	static float SegmentLength => 3f;
+	static int MaxDamage => 4;
+
+	// 0..1: how locked on it is -- the eye irising down and the armor seams lighting through the windup and the
+	// burst, easing off during the recovery.
+	float Focus()
+	{
+		if (state != State.Hunting)
+			return 0;
+		var phase = stateTimer % HuntCycle;
+		return phase < HuntWindup ? phase / HuntWindup
+			: phase < HuntWindup + HuntBurst ? 1
+			: 1 - (phase - HuntWindup - HuntBurst) / HuntRecover;
+	}
+
+	// The surface or NCA texture over the fills, laid out over the rest pose (NeuralSize at NeuralOrigin, scaled
+	// like everything else so a material position is a real pixel).
+	RigSkin Skin(PenPass pass)
+	{
+		var normals = pass == PenPass.Normals;
+		if (pass is not (PenPass.Color or PenPass.Normals))
+			return default;
+		var (size, origin) = (((Vector2)NeuralSize * Scale).RoundToPoint2(), ((Vector2)NeuralOrigin * Scale).RoundToPoint2());
+		if (SkinMode == RigSkinMode.Surface && Assets.GetSurface(SurfaceId) is { } material)
+			return new(material, null, 1, normals, size, origin, Position, Time.SecondsF);
+		if (SkinMode == RigSkinMode.NCA && neuralSkin != null)
+			return new(null, normals ? neuralSkin.OutputNormalTexture : neuralSkin.OutputTexture,
+				normals ? Neural.NeuralNormalAmount : Neural.NeuralColorAmount, normals, size, origin, Position, Time.SecondsF);
+		return default;
+	}
+
+	// Cables and a red tendon strung from the body to the armor and the knees, behind everything: they flex as
+	// the parts spring around, and fill the gaps between plates with machinery instead of background.
+	void DrawCables(Pen pen, Vector2 center)
+	{
+		var sag = surface.TowardSurface * 1.5f * Scale;
+		var cable = Color.Lerp(MetalEdgeColor, Color.Black, 0.35f);
+		var tendon = Color.Lerp(EyeColor, Color.Black, 0.45f);
+		var along = surface.Tangent * 1.5f * Scale;
+		for (var i = 4; i < parts.Length; i++)
+		{
+			var to = parts[i].Position - Position;
+			pen.Cable(center + along, to + along, sag, 1, cable);
+			pen.Cable(center - along, to - along, sag * 1.6f, 1, i == 4 ? tendon : cable);
+		}
+		if (state != State.Dying)
+			for (var i = 0; i < legs.Length; i++)
+				pen.Cable(center, parts[i].Position - Position, sag * 0.6f, 1, (i & 1) == 0 ? cable : tendon);
+	}
+
+	void DrawLeg(Pen pen, int index)
+	{
+		var hip = Hip(index) - Position;
+		var knee = parts[index].Position - Position;
+		var foot = legs[index].Foot - Position;
+		var rest = new Vector2((index - 1.5f) * 9, -4) * Scale;
+		pen.Tube(hip, knee, 3.5f * Scale, rest, MetalColor, MetalEdgeColor, SegmentLength);
+		pen.Tube(knee, foot, 3f * Scale, rest + new Vector2(0, 6 * Scale), MetalColor, MetalEdgeColor, SegmentLength);
+		pen.Ball(knee, 1.9f * Scale, rest, MetalColor, MetalEdgeColor);
+
+		// Thorns along the upper leg's back, facing away from the surface it clings to.
+		var across = (knee - hip).Normalized(Vector2.UnitY).TurnLeft();
+		if (Vector2.Dot(across, surface.TowardSurface) > 0)
+			across = -across;
+		var edge = across * 1.75f * Scale;
+		pen.Teeth(hip + edge, knee + edge, across, ToothSize * 0.75f, ThornSpacing, MetalEdgeColor);
+
+		var direction = (foot - knee).Normalized(surface.TowardSurface);
+		var side = new Vector2(-direction.Y, direction.X);
+		var claw = direction * 2.5f * Scale;
+		pen.Facet(foot - side * Scale, foot + claw + side * 2 * Scale, foot + side * 0.3f * Scale, MetalEdgeColor, side * 0.5f);
+		pen.Facet(foot + side * Scale, foot + claw - side * 2 * Scale, foot - side * 0.3f * Scale, MetalEdgeColor, -side * 0.5f);
+	}
+
+	void DrawPart(Pen pen, int index, float glow)
 	{
 		var part = parts[index];
-		var half = index < 4 ? new Vector2(3.8f, 2.2f) : new Vector2(5.2f, 3.4f);
-		half *= Scale;
+		var half = (index < 4 ? new Vector2(3.8f, 2.2f) : new Vector2(5.2f, 3.4f)) * Scale;
 		Span<Vector2> vertices = stackalloc Vector2[PlateVertexCount];
-		PartVertices(part, half, index, vertices, world: false);
-
-		if (shadow)
-		{
-			DrawPolygon(batcher, vertices, tint);
-			return;
-		}
-
-		var plateColor = Color.Lerp(MetalColor, MetalEdgeColor, 0.05f + ShapeUnit(index, 8) * 0.12f);
-		DrawPolygon(batcher, vertices, plateColor);
-		if (sourceSurface != null && SkinMode == RigSkinMode.Surface)
-			DrawSurfacePlate(batcher, sourceSurface, part, half, index, vertices, 1);
-		if (neuralTexture != null)
-			DrawNeuralPlate(batcher, neuralTexture, index, half, vertices,
-				plateColor * Neural.NeuralColorAmount);
-
-		var edge = MetalEdgeColor;
-		for (var i = 0; i < vertices.Length; i++)
-			batcher.Line(vertices[i], vertices[(i + 1) % vertices.Length], 1.6f * Scale, edge);
-		var highlight = Color.Lerp(plateColor, Color.White, 0.28f);
-		batcher.Line(vertices[1], vertices[2], 0.7f * Scale, highlight);
-		if (index >= 4)
-		{
-			var center = PolygonCenter(vertices);
-			var rivet = Calc.AngleToVector(part.Angle) * half.X * 0.38f;
-			batcher.Circle(center + rivet, 0.7f * Scale, 6, edge);
-		}
-	}
-
-	void PartVertices(Part part, Vector2 half, int index, Span<Vector2> vertices, bool world)
-	{
-		var center = world ? part.Position : part.Position - Position;
+		Span<Vector2> material = stackalloc Vector2[PlateVertexCount];
 		PlateAxes(index, part.Angle, half, out var x, out var y);
-		PlateVertices(index, center, x, y, vertices);
+		PlateVertices(index, part.Position - Position, x, y, vertices);
+		PlateAxes(index, 0, half, out var restX, out var restY);
+		PlateVertices(index, PlateMaterialCenter(index) * Scale, restX, restY, material);
+
+		// Every hit bites a chip out of a corner and leaves a crack running in from it.
+		var center = Pen.Center(vertices);
+		var materialCenter = Pen.Center(material);
+		Span<int> chipped = stackalloc int[MaxDamage];
+		for (var d = 0; d < part.Damage; d++)
+		{
+			var corner = chipped[d] = (int)(ShapeUnit(index, 40 + d) * PlateVertexCount) % PlateVertexCount;
+			var bite = MathF.Min(0.4f, ChipDepth / MathF.Max(Vector2.Distance(vertices[corner], center), 0.01f));
+			vertices[corner] = Vector2.Lerp(vertices[corner], center, bite);
+			material[corner] = Vector2.Lerp(material[corner], materialCenter, bite);
+		}
+
+		pen.Plate(vertices, material, Color.Lerp(MetalColor, MetalEdgeColor, 0.05f + ShapeUnit(index, 8) * 0.12f), MetalEdgeColor);
+
+		// Panel seams inset from some edges, lighting up as it locks on; rivet rows along the others.
+		var seamColor = Color.Lerp(MetalEdgeColor, EyeGlowColor, glow * 0.6f);
+		for (var i = 0; i < vertices.Length; i++)
+		{
+			var a = Inset(vertices[i], center, PanelInset);
+			var b = Inset(vertices[(i + 1) % vertices.Length], center, PanelInset);
+			if (ShapeUnit(index, 20 + i) < 0.5f)
+			{
+				pen.Groove(a, b, 1, seamColor);
+				pen.GlowLine(a, b, 1, EyeGlowColor * glow);
+			}
+			else
+				for (var at = RivetSpacing * 0.5f; at < Vector2.Distance(a, b); at += RivetSpacing)
+					pen.Rivet(a + (b - a).Normalized() * at, MetalEdgeColor);
+		}
+		for (var d = 0; d < part.Damage; d++)
+			pen.Groove(vertices[chipped[d]], Vector2.Lerp(vertices[chipped[d]], center, 0.55f), 1, Color.Lerp(MetalEdgeColor, Color.Black, 0.4f));
+		if (index < 4)
+			return;
+
+		// Armor: a serrated outer edge, and a bank of vents that grows with the plate.
+		var outward = Vector2.Normalize(part.Position - bodyPosition + surface.Tangent * 0.01f);
+		var best = 0;
+		for (var i = 1; i < vertices.Length; i++)
+			if (Vector2.Dot(Pen.Outward(vertices[i], vertices[(i + 1) % vertices.Length], center), outward) >
+				Vector2.Dot(Pen.Outward(vertices[best], vertices[(best + 1) % vertices.Length], center), outward))
+				best = i;
+		var (from, to) = (vertices[best], vertices[(best + 1) % vertices.Length]);
+		pen.Teeth(from, to, Pen.Outward(from, to, center), ToothSize, ToothSpacing, MetalEdgeColor);
+
+		var (along, slat) = (x.Normalized(), y.Normalized() * MathF.Min(y.Length() * 0.45f, 3));
+		var vents = Math.Clamp((int)(x.Length() / 3), 2, 6);
+		for (var v = 0; v < vents; v++)
+		{
+			var at = center + along * (v - (vents - 1) * 0.5f) * 2 - outward * x.Length() * 0.2f;
+			pen.Groove(at - slat, at + slat, 1, seamColor);
+		}
 	}
+
+	static Vector2 Inset(Vector2 vertex, Vector2 center, float pixels)
+		=> Vector2.Lerp(vertex, center, MathF.Min(0.6f, pixels / MathF.Max(Vector2.Distance(vertex, center), 0.01f)));
 
 	void PlateAxes(int index, float angle, Vector2 half, out Vector2 x, out Vector2 y)
 	{
@@ -826,133 +915,35 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	float ShapeSigned(int index, int salt) => ShapeUnit(index, salt) * 2 - 1;
 
-	static Vector2 PolygonCenter(ReadOnlySpan<Vector2> vertices)
-	{
-		var center = Vector2.Zero;
-		for (var i = 0; i < vertices.Length; i++)
-			center += vertices[i];
-		return center / vertices.Length;
-	}
-
-	static void DrawPolygon(Batcher batcher, ReadOnlySpan<Vector2> vertices, Color color)
-	{
-		var center = PolygonCenter(vertices);
-		for (var i = 0; i < vertices.Length; i++)
-			batcher.Triangle(center, vertices[i], vertices[(i + 1) % vertices.Length], color);
-	}
-
-	void DrawSurfacePlate(Batcher batcher, Surface surfaceMaterial, Part part, Vector2 half, int index,
-		ReadOnlySpan<Vector2> vertices, float opacity, bool normals = false)
-	{
-		Span<Vector2> world = stackalloc Vector2[PlateVertexCount];
-		PartVertices(part, half, index, world, world: true);
-		var center = PolygonCenter(vertices);
-		var worldCenter = PolygonCenter(world);
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[PlateVertexCount * 3];
-		for (var i = 0; i < vertices.Length; i++)
-		{
-			var at = i * 3;
-			triangles[at] = new(center, worldCenter);
-			triangles[at + 1] = new(vertices[i], world[i]);
-			triangles[at + 2] = new(vertices[(i + 1) % vertices.Length], world[(i + 1) % vertices.Length]);
-		}
-		if (normals)
-			surfaceMaterial.RenderNormals(batcher, triangles, Time.SecondsF);
-		else
-			surfaceMaterial.Render(batcher, triangles, Time.SecondsF, opacity);
-	}
-
-	void DrawNeuralPlate(Batcher batcher, Texture texture, int index, Vector2 half,
-		ReadOnlySpan<Vector2> vertices, Color color)
-	{
-		var materialCenter = PlateMaterialCenter(index);
-		PlateAxes(index, 0, half, out var x, out var y);
-		Span<Vector2> uv = stackalloc Vector2[PlateVertexCount];
-		PlateVertices(index, materialCenter, x, y, uv);
-		var center = PolygonCenter(vertices);
-		var centerUV = NeuralUV(materialCenter);
-		for (var i = 0; i < vertices.Length; i++)
-			batcher.Triangle(texture, center, vertices[i], vertices[(i + 1) % vertices.Length],
-				centerUV, NeuralUV(uv[i]), NeuralUV(uv[(i + 1) % vertices.Length]), color);
-	}
-
 	static Vector2 PlateMaterialCenter(int index) => index < 4
 		? new Vector2((index - 1.5f) * 6.5f, -6.5f + (index & 1) * 1.5f)
 		: new Vector2(index == 4 ? -6 : 6, -BodyHeight);
 
-	void DrawSurfaceCircle(Batcher batcher, Surface surfaceMaterial, Vector2 center, float radius,
-		Vector2 worldCenter, bool normals = false)
-	{
-		const int steps = 16;
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[steps * 3];
-		var previous = center + Vector2.UnitX * radius;
-		var previousWorld = worldCenter + Vector2.UnitX * radius;
-		for (var i = 1; i <= steps; i++)
-		{
-			var direction = Calc.AngleToVector(i / (float)steps * MathF.Tau);
-			var next = center + direction * radius;
-			var nextWorld = worldCenter + direction * radius;
-			var at = (i - 1) * 3;
-			triangles[at] = new(center, worldCenter);
-			triangles[at + 1] = new(previous, previousWorld);
-			triangles[at + 2] = new(next, nextWorld);
-			previous = next;
-			previousWorld = nextWorld;
-		}
-		if (normals)
-			surfaceMaterial.RenderNormals(batcher, triangles, Time.SecondsF);
-		else
-			surfaceMaterial.Render(batcher, triangles, Time.SecondsF);
-	}
-
-	static void DrawNeuralCircle(Batcher batcher, Texture texture, Vector2 center, float radius,
-		Vector2 uvCenter, Color color)
-	{
-		const int steps = 16;
-		var uvRadius = new Vector2(radius) / (Vector2)NeuralSize;
-		var previous = center + Vector2.UnitX * radius;
-		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= steps; i++)
-		{
-			var direction = Calc.AngleToVector(i / (float)steps * MathF.Tau);
-			var next = center + direction * radius;
-			var nextUV = uvCenter + direction * uvRadius;
-			batcher.Triangle(texture, center, previous, next, uvCenter, previousUV, nextUV, color);
-			previous = next;
-			previousUV = nextUV;
-		}
-	}
-
-	static Vector2 NeuralUV(Vector2 position) => (position - (Vector2)NeuralOrigin) / (Vector2)NeuralSize;
-
-	void DrawClaw(Batcher batcher, Vector2 knee, Vector2 foot, Color outline, Color fill)
-	{
-		var direction = (foot - knee).Normalized(surface.TowardSurface);
-		var side = new Vector2(-direction.Y, direction.X);
-		batcher.Line(foot, foot + direction * 2.5f * Scale + side * 2 * Scale, 2, outline);
-		batcher.Line(foot, foot + direction * 2.5f * Scale - side * 2 * Scale, 2, outline);
-		batcher.Circle(foot, 1.3f * Scale, 8, fill);
-	}
-
-	void DrawEye(Batcher batcher, bool emissive)
+	// A camera-iris eye: blades close down to a pinhole as it locks on, so you see it focus on you before it lunges.
+	void DrawEye(Pen pen, Vector2 body, float focus)
 	{
 		var intensity = Math.Clamp(EyeIntensity + eyeHitFlash, 0, 1.4f);
 		if (intensity <= 0)
 			return;
-		var center = bodyPosition - Position;
+		var center = body;
 		if (Game.GetFirst<Player>() is { } player)
 			center += ((Vector2)player.Position - bodyPosition).Normalized() * 1.1f * Scale;
-		var color = emissive ? EyeGlowColor : EyeColor;
-		var radius = (emissive ? 2.6f : 1.8f) * Scale * MathF.Min(1.2f, intensity);
-		batcher.Circle(center, radius, 12, color * MathF.Min(1, intensity));
-		if (!emissive)
-			batcher.Circle(center - Vector2.One * 0.45f * Scale, 0.55f * Scale, 8, Color.White * MathF.Min(1, intensity));
-	}
+		var strength = MathF.Min(1, intensity);
+		var radius = 3.4f * Scale;
+		var open = radius * (0.85f - 0.6f * focus);
+		pen.Dot(center, radius, EyeColor * strength);
+		pen.Dot(center - Vector2.One * 0.45f * Scale, 0.55f * Scale, Color.White * strength);
+		pen.Glow(center, MathF.Max(open, 1), EyeGlowColor * strength);
 
-	public override void RenderEmissive(Batcher batcher)
-	{
-		if (!SpriteBlinkHidden)
-			DrawEye(batcher, emissive: true);
+		var blades = Math.Clamp((int)(radius * 1.6f), 5, 10);
+		var blade = Color.Lerp(MetalEdgeColor, Color.Black, 0.25f);
+		for (var i = 0; i < blades; i++)
+		{
+			var (a, b) = (i * MathF.Tau / blades + bodyAngle, (i + 1) * MathF.Tau / blades + bodyAngle);
+			var tip = center + Calc.AngleToVector(a + 1.4f) * open;
+			pen.Facet(center + Calc.AngleToVector(a) * radius, center + Calc.AngleToVector(b) * radius, tip, blade,
+				-Calc.AngleToVector((a + b) * 0.5f) * 0.45f);
+		}
 	}
 
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
@@ -961,46 +952,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		if (intensity > 0.05f)
 			action(bodyPosition, EyeLightRadius * Scale, EyeLightIntensity * intensity, 7 * Scale, EyeGlowColor);
 	}
-
-	public override void RenderNormals(Batcher batcher)
-	{
-		if (SpriteBlinkHidden)
-			return;
-		var flat = new Color(0x8080ff);
-		var surfaceMaterial = SkinMode == RigSkinMode.Surface ? Assets.GetSurface(SurfaceId) : null;
-		var neuralNormals = SkinMode == RigSkinMode.NCA ? neuralSkin?.OutputNormalTexture : null;
-		if (neuralNormals != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		Span<Vector2> vertices = stackalloc Vector2[PlateVertexCount];
-		if (state != State.Dying)
-			for (var i = 0; i < legs.Length; i++)
-			{
-				batcher.Line(Hip(i) - Position, parts[i].Position - Position, 3.5f * Scale, flat);
-				batcher.Line(parts[i].Position - Position, legs[i].Foot - Position, 3.5f * Scale, flat);
-			}
-		for (var i = 0; i < parts.Length; i++)
-		{
-			var half = (i < 4 ? new Vector2(3.8f, 2.2f) : new Vector2(5.2f, 3.4f)) * Scale;
-			PartVertices(parts[i], half, i, vertices, world: false);
-			DrawPolygon(batcher, vertices, flat);
-			if (surfaceMaterial != null)
-				DrawSurfacePlate(batcher, surfaceMaterial, parts[i], half, i, vertices, 1, normals: true);
-			else if (neuralNormals != null)
-				DrawNeuralPlate(batcher, neuralNormals, i, half, vertices, Color.White * Neural.NeuralNormalAmount);
-		}
-		RenderSphereNormals(batcher, bodyPosition - Position, 6.2f * Scale, 18);
-		if (surfaceMaterial != null)
-			DrawSurfaceCircle(batcher, surfaceMaterial, bodyPosition - Position, 4.8f * Scale, bodyPosition,
-				normals: true);
-		else if (neuralNormals != null)
-			DrawNeuralCircle(batcher, neuralNormals, bodyPosition - Position, 4.8f * Scale,
-				NeuralUV(new Vector2(0, -BodyHeight)), Color.White * Neural.NeuralNormalAmount);
-		if (neuralNormals != null)
-			batcher.PopSampler();
-	}
-
-	static void RenderSphereNormals(Batcher batcher, Vector2 center, float radius, int steps)
-		=> RigDraw.DrawSphereNormals(batcher, center, radius, steps);
 
 	static float AngleDelta(float from, float to)
 	{

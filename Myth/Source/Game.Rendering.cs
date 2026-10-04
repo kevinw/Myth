@@ -2525,7 +2525,7 @@ public sealed partial class GameView
 	// --- view state moved from Game.cs (fields/consts/caches) ---
 	// Fullscreen tuning display: 3008x1692 logical points at 2x backing scale.
 	static Vector2 RenderTargetShakeReferenceSize => new(6016, 3384);
-	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
+	internal static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
 	static readonly BlendMode ColorFieldCopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	// Stir strokes keep the strongest of whatever they overlap; see DrawPixelSortStir.
 	static readonly BlendMode PixelSortStirBlend = new(BlendOp.Max, BlendFactor.One, BlendFactor.One);

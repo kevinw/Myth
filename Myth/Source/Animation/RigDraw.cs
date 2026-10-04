@@ -79,6 +79,27 @@ readonly record struct RigSkin(Surface? Surface, Texture? Texture, float Amount,
 	public void Joint(Batcher batcher, Vector2 center, float radius, Vector2 uvCenter, Color color)
 		=> Circle(batcher, center, radius, uvCenter, new Vector2(radius) / (Vector2)Size, color, RigDraw.JointSteps(radius));
 
+	// A convex polygon fanned from its center, each vertex at its own uv.
+	public void Polygon(Batcher batcher, ReadOnlySpan<Vector2> vertices, ReadOnlySpan<Vector2> uvs, Color color)
+	{
+		var (center, uvCenter) = (Pen.Center(vertices), Pen.Center(uvs));
+		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[Surface != null ? vertices.Length * 3 : 0];
+		for (var i = 0; i < vertices.Length; i++)
+		{
+			var next = (i + 1) % vertices.Length;
+			if (Surface != null)
+			{
+				triangles[i * 3] = new(center, World(uvCenter));
+				triangles[i * 3 + 1] = new(vertices[i], World(uvs[i]));
+				triangles[i * 3 + 2] = new(vertices[next], World(uvs[next]));
+			}
+			else if (Texture != null)
+				batcher.Triangle(Texture, center, vertices[i], vertices[next], uvCenter, uvs[i], uvs[next], color * Amount);
+		}
+		if (Surface != null)
+			Render(batcher, triangles);
+	}
+
 	public void Triangle(Batcher batcher, Vector2 a, Vector2 b, Vector2 c, Vector2 uvA, Vector2 uvB, Vector2 uvC)
 	{
 		if (Surface != null)
@@ -336,7 +357,7 @@ static class RigDraw
 		batcher.Vertices(verts, idxs);
 	}
 
-	static Color NormalColor(Vector2 lateral)
+	internal static Color NormalColor(Vector2 lateral)
 	{
 		var length = lateral.Length();
 		if (length > 0.999f)
