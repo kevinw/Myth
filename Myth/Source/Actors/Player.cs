@@ -786,6 +786,8 @@ public abstract partial class Pawn : Actor
 
 	protected void NormalState()
 	{
+		if (TryWallDive())
+			return;
 		if (input.MoveY < 0 && TryGrabRope())
 			return;
 
