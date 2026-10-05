@@ -41,6 +41,7 @@ public readonly struct NeuralWeightsContent : IContentKind
 	public static ContentRef<NeuralWeightsContent> RigDefault => new("rock035_pair_circular_screen.bin");
 	public static ContentRef<NeuralWeightsContent> AlienBugDefault => new("bubbles_circular.bin");
 	public static ContentRef<NeuralWeightsContent> MagneticCrawlerDefault => new("pseudocamo_tight_converge.bin");
+	public static ContentRef<NeuralWeightsContent> MenuSelection => new("rock035_pair_circular_screen.bin");
 }
 
 public readonly struct NcaWeightsContent : IContentKind

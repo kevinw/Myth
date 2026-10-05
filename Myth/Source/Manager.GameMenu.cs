@@ -357,6 +357,8 @@ public partial class Manager
 			var visible = menuImgui.BeginBatchAt(Rect.Between(buttonMin, buttonMax), out var labelBatch, out var bounds);
 			if (visible)
 			{
+				if (IsItemFocused() && MenuSelectionTexture()?.OutputTexture is { } selection)
+					labelBatch.Image(selection, Vector2.Zero, Color.White * (MenuSelectionOpacity * gameMenuLayoutEase));
 				var x = font['x'];
 				var inkCenter = font.Ascent + x.Offset.Y + x.Subtexture.Height * 0.5f;
 				labelBatch.Text(font, label, new Vector2(GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * (gameMenuLayoutEase * (enabled ? 1f : 0.4f)));
@@ -389,6 +391,8 @@ public partial class Manager
 			if (menuFocusedIndex >= 0)
 				MenuAudioEvent("menu/select");
 			menuFocusedIndex = menuButtonIndex;
+			// Regrow from the seed so the texture blooms into each newly selected button.
+			menuSelectionTexture?.SimulateFromSeed(MenuSelectionSeedSteps);
 		}
 
 		menuButtonIndex++;
@@ -430,6 +434,28 @@ public partial class Manager
 			draw.AddRectFilled(min, min + SliderBlockSize, ColorConvertFloat4ToU32(color));
 		}
 		return changed != value;
+	}
+
+	Game? menuSelectionRig;
+	NeuralTextureActor? menuSelectionTexture;
+	static float MenuSelectionOpacity => 0.6f;
+	static int MenuSelectionSeedSteps => 24;
+
+	// One button-sized neural texture in its own offscreen Game, kept for the session and stepped
+	// by BuildGameMenu; sized for the widest page's buttons and cropped by the button's scissor.
+	NeuralTextureActor? MenuSelectionTexture()
+	{
+		if (menuSelectionTexture != null)
+			return menuSelectionTexture;
+		menuSelectionRig = new Game(this, new Room(Point2.Zero, new Point2(Game.Columns, Game.Rows)),
+			audioEventsEnabled: false, spawnBud: false, enableParticles: false);
+		return menuSelectionTexture = menuSelectionRig.Create<NeuralTextureActor>(Point2.Zero, it =>
+		{
+			it.Size = new Point2(100, (int)MenuButtonHeight);
+			it.WeightsFile = NeuralWeightsContent.MenuSelection;
+			it.PrewarmSteps = MenuSelectionSeedSteps;
+			it.AutoPerturb = false;
+		});
 	}
 
 	static Vector2 SliderBlockSize => new(3, 5);
@@ -509,6 +535,8 @@ public partial class Manager
 
 		if (menuFocusDirty)
 			menuFocusedIndex = -1;
+		if (GameMenuOpen && menuSelectionRig != null)
+			NeuralTextureActor.StepAll(menuSelectionRig);
 
 		menuImgui.BeginLayout();
 		PushMenuStyle();
