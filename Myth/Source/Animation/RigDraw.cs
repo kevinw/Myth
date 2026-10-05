@@ -295,14 +295,18 @@ static class RigDraw
 
 	public static void DrawCylinderNormals(Batcher batcher, Vector2 from, Vector2 to, float width,
 		float roundness, float irregularity, uint seed)
+		=> DrawCylinderNormals(batcher, from, to, width, width, roundness, irregularity, seed);
+
+	// Tapered: `fromWidth` at one end, `toWidth` at the other.
+	public static void DrawCylinderNormals(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,
+		float roundness, float irregularity, uint seed)
 	{
 		var along = (to - from).Normalized(Vector2.UnitY);
 		var across = along.TurnLeft();
-		var halfWidth = width * 0.5f;
-		var leftFrom = from + across * halfWidth;
-		var leftTo = to + across * halfWidth;
-		var rightFrom = from - across * halfWidth;
-		var rightTo = to - across * halfWidth;
+		var leftFrom = from + across * fromWidth * 0.5f;
+		var leftTo = to + across * toWidth * 0.5f;
+		var rightFrom = from - across * fromWidth * 0.5f;
+		var rightTo = to - across * toWidth * 0.5f;
 		var startTilt = along * (HashSigned(seed) * irregularity * 0.28f);
 		var endTilt = along * (HashSigned(seed ^ 0xc2b2ae35u) * irregularity * 0.28f);
 		var centerFrom = NormalColor(startTilt * 0.32f);

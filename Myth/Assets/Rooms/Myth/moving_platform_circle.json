@@ -131,7 +131,7 @@
       "Size": [24, 16],
       "Speed": 35,
       "CircleCenter": [320, 184],
-      "Material": "stone-dual"
+      "Material": "blueboard-dual"
     },
     {
       "Id": "116225dd2a12f166",
@@ -145,10 +145,10 @@
       "Mode": "Circle",
       "CircleCenter": [320, 184],
       "Size": [25, 16],
-      "Material": "stone-dual",
       "StartFriction": 14.753,
       "WaitTime": 5,
-      "Speed": 21.421
+      "Speed": 21.421,
+      "Material": "blueboard-dual"
     },
     {
       "Id": "3a0754e306dca549",
