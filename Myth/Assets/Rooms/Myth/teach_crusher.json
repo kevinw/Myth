@@ -128,6 +128,17 @@
       "Id": "358be7053970c18e",
       "Type": "Blob",
       "Position": [219, 151]
+    },
+    {
+      "Id": "2e26ef9c44081069",
+      "Type": "CurveRibbon",
+      "Position": [216, 53],
+      "Style": "cable",
+      "Tint": "A37C7C",
+      "Points": [[-179, -49],[-176, -8],[-176, 104],[-128, 112]
+      ],
+      "Bulge": 8,
+      "Roundness": 1
     }
   ]
 }

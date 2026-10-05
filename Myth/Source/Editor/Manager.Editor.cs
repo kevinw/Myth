@@ -1066,11 +1066,20 @@ public partial class Manager
 	const float BASE_EDITOR_CAM_MOVE_MULTIPLIER = 0.7f;
 	const float EDITOR_CAM_MOVE_MULTIPLIER_SPEED_UP = 1.2f;
 	float editorCameraMoveMultiplier = BASE_EDITOR_CAM_MOVE_MULTIPLIER;
+	static float EditorStickPanSpeed => 900f;
+	static float EditorStickPanEase => 10f;
+	Vector2 editorStickPan;
 
 	void UpdateEditorNavigation()
 	{
 		if (CommandModifierDown)
 			return;
+
+		// Right stick pans at a screen-space speed, squared for fine control near center and eased so it
+		// glides in and out rather than snapping.
+		var stick = controls.Look.Value;
+		editorStickPan = Vector2.Lerp(editorStickPan, stick * stick.Length() * EditorStickPanSpeed, 1 - MathF.Exp(-EditorStickPanEase * Time.Delta));
+		editorCamera += editorStickPan * Time.Delta / editorZoom;
 
 		var keyMove = WasdDirection(down: true);
 		// Keyboard Shift + WASD moves the camera around incrementally.
@@ -2330,7 +2339,7 @@ public partial class Manager
 			if ((DragKind is EditorDragKind.RoomActor or EditorDragKind.ActorPathPoint or EditorDragKind.ActorGizmo or EditorDragKind.ActorResize) && !selected)
 				continue;
 
-			var hovered = i == hoveredIndex;
+			var hovered = i == hoveredIndex || i == actorListHoveredIndex;
 			var bounds = EditorRoomActorBounds(room, room.Actors[i]);
 
 #if false
@@ -4995,6 +5004,8 @@ public partial class Manager
 			}
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
+			else if (!editingRoomGeometry && actorListHoveredIndex >= 0 && actorListHoveredIndex < editing.Actors.Count)
+				batcher.RectLine(EditorRoomActorBounds(editing, editing.Actors[actorListHoveredIndex]).Inflate(gridWeight * 2), gridWeight * 2, Color.White);
 			if (maskPaintActorId != null)
 			{
 				var brushColor = maskPaintSlot < 0 || Input.Mouse.RightDown ? new Color(255, 90, 90, 255) : Color.White;

@@ -867,7 +867,7 @@ public partial class Game
 
 	static readonly List<Actor> solidRangeCandidates = [];
 
-	// The stretches of `band` that are actually on solid -- room geometry plus solid actors -- as sub-rects of
+	// The stretches of `band` that are actually on solid -- room geometry plus solid and jumpthru actors -- as sub-rects of
 	// it, in order along its long axis. Anything attached to `actor` rides with it, so it isn't contact, the same
 	// rule that decides what stops the thing in the first place (see Crusher.Clear). `into` is the caller's, so a
 	// reusable scratch list keeps this allocation-free.
@@ -883,7 +883,7 @@ public partial class Game
 		solidRangeCandidates.Clear();
 		foreach (var other in Actors)
 			if (other != actor && other is not Grid && !destroying.Contains(other) && other.Room == actorRoom &&
-				other.Mask.Has(Actor.Masks.Solid) && !other.IsAttachedTo(actor) && other.Hitbox.Overlaps(band - other.Position))
+				other.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru) && !other.IsAttachedTo(actor) && other.Hitbox.Overlaps(band - other.Position))
 				solidRangeCandidates.Add(other);
 
 		// Walk the long axis a pixel at a time. Exact rather than tile-wise: a slope only bites across part of

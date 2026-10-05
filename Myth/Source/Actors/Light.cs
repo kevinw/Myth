@@ -139,6 +139,8 @@ public class Light : Actor, IHitByHitbox
 
 	static float BuriedRadiusScale => 0.3f;
 	static float BuriedIntensityScale => 0.35f;
+	static float BuriedSpriteAlpha => 0f;
+	float SpriteAlpha => Calc.Lerp(1, BuriedSpriteAlpha, buried);
 	static int BuriedClearance => 32; // px of open space ahead the light needs to be fully itself
 	float buried; // 0..1: how little room there is ahead of the light
 
@@ -261,26 +263,26 @@ public class Light : Actor, IHitByHitbox
 	public override void Render(Batcher batcher)
 	{
 		if (DrawSprite && Enabled)
-			RenderSpriteSubtexture(batcher, SpriteTint);
+			RenderSpriteSubtexture(batcher, SpriteTint * SpriteAlpha);
 	}
 
 	public override void RenderNormals(Batcher batcher)
 	{
 		if (DrawSprite && Enabled)
-			base.RenderNormals(batcher);
+			RenderSpriteSubtexture(batcher, SubtextureType.Normals, Color.White * SpriteAlpha);
 	}
 
 	public override void RenderEmissive(Batcher batcher)
 	{
 		if (DrawSprite && Enabled)
 			RenderSpriteSubtexture(batcher, SubtextureType.Emissive,
-				Color.White * Math.Clamp(1 + (RenderScale / FlickerBaseScale - 1) * 1.5f, 0, 1));
+				Color.White * Math.Clamp(1 + (RenderScale / FlickerBaseScale - 1) * 1.5f, 0, 1) * SpriteAlpha);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)
 	{
 		if (DrawSprite && Enabled)
-			base.RenderReflection(batcher, Multiply(color, SpriteTint));
+			base.RenderReflection(batcher, Multiply(color, SpriteTint) * SpriteAlpha);
 	}
 
 }

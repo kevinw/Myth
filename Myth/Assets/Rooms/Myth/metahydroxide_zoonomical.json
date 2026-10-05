@@ -7,7 +7,7 @@
   "ambientIntensity": 0.377,
   "lightNoise": 0.547,
   "sporeFogStrength": 0.732,
-  "reverb": 0.843,
+  "reverb": 0.832,
   "ditherStrength": 0.147,
   "sun": {
     "strength": 0,
@@ -51,11 +51,11 @@
     "000000000000000000000000000000000000000000000HHH",
     "0000000000000000000000000000000000000000000HHHHH",
     "0000000000000000000000000000000000000000000HHHHH",
-    "0000000000000000000000000000000000000000000HHHHH",
     "000000000000000000000000000000000000000000HHHHHH",
-    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
-    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
-    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+    "00HHHHHHHHHHHHHHHHHHHH000000HHHHHHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHH0000000000H000000HHHHHHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHH0000000000H000000HHHHHHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHH00000HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
   ],
   "backgroundTiles": [
     "000000000000000000000000000000000000000000000000",
@@ -87,10 +87,12 @@
     "000000000000000000000000##0000000000000000000000",
     "000000000000000000000000##0000000000000000000000",
     "000000000000000000000000##0000000000000000000000",
-    "000000000000000000000000##0000000000000000000000",
-    "000000000000000000000000##0000000000000000000000",
+    "0000000000000000000000#######0000000000000000000",
+    "0000000000000000000000#######0000000000000000000",
     "000000000000000000000000000000000000000000000000",
     "000000000000000000000000000000000000000000000000"
+  ],
+  "breakable": [[21, 30],[21, 31]
   ],
   "actors": [
     {
@@ -208,7 +210,48 @@
     {
       "Id": "9d0407879cb5ef52",
       "Type": "Light",
-      "Position": [201, 212]
+      "Position": [200, 204],
+      "AttachedToActorId": "10ba8c5edd515d86",
+      "AttachmentOffset": [136, 59]
+    },
+    {
+      "Id": "9fcaf149011938ff",
+      "Type": "Light",
+      "Position": [44, 140],
+      "Radius": 141.932,
+      "Intensity": 0.572
+    },
+    {
+      "Id": "0441f31491a093f8",
+      "Type": "Jumpthru",
+      "Position": [174, 232],
+      "Size": [53, 8]
+    },
+    {
+      "Id": "a315f7dee132640c",
+      "Type": "RevealDoor",
+      "Position": [160, 239],
+      "Direction": "Left"
+    },
+    {
+      "Id": "10ba8c5edd515d86",
+      "Type": "CurveRibbon",
+      "Position": [64, 145],
+      "Style": "cable",
+      "Tint": "A37C7C",
+      "Points": [[10, -52],[-14, -44],[2, 4],[16, 80],[40, 120]
+      ]
+    },
+    {
+      "Id": "9395de58943b20b2",
+      "Type": "CurveRibbon",
+      "Position": [253, 171],
+      "Style": "cable",
+      "Tint": "A37C7C",
+      "AttachedToActorId": "10ba8c5edd515d86",
+      "AttachmentOffset": [189, 26],
+      "Points": [[72, -64],[104, -48],[160, -32]
+      ]
     }
   ]
 }

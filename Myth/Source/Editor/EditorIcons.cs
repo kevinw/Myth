@@ -26,6 +26,7 @@ static class EditorIcons
 	public const string Close = "\uf00d";
 	public const string Reset = "\uf0e2";
 	public const string Code = "\uf121";
+	public const string Sitemap = "\uf0e8";
 	public const string Cube = "\uf1b2";
 	public const string Pencil = "\uf040";
 	public const string Sliders = "\uf1de";
@@ -79,6 +80,7 @@ static class EditorIcons
 		0xf09c, 0xf09c,
 		0xf0c4, 0xf0c5,
 		0xf0e2, 0xf0e2,
+		0xf0e8, 0xf0e8,
 		0xf121, 0xf121,
 		0xf185, 0xf187,
 		0xf1b2, 0xf1b2,

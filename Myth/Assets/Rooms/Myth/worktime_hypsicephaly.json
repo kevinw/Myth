@@ -7,7 +7,7 @@
   "ambientIntensity": 0.377,
   "lightNoise": 0.547,
   "sporeFogStrength": 0.732,
-  "reverb": 0.766,
+  "reverb": 0.788,
   "ditherStrength": 0.147,
   "sun": {
     "strength": 0,
@@ -21,6 +21,7 @@
     "foreground": "09c6e5c73bf0f8c9.png"
   },
   "legend": {
+    "C": "crackedcement",
     "D": "solidblockout",
     "H": "sporgy",
     "P": "dirt",
@@ -49,7 +50,7 @@
     "HHH000000000000000000000000000000000HHHH",
     "HHH000000000000000000000000000000000HHHH",
     "HH0000000000000000000000000000000000HHHH",
-    "0000000HHH00000000000000000HHHHH00000000"
+    "0000000HHH00000CCCCCCC00000HHHHH00000000"
   ],
   "backgroundTiles": [
     "0000000000000000000000000000000000000000",
@@ -85,7 +86,9 @@
       "Position": [40, 120],
       "Size": [40, 32],
       "Direction": "Right",
-      "Material": "crackedcement-dual"
+      "Material": "crackedcement-dual",
+      "ReturnDelay": 0.467,
+      "ReturnSpeed": 45.067
     },
     {
       "Id": "8c84e6954503f7ee",
@@ -112,6 +115,27 @@
       "Intensity": 0.313,
       "AttachedToActorId": "0bfb03f4999f2e1b",
       "AttachmentOffset": [19, -3]
+    },
+    {
+      "Id": "a60782c206cb5259",
+      "Type": "CurveRibbon",
+      "Position": [189, 81],
+      "Style": "cable",
+      "Tint": "A37C7C",
+      "Points": [[-192, -32],[-96, -32],[-72, -8],[-112, 16],[-152, 32],[-152, 104]
+      ]
+    },
+    {
+      "Id": "433a40ec08b5344a",
+      "Type": "CurveRibbon",
+      "Position": [159, 93],
+      "Style": "cable",
+      "Tint": "828282",
+      "Width": 4.723,
+      "AttachedToActorId": "61e4a0fd268d81e7",
+      "AttachmentOffset": [108, -35],
+      "Points": [[-40, 88],[-24, 72],[104, 72],[120, 32],[96, 24],[104, 8],[136, 0],[128, -80]
+      ]
     }
   ]
 }

@@ -13,6 +13,12 @@ public partial class Manager
 {
 	const string ActorListDragPayload = "MYTH_ACTOR_LIST";
 	JsonObject? actorListDraggingActor;
+	bool actorListTree = true;
+	int actorListHoveredIndex = -1; // outlined in the world view (DrawRoomActorOverlays)
+
+	static readonly List<int> actorListParents = [];
+	static readonly List<(int Index, int Depth)> actorListRows = [];
+	static readonly List<bool> actorListPlaced = [];
 
 	readonly record struct ActorInstanceSearchResult(string RoomId, string ActorId, string Position, string Modified);
 
@@ -34,15 +40,29 @@ public partial class Manager
 			return;
 		}
 
+		var style = ImGui.GetStyle();
+		if (actorListTree)
+			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
+		if (ImGui.SmallButton(EditorIcons.Sitemap + "##ActorListTree"))
+			actorListTree = !actorListTree;
+		if (actorListTree)
+			ImGui.PopStyleColor();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(actorListTree ? "Flat list" : "Nest attached actors under what they're attached to");
+
+		BuildActorListRows(room);
+		actorListHoveredIndex = -1;
 		var label = new ValueStringBuilder(stackalloc char[128]);
 		var reorderAt = -1;
-		for (var i = 0; i < room.Actors.Count; i++)
+		foreach (var (i, depth) in actorListRows)
 		{
 			var actor = room.Actors[i];
 			label.Clear();
 			label.Append(ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.GetTypeName(actor) ?? "Actor");
 
 			ImGui.PushID(i);
+			if (depth > 0)
+				ImGui.SetCursorPosX(ImGui.GetCursorPosX() + depth * style.IndentSpacing);
 			if (ImGui.Selectable(label.AsSpan(), selectedRoomActorIndex == i))
 			{
 				using (CaptureSelectionUndo("Select Actor"))
@@ -55,8 +75,12 @@ public partial class Manager
 				}
 			}
 
-			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-				TweenEditorCameraToActor(room, i);
+			if (ImGui.IsItemHovered())
+			{
+				actorListHoveredIndex = i;
+				if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+					TweenEditorCameraToActor(room, i);
+			}
 
 			var rowMin = ImGui.GetItemRectMin();
 			var rowMax = ImGui.GetItemRectMax();
@@ -110,6 +134,45 @@ public partial class Manager
 		}
 		if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
 			actorListDraggingActor = null;
+	}
+
+	// Room order, or with the tree on, each actor followed by what's attached to it, depth-first and indented.
+	// Anything whose attachment chain loops never hangs off a root, so it's listed flat at the end.
+	void BuildActorListRows(Room room)
+	{
+		actorListRows.Clear();
+		if (!actorListTree)
+		{
+			for (var i = 0; i < room.Actors.Count; i++)
+				actorListRows.Add((i, 0));
+			return;
+		}
+
+		actorListParents.Clear();
+		actorListPlaced.Clear();
+		foreach (var actor in room.Actors)
+		{
+			var parentId = ActorSpecs.ReadResolvedString(actor, nameof(Actor.AttachedToActorId));
+			actorListParents.Add(string.IsNullOrWhiteSpace(parentId) || FindRoomActorById(room, parentId) is not { } parent
+				? -1 : room.Actors.IndexOf(parent));
+			actorListPlaced.Add(false);
+		}
+
+		for (var i = 0; i < room.Actors.Count; i++)
+			if (actorListParents[i] < 0)
+				AddActorListBranch(i, 0);
+		for (var i = 0; i < room.Actors.Count; i++)
+			if (!actorListPlaced[i])
+				AddActorListBranch(i, 0);
+	}
+
+	static void AddActorListBranch(int index, int depth)
+	{
+		actorListPlaced[index] = true;
+		actorListRows.Add((index, depth));
+		for (var child = 0; child < actorListParents.Count; child++)
+			if (actorListParents[child] == index && !actorListPlaced[child])
+				AddActorListBranch(child, depth + 1);
 	}
 
 	void OpenActorInstanceSearch(Factory.ActorPaletteEntry entry)
