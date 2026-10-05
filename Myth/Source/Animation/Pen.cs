@@ -187,25 +187,29 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 		}
 	}
 
-	// A limb or rod: a cylinder, its outline shading the sides. Its material runs along it from `material`, so a
-	// leg's grit stays put on the leg. `segment` > 0 bands it every that many pixels.
-	public void Tube(Vector2 from, Vector2 to, float width, Vector2 material, Color fill, Color outline, float segment = 0)
+	// A limb or rod: a cylinder tapering from `fromWidth` to `toWidth`, its outline shading the sides. Its material
+	// runs along it from `material`, so a leg's grit stays put on the leg. `segment` > 0 bands it every that many
+	// pixels.
+	public void Tube(Vector2 from, Vector2 to, float fromWidth, float toWidth, Vector2 material, Color fill, Color outline, float segment = 0)
 	{
 		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft() * width * 0.5f;
+		var across = along.TurnLeft() * 0.5f;
 		var length = Vector2.Distance(from, to);
-		ReadOnlySpan<Vector2> quad = [from + across, to + across, to - across, from - across];
-		ReadOnlySpan<Vector2> quadMaterial = [material, material + new Vector2(length, 0), material + new Vector2(length, width), material + new Vector2(0, width)];
+		ReadOnlySpan<Vector2> quad = [from + across * fromWidth, to + across * toWidth, to - across * toWidth, from - across * fromWidth];
+		ReadOnlySpan<Vector2> quadMaterial = [material, material + new Vector2(length, 0), material + new Vector2(length, toWidth), material + new Vector2(0, fromWidth)];
 		if (pass == PenPass.Normals)
 		{
-			RigDraw.DrawCylinderNormals(batcher, from, to, width, Roundness * Flatten, 0, 0);
+			RigDraw.DrawCylinderNormals(batcher, from, to, fromWidth, toWidth, Roundness * Flatten, 0, 0);
 			Print(quad, quadMaterial, Center(quad), Center(quadMaterial), fill);
 		}
 		else
 			Plate(quad, quadMaterial, fill, outline);
 		if (segment > 0)
 			for (var at = segment; at < length - 1; at += segment)
-				Groove(from + along * at + across, from + along * at - across, 1, outline);
+			{
+				var half = across * float.Lerp(fromWidth, toWidth, at / length);
+				Groove(from + along * at + half, from + along * at - half, 1, outline);
+			}
 	}
 
 	// A sagging line -- a cable, a tendon -- hung from `from` to `to`, bowing `sag` at its middle.

@@ -99,8 +99,9 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 	// Shape tweakables, in unscaled pixels (everything below multiplies by Scale).
 	static float UpperLeg => 7f;
 	static float LowerLeg => 8f;
-	static float UpperLegWidth => 3.5f;          // upper/lower widths are the limb's taper
-	static float LowerLegWidth => 3f;
+	static float HipWidth => 3.5f;               // the limb's taper: hip to knee to foot
+	static float KneeWidth => 3.2f;
+	static float FootWidth => 2f;
 	static float KneeLift => 0.5f;               // 0 = knees bend straight out to the side, higher = up and away from the surface
 	static float HipSpan => 9.3f;                // how far apart the outermost hips sit along the body
 	static float StanceInner => 5f;              // innermost foot's distance from center...
@@ -971,16 +972,15 @@ public class MagneticCrawler : Actor, INeuralTextureAgent, IPenDrawn
 		var knee = parts[index].Position - Position;
 		var foot = legs[index].Foot - Position;
 		var rest = new Vector2((index - (legs.Length - 1) * 0.5f) * 27f / (legs.Length - 1), -4) * Scale;
-		pen.Tube(hip, knee, UpperLegWidth * Scale, rest, MetalColor, MetalEdgeColor, SegmentLength);
-		pen.Tube(knee, foot, LowerLegWidth * Scale, rest + new Vector2(0, 6 * Scale), MetalColor, MetalEdgeColor, SegmentLength);
+		pen.Tube(hip, knee, HipWidth * Scale, KneeWidth * Scale, rest, MetalColor, MetalEdgeColor, SegmentLength);
+		pen.Tube(knee, foot, KneeWidth * Scale, FootWidth * Scale, rest + new Vector2(0, 6 * Scale), MetalColor, MetalEdgeColor, SegmentLength);
 		pen.Ball(knee, 1.9f * Scale, rest, MetalColor, MetalEdgeColor);
 
 		// Thorns along the upper leg's back, facing away from the surface it clings to.
 		var across = (knee - hip).Normalized(Vector2.UnitY).TurnLeft();
 		if (Vector2.Dot(across, surface.TowardSurface) > 0)
 			across = -across;
-		var edge = across * UpperLegWidth * 0.5f * Scale;
-		pen.Teeth(hip + edge, knee + edge, across, ToothSize * 0.75f, ThornSpacing, MetalEdgeColor);
+		pen.Teeth(hip + across * HipWidth * 0.5f * Scale, knee + across * KneeWidth * 0.5f * Scale, across, ToothSize * 0.75f, ThornSpacing, MetalEdgeColor);
 
 		DrawClaws(pen, index, knee, foot);
 		DrawPart(pen, index, glow);
