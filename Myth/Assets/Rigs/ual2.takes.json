@@ -1,4 +1,21 @@
 {
+  "ArmSwing": {
+    "Clip": "Melee_Hook",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 8,
+    "ArmWidthScale": 1.15,
+    "HandWidthScale": 1.2
+  },
+  "Death": {
+    "Clip": "Hit_Knockback",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false
+  },
   "EyeLaserCharge": {
     "Clip": "Eye_Laser_Attack",
     "Start": 0,
@@ -23,10 +40,9 @@
     "Speed": 1,
     "FootIK": true
   },
-  "KneelDown": {
-    "Clip": "Kneeling_Down",
+  "FloatingFlashLand": {
+    "Clip": "NinjaJump_Land",
     "Start": 0,
-    "End": 2.8,
     "Loop": false,
     "Speed": 1,
     "FootIK": false
@@ -39,9 +55,10 @@
     "Speed": 1,
     "FootIK": false
   },
-  "FloatingFlashLand": {
-    "Clip": "NinjaJump_Land",
+  "KneelDown": {
+    "Clip": "Kneeling_Down",
     "Start": 0,
+    "End": 2.8,
     "Loop": false,
     "Speed": 1,
     "FootIK": false
@@ -54,6 +71,13 @@
     "Speed": 1,
     "FootIK": false
   },
+  "Surprise": {
+    "Clip": "Hit_Reaction",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1.3,
+    "FootIK": false
+  },
   "Swipe": {
     "Clip": "Mutant_Swiping",
     "Start": 0,
@@ -63,12 +87,5 @@
     "UpperBodyLeanDegrees": 11,
     "ArmWidthScale": 1.25,
     "HandWidthScale": 1
-  },
-  "Death": {
-    "Clip": "Hit_Knockback",
-    "Start": 0,
-    "Loop": false,
-    "Speed": 1,
-    "FootIK": false
   }
 }

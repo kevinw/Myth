@@ -2036,14 +2036,8 @@ public sealed partial class GameView
 	{
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
 			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
-			{
-				var entry = renderRoom.GetEntry(new Point2(tileX, tileY));
-				var actorDrawsNormals = entry?.NeuralTexture != null ||
-					entry is { DualTilesetName: { } dualTilesetName } &&
-					Assets.GetTileset(dualTilesetName) is { NormalTiles.Count: > 0 } or { NormalVariants.Count: > 0 };
-				if (actorDrawsNormals)
+				if (renderRoom.GetEntry(new Point2(tileX, tileY)) is { HasNormals: true })
 					suppress[tileY * renderRoom.Size.X + tileX] = 1;
-			}
 	}
 
 	static void FillRoomNormalMask(byte[] mask, int width, int height, RectInt rect, Point2 origin)

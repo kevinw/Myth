@@ -56,6 +56,12 @@
       "Id": "6d58a60e5954adbe",
       "Type": "Chest",
       "Position": [197, 184]
+    },
+    {
+      "Id": "4d5b495d43124ffb",
+      "Type": "LinkedDoor",
+      "Position": [176, 184],
+      "TargetActorId": "7c643e82ea7e4090"
     }
   ]
 }

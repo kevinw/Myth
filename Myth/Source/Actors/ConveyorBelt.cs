@@ -9,7 +9,7 @@ namespace Myth;
 // scrape to a stop against walls instead of clipping through.
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/conveyor_belt", Anchor = SpriteAnchor.TopLeft,
 	LivePositionEditable = true, LiveResizable = true)]
-public class ConveyorBelt : Actor, IResizable
+public class ConveyorBelt : Actor, IResizable, IPenDrawn
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 6, Game.TileSize / 2);
 	public static readonly ResizeAxes ResizableAxes = ResizeAxes.X;
@@ -62,65 +62,32 @@ public class ConveyorBelt : Actor, IResizable
 
 	internal override Vector2 LocalLiftVelocity => new(Facing * Speed, 0);
 
-	public override void Render(Batcher batcher)
+	void IPenDrawn.Draw(Pen pen)
 	{
 		if (Size.X <= 0 || Size.Y <= 0)
 			return;
 
-		batcher.Rect(new Rect(0, 0, Size.X, Size.Y), ColorA);
+		var middle = Size.Y / 2f;
+		pen.Tube(new Vector2(0, middle), new Vector2(Size.X, middle), Size.Y, Size.Y, Vector2.Zero, ColorA,
+			Color.Lerp(ColorA, Color.Black, 0.5f));
 
-		// Alternate dashes scroll at the carry speed, so the surface visibly moves at the same
-		// rate it drags riders.
+		// Alternate dashes scroll at the carry speed, so the surface visibly moves at the same rate it drags
+		// riders -- and each dash leads with a groove, so light ripples along the belt at that speed too.
 		var period = DashLength * 2;
 		var offset = (Facing * Speed * Time.SecondsF) % period;
 		if (offset < 0)
 			offset += period;
+		var seam = Color.Lerp(ColorA, Color.Black, 0.35f);
 		for (var x = offset - period; x < Size.X; x += period)
 		{
 			var left = MathF.Max(x, 0);
 			var right = MathF.Min(x + DashLength, Size.X);
 			if (right > left)
-				batcher.Rect(new Rect(left, 0, right - left, Size.Y), ColorB);
+				pen.Stroke(new Vector2((left + right) / 2, 0), new Vector2((left + right) / 2, Size.Y), right - left, ColorB);
+			if (x >= 0.5f)
+				pen.Groove(new Vector2(x, 0), new Vector2(x, Size.Y), 1, seam);
 		}
 	}
-
-	public override void RenderNormals(Batcher batcher)
-	{
-		if (Size.X <= 0 || Size.Y <= 0)
-			return;
-
-		var bevel = MathF.Min(Size.X, Size.Y) * 0.5f;
-		var x0 = 0f;
-		var x1 = bevel;
-		var x2 = Size.X - bevel;
-		var x3 = (float)Size.X;
-		var y0 = 0f;
-		var y1 = bevel;
-		var y2 = Size.Y - bevel;
-		var y3 = (float)Size.Y;
-		var flat = new Color(0x8080ff);
-		var left = NormalColor(-Vector2.UnitX);
-		var right = NormalColor(Vector2.UnitX);
-		var top = NormalColor(-Vector2.UnitY);
-		var bottom = NormalColor(Vector2.UnitY);
-		var topLeft = NormalColor(new Vector2(-1, -1).Normalized());
-		var topRight = NormalColor(new Vector2(1, -1).Normalized());
-		var bottomRight = NormalColor(Vector2.One.Normalized());
-		var bottomLeft = NormalColor(new Vector2(-1, 1).Normalized());
-
-		batcher.Quad(new(x0, y0), new(x1, y0), new(x1, y1), new(x0, y1), topLeft, top, flat, left);
-		batcher.Quad(new(x1, y0), new(x2, y0), new(x2, y1), new(x1, y1), top, top, flat, flat);
-		batcher.Quad(new(x2, y0), new(x3, y0), new(x3, y1), new(x2, y1), top, topRight, right, flat);
-		batcher.Quad(new(x0, y1), new(x1, y1), new(x1, y2), new(x0, y2), left, flat, flat, left);
-		batcher.Quad(new(x1, y1), new(x2, y1), new(x2, y2), new(x1, y2), flat);
-		batcher.Quad(new(x2, y1), new(x3, y1), new(x3, y2), new(x2, y2), flat, right, right, flat);
-		batcher.Quad(new(x0, y2), new(x1, y2), new(x1, y3), new(x0, y3), left, flat, bottom, bottomLeft);
-		batcher.Quad(new(x1, y2), new(x2, y2), new(x2, y3), new(x1, y3), flat, flat, bottom, bottom);
-		batcher.Quad(new(x2, y2), new(x3, y2), new(x3, y3), new(x2, y3), flat, right, bottomRight, bottom);
-	}
-
-	static Color NormalColor(Vector2 direction)
-		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1f);
 
 	// Spriteless, so the sprite-based default is a zero rect; report the real footprint.
 	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);

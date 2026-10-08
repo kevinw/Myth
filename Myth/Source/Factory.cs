@@ -58,9 +58,13 @@ public static class Factory
 		public readonly float AcousticReflectivity;
 		// Non-null on neural-texture tiles: room load grows one region simulation per island.
 		public readonly NctTileSpec? NeuralTexture;
+		// False for tiles some other system draws (water), which owe the normal buffer nothing.
+		public readonly bool DrawsVisual;
+		public bool HasNormals => NeuralTexture != null ||
+			Assets.GetTileset(DualTilesetName ?? TilesetName ?? "") is { NormalTiles.Count: > 0 } or { NormalVariants.Count: > 0 };
 		public bool SupportsSlope => SlopeTilesetName != null || NeuralTexture is { HasSlope: true };
 
-		public Entry(string name, Subtexture image, TileFn? tile, string? substance = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
+		public Entry(string name, Subtexture image, TileFn? tile, string? substance = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null, bool drawsVisual = true)
 		{
 			Name = name;
 			Image = image;
@@ -77,6 +81,7 @@ public static class Factory
 			Layer = layer;
 			AcousticReflectivity = Math.Clamp(acousticReflectivity, 0.0f, 1.0f);
 			NeuralTexture = neuralTexture;
+			DrawsVisual = drawsVisual;
 		}
 	}
 
@@ -337,7 +342,7 @@ public static class Factory
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
 			var image = tileset.GetRandomTile(ref rng, out var normal);
 			target.Set(tile.X, tile.Y, image, reflection != ReflectionMode.None && !isFg ? 0.55f : 1.0f, normal);
-		}, substance, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+		}, substance, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity, drawsVisual: drawsVisual);
 	}
 
 	public static int StableVariantSeed(Room room, string key, Point2 tile)

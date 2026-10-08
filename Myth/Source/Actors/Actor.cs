@@ -875,7 +875,7 @@ public class Actor
 		batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat)); // pen materials tile, a texel per pixel
 		drawn.Draw(new(batcher, pass, tint)
 		{
-			Material = PenMaterial.Get(PenMaterial.DefaultTexture),
+			Material = PenMaterial.Get(drawn.PenTexture),
 			DepthColor = Pen.DepthColorFor(Room?.BackdropColor ?? Myth.Room.DefaultBackdropColor),
 		});
 		batcher.PopSampler();

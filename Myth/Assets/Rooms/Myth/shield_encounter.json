@@ -157,7 +157,8 @@
       "BicepSize": 3.049,
       "TorsoSize": 5.547,
       "HeadSize": 4.094,
-      "IdlePatrol": true
+      "IdlePatrol": true,
+      "SwingsAtPlayer": true
     },
     {
       "Id": "e760d8d447f5958c",

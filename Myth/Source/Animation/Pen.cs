@@ -9,6 +9,7 @@ enum PenPass { Color, Normals, Silhouette, Emissive }
 interface IPenDrawn
 {
 	void Draw(Pen pen);
+	ContentRef<VisualTextureContent> PenTexture => PenMaterial.DefaultTexture;
 }
 
 // A tiling height texture every pen shape is printed with, one texel per pixel so its grit stays crisp at any
@@ -19,6 +20,7 @@ sealed class PenMaterial(Texture shade, Texture normals) : IDisposable
 	public Vector2 Size => new(Shade.Width, Shade.Height);
 
 	public static ContentRef<VisualTextureContent> DefaultTexture => new("patterns/noise/Noise_014");
+	public static ContentRef<VisualTextureContent> MachinedTexture => new("patterns/noise/Noise_053"); // a brushed sweep
 
 	public static PenMaterial? Get(ContentRef<VisualTextureContent> content)
 	{
@@ -287,6 +289,19 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 			batcher.Circle(center, radius, Math.Clamp((int)(radius * 3), 6, 24), Tinted(color));
 	}
 
+	// Color only, like Dot: energy rather than a surface, so it has no normals and casts no shadow.
+	public void Stroke(Vector2 from, Vector2 to, float width, Color color)
+	{
+		if (pass == PenPass.Color)
+			batcher.Line(from, to, width, Tinted(color));
+	}
+
+	public void Ring(Vector2 center, float radius, float width, Color color)
+	{
+		if (pass == PenPass.Color)
+			batcher.CircleLine(center, radius, width, Math.Clamp((int)(radius * 1.5f), 12, 32), Tinted(color));
+	}
+
 	// Emissive only, added over whatever has been drawn so far.
 	public void Glow(Vector2 center, float radius, Color color)
 	{
@@ -303,6 +318,15 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 			return;
 		batcher.PushBlend(BlendMode.Premultiply);
 		batcher.Line(from, to, width, Glowing(color));
+		batcher.PopBlend();
+	}
+
+	public void GlowRing(Vector2 center, float radius, float width, Color color)
+	{
+		if (pass != PenPass.Emissive)
+			return;
+		batcher.PushBlend(BlendMode.Premultiply);
+		batcher.CircleLine(center, radius, width, Math.Clamp((int)(radius * 1.5f), 12, 32), Glowing(color));
 		batcher.PopBlend();
 	}
 

@@ -11,7 +11,7 @@ namespace Myth;
 [GameActor(Sprite = "Editor/particles", Icon = "bolt-lightning", Tags = ActorTag.Hazard,
 	BoundsX = -6, BoundsY = -6, BoundsW = 12, BoundsH = 12, Anchor = SpriteAnchor.Center,
 	LivePositionEditable = true)]
-public class LightningTrap : Actor, IRoomInversionListener
+public class LightningTrap : Actor, IRoomInversionListener, IPenDrawn
 {
 	public Cardinal Direction = Cardinal.Right;
 	[I(0.1f, 5)] public float WaitDelay = 1.5f;   // idle time between fires
@@ -307,16 +307,48 @@ public class LightningTrap : Actor, IRoomInversionListener
 		_ => 0f,
 	};
 
-	public override void Render(Batcher batcher)
-	{
-		DrawHousing(batcher);
-		DrawBeam(batcher);
-	}
+	ContentRef<VisualTextureContent> IPenDrawn.PenTexture => PenMaterial.MachinedTexture;
+	static Color ElectrodeColor => 0x79cfff;
 
-	public override void RenderEmissive(Batcher batcher)
+	void IPenDrawn.Draw(Pen pen)
 	{
-		DrawBeam(batcher);
-		DrawElectrodes(batcher, emissive: true);
+		// The housing is squashed along the beam, so it reads as a flat plate set into the wall.
+		const int Steps = 16;
+		var material = new Vector2(48);
+		Span<Vector2> plate = stackalloc Vector2[Steps];
+		Span<Vector2> plateMaterial = stackalloc Vector2[Steps];
+		Span<Vector2> mouth = stackalloc Vector2[Steps];
+		Span<Vector2> mouthMaterial = stackalloc Vector2[Steps];
+		for (var i = 0; i < Steps; i++)
+		{
+			var direction = Calc.AngleToVector(i / (float)Steps * MathF.Tau);
+			plate[i] = direction * 6 * HousingScale;
+			plateMaterial[i] = material + direction * 6;
+			mouth[i] = direction * 2.5f * HousingScale;
+			mouthMaterial[i] = material + direction * 2.5f;
+		}
+		pen.Plate(plate, plateMaterial, new Color(0x2a2140), new Color(0x171319));
+		pen.Plate(mouth, mouthMaterial, new Color(0x3d2f5c), new Color(0x171319));
+
+		// Electrodes: studs that warm toward the beam's color through the gather, so the telegraph is on the
+		// hardware too, and catch the beam's own light while it fires.
+		var glow = Glow;
+		var perp = Dir.TurnLeft();
+		for (var s = -1; s <= 1; s += 2)
+		{
+			var at = perp * (s * 2.5f);
+			pen.Ball(at, 1.4f, material + at, Color.Lerp(new Color(0x3a3550), ElectrodeColor, glow), new Color(0x171319), round: true);
+			if (glow > 0.01f)
+				pen.Glow(at, 1.6f, ElectrodeColor * glow);
+		}
+
+		// The beam is energy: colors and glow only, drawn last so the housing never erases it.
+		if (pen.Pass is PenPass.Color or PenPass.Emissive)
+		{
+			pen.Batcher.PushBlend(BlendMode.Premultiply);
+			DrawBeam(pen.Batcher);
+			pen.Batcher.PopBlend();
+		}
 	}
 
 	void DrawBeam(Batcher batcher)
@@ -408,30 +440,6 @@ public class LightningTrap : Actor, IRoomInversionListener
 			}
 		}
 		return (Vector2)Position + segments[^1].To;
-	}
-
-	void DrawHousing(Batcher batcher)
-	{
-		batcher.PushMatrix(Matrix3x2.CreateScale(HousingScale));
-		batcher.Circle(Vector2.Zero, 6, 16, new Color(0x171319));
-		batcher.Circle(Vector2.Zero, 5, 16, new Color(0x2a2140));
-		batcher.Circle(Vector2.Zero, 2.5f, 12, new Color(0x3d2f5c));
-		batcher.PopMatrix();
-		DrawElectrodes(batcher, emissive: false);
-	}
-
-	void DrawElectrodes(Batcher batcher, bool emissive)
-	{
-		var glow = Glow;
-		if (emissive && glow <= 0.01f)
-			return;
-
-		var perp = new Vector2(-Dir.Y, Dir.X);
-		var color = emissive
-			? new Color(0x79cfff) * glow
-			: Color.Lerp(new Color(0x3a3550), new Color(0x79cfff), glow);
-		for (var s = -1; s <= 1; s += 2)
-			batcher.Circle(perp * (s * 2.5f), emissive ? 1.6f : 1.4f, 8, color);
 	}
 
 #if EDITOR

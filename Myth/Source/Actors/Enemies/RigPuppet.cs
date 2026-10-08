@@ -48,6 +48,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	// Starts him pacing back and forth near his spawn, ignoring the player until he has a clear
 	// sightline toward the side he's facing; then he wakes into normal behaviour for good.
 	public bool IdlePatrol;
+	// Once awake, closes in and swings an arm (AttackTake) at the player when in reach. The swing hurts where
+	// the arm actually goes when ArticulatedCombatBounds is on.
+	public bool SwingsAtPlayer;
+	[InspectorGroup("Animation")] public string SurpriseTake = "Surprise"; // spotting the player out of a patrol
+	public string AttackTake = "ArmSwing";
 	public bool ArticulatedCombatBounds;
 	public bool StraddlesPlayerDepth;
 	[InspectorGroup("Costume")] public bool Ruff;
@@ -64,6 +69,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool recovering;
 	bool walking;
 	bool patrolling;
+	enum Reaction { None, Surprise, Attack }
+	Reaction reaction;
+	bool spotted;        // just saw the player out of a patrol: startle before anything else
+	float attackCooldown;
 	float patrolOriginX;
 	float patrolSightTimer;
 	bool abilityActive;
@@ -116,6 +125,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	static float PatrolReach => 80f;              // how far he paces each way from spawn
 	static float PatrolSightInterval => 0.1f;     // seconds between line-of-sight checks
 	static float PatrolSightHeight => 26f;         // eye height above the origin for the sightline
+	static float SurpriseHop => 70f;               // a startled little jump
+	static float SurpriseJostle => 2f;             // pixels of shake at the start of the startle, easing out
+	static float AttackRange => 30f;               // horizontal reach that starts a swing
+	static float AttackHeight => 24f;
+	static float AttackLunge => 45f;               // the step into the swing
+	static float AttackCooldown => 1.4f;
 
 	public RigPuppet()
 	{
@@ -321,8 +336,68 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.Update(FrozenPoseFootIK, FrozenPoseFootIK, advance: false, seekGround: FrozenPoseFootIK);
 	}
 
-	protected virtual bool UpdateAbility(Player player, bool grounded) => false;
-	protected virtual void InterruptAbility() { }
+	// The plain puppet's abilities: the startle on spotting you, then arm swings. Subclasses with their own
+	// repertoire (EyeLaserPuppet) override both.
+	protected virtual bool UpdateAbility(Player player, bool grounded)
+	{
+		attackCooldown = MathF.Max(0, attackCooldown - Time.Delta);
+		switch (reaction)
+		{
+			case Reaction.None:
+				if (spotted)
+					return BeginReaction(Reaction.Surprise, SurpriseTake, player);
+				return SwingsAtPlayer && attackCooldown <= 0 && grounded && InSwingReach(player)
+					&& BeginReaction(Reaction.Attack, AttackTake, player);
+			case Reaction.Surprise:
+				SetAbilityLookTarget(player.Position);
+				SetAbilityPoseJostle(SurpriseJostle * (1 - AbilityAnimationProgress));
+				break;
+		}
+		if (!AbilityAnimationFinished)
+			return true;
+		if (reaction == Reaction.Attack)
+			attackCooldown = AttackCooldown;
+		reaction = Reaction.None;
+		return false;
+	}
+
+	protected virtual void InterruptAbility()
+	{
+		if (reaction == Reaction.Attack)
+			attackCooldown = AttackCooldown;
+		reaction = Reaction.None;
+	}
+
+	bool BeginReaction(Reaction next, string take, Player player)
+	{
+		spotted = false;
+		if (!RigTakes.TryGet(take, out _))
+			return false;
+		Facing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
+		reaction = next;
+		if (next == Reaction.Surprise)
+		{
+			PlayAbilityTake(take, 0.08f);
+			SetAbilityLookTarget(player.Position);
+			Velocity = new Vector2(0, -SurpriseHop);
+			AudioEvent("rig_puppet/surprised");
+		}
+		else
+		{
+			SetAbilityYaw(RigFacingYaw);
+			PlayAbilityTake(take);
+			Velocity.X = (int)Facing * AttackLunge;
+			AudioEvent("rig_puppet/swing");
+		}
+		return true;
+	}
+
+	bool InSwingReach(Player player)
+	{
+		var delta = player.Position - Position;
+		return MathF.Abs(delta.X) <= AttackRange && MathF.Abs(delta.Y) <= AttackHeight
+			&& Math.Sign(delta.X) == (int)Facing && visual.FacingMatches;
+	}
 	protected virtual bool AbilityControlsMovement => false;
 	protected virtual bool SuppressKnockdownOnHit => false;
 	protected virtual bool DeathIsPersistent => false;
@@ -500,6 +575,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			if (player != null && Math.Sign(player.Position.X - Position.X) == (int)Facing && CanSeePlayer(player))
 			{
 				patrolling = false;
+				spotted = true;
 				return;
 			}
 		}
