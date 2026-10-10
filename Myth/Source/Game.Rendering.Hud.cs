@@ -53,7 +53,6 @@ public sealed partial class GameView
 #endif
 			var hudScale = 1 + (BurrowUpgradeHudScale - 1) * Ease.Cube.InOut(game.BurrowUpgradeHud.Emphasis);
 			Batcher.PushMatrix(Matrix3x2.CreateScale(hudScale, hudAnchor));
-			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 40, 3), rectColor);
 
 			// Burrow stamina: a green bar under the hearts. Its width scales with capacity so
 			// collecting BurrowUpgrade pickups visibly lengthens it; the fill drains while burrowing.
@@ -77,10 +76,19 @@ public sealed partial class GameView
 			var burrowY = pos.Y + 11;
 			var burrowBarHeight = 2;
 			var burrowWidth = displayedBurrowCapacity * pixelsPerBurrowSecond;
+
+			// Fade out while the player is behind the HUD so it never hides them.
+			var hudRect = new Rect(0, pos.Y, MathF.Max(40, burrowWidth), 14);
+			var playerWorld = player.Hitbox.Rect + player.Position;
+			var occluded = !game.BurrowUpgradeHud.Active &&
+				Rect.Between(WorldToFrame(playerWorld.TopLeft), WorldToFrame(playerWorld.BottomRight)).Overlaps(hudRect.Inflate(HudOcclusionMargin));
+			hudOpacity = Calc.Approach(hudOpacity, occluded ? HudOccludedOpacity : 1, HudFadeRate * game.Manager.Time.Delta);
+			rectColor *= hudOpacity;
+			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 40, 3), rectColor);
 			displayedBurrowBarOpacity = Calc.Approach(displayedBurrowBarOpacity, player.BurrowBarOpacity,
 				BurrowBarOpacityRate * game.Manager.Time.Delta);
 			Batcher.Rect(new Rect(0, burrowY, burrowWidth, burrowBarHeight), rectColor * displayedBurrowBarOpacity);
-			Batcher.Rect(new Rect(0, burrowY, burrowWidth * player.BurrowFill, burrowBarHeight), burrowColor * displayedBurrowBarOpacity);
+			Batcher.Rect(new Rect(0, burrowY, burrowWidth * player.BurrowFill, burrowBarHeight), burrowColor * (displayedBurrowBarOpacity * hudOpacity));
 			if (game.BurrowUpgradeHud.Particles > 0)
 				DrawBurrowGrowthParticles(new Vector2(burrowWidth, burrowY + 1), game.Manager.Time.SecondsF,
 					game.BurrowUpgradeHud.Particles);
@@ -88,7 +96,7 @@ public sealed partial class GameView
 			DrawBurrowUpgradeLabel(capacity * pixelsPerBurrowSecond * BurrowUpgradeHudScale);
 
 			// draw little icons for each unit of health
-			var healthColor = Color.White * 0.75f;
+			var healthColor = Color.White * (0.75f * hudOpacity);
 			for (var i = 0; i < Player.MaxHealth; i++)
 			{
 				var subTexture = player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1");
@@ -112,6 +120,10 @@ public sealed partial class GameView
 	// grows while the BurrowUpgradeGet modal freezes the sim (TimeScale 0).
 	float displayedBurrowCapacity = -1f;
 	float displayedBurrowBarOpacity = 1;
+	float hudOpacity = 1;
+	static float HudOccludedOpacity => 0f;
+	static float HudFadeRate => 4f;
+	static float HudOcclusionMargin => 2f;
 	static float BurrowBarGrowRate => 0.6f;   // seconds of capacity closed per real second
 	static float BurrowBarOpacityRate => 8f;
 	static float BurrowUpgradeHudScale => 4f;

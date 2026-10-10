@@ -74,7 +74,7 @@ public partial class Manager : App
 	static bool EditorLocked => false;
 #endif
 	// --play-room runs from an empty save and never touches the one on disk.
-	internal bool EphemeralSave => args.playRoomId != null;
+	internal bool EphemeralSave => args.playRoomId != null || args.IsToolRun;
 	bool SkipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
 	bool startingPlay;
 	static float PlayMouseHideDelay => 3f;
@@ -585,7 +585,7 @@ public partial class Manager : App
 		LoadWindowSettings();
 #endif
 		vSyncEnabled = args.vsync ?? vSyncEnabled;
-		if (!headless)
+		if (!args.IsToolRun)
 		{
 			Steam.Init(AppInfo.SteamAppId);
 			MythAchievements.Register(this);
@@ -601,13 +601,6 @@ public partial class Manager : App
 		ApplyVSync();
 		ApplyLatencyMode();
 #endif
-
-		if (args.buildAssetPack)
-		{
-			Assets.BuildVisualAssetPack(GraphicsDevice, args.assetPackPath, args.dumpAtlases);
-			Exit();
-			return;
-		}
 
 #if BROWSER
 		Assets.ConfigureVisualAssetPack(args.assetPackPath, true);
@@ -857,7 +850,8 @@ public partial class Manager : App
 #endif
 		FlushSaveState();
 #if !BROWSER
-		SaveWindowSettings();
+		if (!args.IsToolRun)
+			SaveWindowSettings();
 #endif
 		game?.Dispose();
 		DisposeStartupAttribution();

@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 using Foster.Framework;
 using LinkDotNet.StringBuilder;
 
-[assembly: MetadataUpdateHandler(typeof(Myth.ActorSpecs))]
+[assembly: MetadataUpdateHandler(typeof(Myth.ActorSpecs.HotReload))]
 
 namespace Myth;
 
@@ -116,7 +116,10 @@ public static class ActorSpecs
 		typeDefaults.Clear();
 	}
 
-	static void ClearCache(Type[]? _) => Interlocked.Increment(ref codeVersion);
+	internal static class HotReload
+	{
+		static void ClearCache(Type[]? _) => Interlocked.Increment(ref codeVersion);
+	}
 
 	static void DropStaleCodeCaches()
 	{

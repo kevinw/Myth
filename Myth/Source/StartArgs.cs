@@ -75,6 +75,10 @@ public struct StartArgs
 	public bool screenshotHud = true;
 	public bool screenshotPostprocessing = true;
 
+	// Automation and content-pipeline runs, as opposed to someone playing or editing.
+	public readonly bool IsToolRun => headless || checkRooms || bakeWorldMap != null || writeAllRooms ||
+		buildAssetPack || gym || bench || screenshotPath != null;
+
 	public StartArgs(string[] args)
 	{
 		maxFrames = int.MaxValue;
@@ -187,18 +191,17 @@ public struct StartArgs
 
 		gym |= gymCli;
 		headless |= gymCli;
-		if (checkRooms)
-		{
-			audio = false;
-		}
+		if (bakeWorldMap != null && worldId == null)
+			throw Invalid("--bake-world-map", "requires --world <world>");
+#if !EDITOR
 		if (bakeWorldMap != null)
-		{
-			if (worldId == null)
-				throw Invalid("--bake-world-map", "requires --world <world>");
-			audio = false;
-		}
+			throw Invalid("--bake-world-map", "requires an editor build");
+#endif
+#if BROWSER
 		if (writeAllRooms)
-			audio = false;
+			throw Invalid("--write-all-rooms", "not available in the browser build");
+#endif
+		audio &= !IsToolRun;
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
 		play |= screenshotPath != null || playRoomId != null;

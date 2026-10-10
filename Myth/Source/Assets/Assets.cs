@@ -657,9 +657,6 @@ public static partial class Assets
 			: $"World maps: none in {directory}. Bake one from the editor toolbar (Bake Map).");
 	}
 
-	public static void BuildVisualAssetPack(GraphicsDevice gfx, string? path = null, bool dumpPackedAtlases = false)
-		=> BuildVisualAssetPack(path, dumpPackedAtlases);
-
 	public static void ReloadRooms()
 		=> LoadRooms();
 

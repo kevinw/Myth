@@ -1,5 +1,6 @@
 #if !BROWSER
 using Foster.Framework;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Numerics;
@@ -92,6 +93,8 @@ public partial class Manager
 
 	// `set <actorId> <member> <value>`: poke a public field or property on a live actor, so a test can
 	// drive authored content without an editor round-trip. Ids are what `state` reports as `ground`.
+	[UnconditionalSuppressMessage("Trimming", "IL2075", Justification =
+		"Actors are registered via ActorSpecs.RegisterActor, which preserves public fields and properties.")]
 	string DevSet(string argument)
 	{
 		var parts = argument.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
