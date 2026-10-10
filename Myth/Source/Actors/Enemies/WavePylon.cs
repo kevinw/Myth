@@ -6,7 +6,7 @@ namespace Myth;
 [GameActor(Sprite = "Editor/particles", Icon = "wave-square", Tags = ActorTag.Hazard,
 	BoundsX = -8, BoundsY = -8, BoundsW = 16, BoundsH = 16, Anchor = SpriteAnchor.Center,
 	LivePositionEditable = true)]
-public sealed class WavePylon : Actor
+public sealed class WavePylon : Actor, IPenDrawn
 {
 	[I(0.5f, 12)] public float Interval = 3;
 	[I(0, 12)] public float PhaseOffset;
@@ -215,66 +215,63 @@ public sealed class WavePylon : Actor
 		MathF.Max(0.0001f, CycleInterval - ChargeStart), 0, 1) : 0;
 	Color WaveColor => medium == RadialWaveMedium.Solid ? SolidColor : AirColor;
 
-	public override void Render(Batcher batcher) => DrawPylon(batcher, false);
-	public override void RenderEmissive(Batcher batcher) => DrawPylon(batcher, true);
+	ContentRef<VisualTextureContent> IPenDrawn.PenTexture => PenMaterial.MachinedTexture;
+	static float SolidDepth => 0.6f;
+	static Color HousingColor => 0x35293e;
+	static Color HousingEdgeColor => 0x574661;
+	static Color DarkColor => 0x191521;
 
-	void DrawPylon(Batcher batcher, bool emissive)
+	void IPenDrawn.Draw(Pen pen)
 	{
 		var progress = EasedChargeProgress;
 		var pulse = 0.82f + MathF.Abs(MathF.Sin(Time.SecondsF * Calc.Lerp(7, 34, progress))) * 0.18f;
-		var color = WaveColor;
-		if (!emissive)
-		{
-			batcher.Circle(Vector2.Zero, 8, 20, new Color(0x191521));
-			batcher.Circle(Vector2.Zero, 6.5f, 20, new Color(0x35293e));
-			batcher.CircleLine(Vector2.Zero, 8.5f, 1.5f, 20, Color.Lerp(new Color(0x574661), color, progress));
-		}
-		else
-		{
-			var pulseFactor = (MathF.Sin(Time.SecondsF * CycleInterval * 2.0f) + 1.0f) * 0.5f * 0.4f;
-			batcher.CircleLine(Vector2.Zero, 8.5f, 1.5f, 20, new Color(0x574661) * pulseFactor);
-			
-				float cycleProgress = cycleTime / CycleInterval;
-				var steps = 12;
-				for (var i = 0; i < steps; ++i)
-				{
-					float done = (float)i / (float)steps;
-					if (done > cycleProgress) break;
-
-					float rad = 5.5f;
-					float x = rad * MathF.Cos(done * MathF.Tau - MathF.PI * 0.5f);
-					float y = rad * MathF.Sin(done * MathF.Tau - MathF.PI * 0.5f);
-	
-					var ledColor = Color.Pink;
-					ledColor *= 0.5f;
-					batcher.Rect(new (x, y, 1f, 1f), ledColor);
-				}
-		}
-
 		var glow = charging ? Calc.Lerp(0.18f, 1, Ease.Cube.In(progress)) * pulse : 0.12f;
-		var coreColor = color * (emissive ? glow : Calc.Lerp(0.35f, 1, progress));
-		batcher.Circle(Vector2.Zero, Calc.Lerp(2.2f, 4.6f, Ease.Cube.In(progress)), 16, coreColor);
+		var color = WaveColor;
+		var material = new Vector2(48);
+
+		// Buried in rock, the pylon sinks back; only its reach to the surface stays at the front.
+		var body = pen with { Depth = medium == RadialWaveMedium.Solid ? SolidDepth : 0 };
+		body.Ball(Vector2.Zero, 8.5f, material, HousingColor, Color.Lerp(HousingEdgeColor, color, progress));
+		body.GlowRing(Vector2.Zero, 8.5f, 1.5f, HousingEdgeColor * ((MathF.Sin(Time.SecondsF * CycleInterval * 2) + 1) * 0.2f));
+
 		for (var i = 0; i < 8; i++)
 		{
 			var direction = Calc.AngleToVector(i * MathF.Tau / 8);
 			var lit = charging && progress * 8 >= i;
-			var segmentColor = color * (emissive ? (lit ? glow : 0.03f) : (lit ? 0.95f : 0.2f));
-			batcher.Line(direction * 5.5f, direction * 8, lit ? 2 : 1, segmentColor);
+			body.Groove(direction * 5.5f, direction * 8, lit ? 2 : 1, lit ? color : Color.Lerp(DarkColor, color, 0.2f));
+			body.GlowLine(direction * 5.5f, direction * 8, lit ? 2 : 1, color * (lit ? glow : 0.03f));
 		}
 
-		if (charging)
+		// The cycle countdown: studs that light in turn and catch the room's light while dark.
+		const int Leds = 12;
+		var cycleProgress = cycleTime / CycleInterval;
+		for (var i = 0; i < Leds; i++)
 		{
-			var gatheringRadius = Calc.Lerp(19, 9.5f, Ease.Cube.In(progress));
-			batcher.CircleLine(Vector2.Zero, gatheringRadius, emissive ? 2 : 1, 28,
-				color * glow * (emissive ? 0.75f : 0.45f));
+			var done = i / (float)Leds;
+			var at = Calc.AngleToVector(done * MathF.Tau - MathF.PI * 0.5f) * 5.5f;
+			var lit = done <= cycleProgress;
+			body.Rivet(at, lit ? Color.Lerp(HousingColor, color, 0.6f) : DarkColor);
+			if (lit)
+				body.Glow(at, 0.8f, color * 0.5f);
 		}
-		if (charging && medium == RadialWaveMedium.Solid && solidSurface is { } surface)
-		{
-			var contact = surface.Point - Position;
-			batcher.Line(Vector2.Zero, contact, emissive ? 2.5f : 1.5f,
-				color * glow * (emissive ? 0.65f : 0.4f));
-			batcher.Circle(contact, emissive ? 3 : 2, 12, color * glow);
-		}
+
+		var coreRadius = Calc.Lerp(2.2f, 4.6f, Ease.Cube.In(progress));
+		body.Ball(Vector2.Zero, coreRadius, material, Color.Lerp(HousingColor, color, Calc.Lerp(0.35f, 1, progress)),
+			Color.Lerp(DarkColor, color, 0.5f), round: true);
+		body.Glow(Vector2.Zero, coreRadius, color * glow);
+
+		if (!charging)
+			return;
+		var gatheringRadius = Calc.Lerp(19, 9.5f, Ease.Cube.In(progress));
+		pen.Ring(Vector2.Zero, gatheringRadius, 1, color * glow * 0.45f);
+		pen.GlowRing(Vector2.Zero, gatheringRadius, 2, color * glow * 0.75f);
+		if (medium != RadialWaveMedium.Solid || solidSurface is not { } surface)
+			return;
+		var contact = surface.Point - Position;
+		pen.Stroke(Vector2.Zero, contact, 1.5f, color * glow * 0.4f);
+		pen.GlowLine(Vector2.Zero, contact, 2.5f, color * glow * 0.65f);
+		pen.Dot(contact, 2, color * glow);
+		pen.Glow(contact, 3, color * glow);
 	}
 
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
@@ -292,10 +289,6 @@ public sealed class WavePylon : Actor
 		ReleaseParticleEffect(ref chargeEffect);
 		StopAndReleaseSound(ref sound, true);
 	}
-
-	public override void RenderNormals(Batcher batcher) { }
-	public override void RenderShadow(Batcher batcher, Color color) { }
-	public override void RenderReflection(Batcher batcher, Color color) { }
 
 	public override Rect GetVisualBounds()
 		=> charging && medium == RadialWaveMedium.Solid && solidSurface is { } surface

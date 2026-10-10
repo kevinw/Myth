@@ -357,6 +357,7 @@ public partial class Manager
 			var visible = menuImgui.BeginBatchAt(Rect.Between(buttonMin, buttonMax), out var labelBatch, out var bounds);
 			if (visible)
 			{
+				const float MenuSelectionOpacity = 0.6f;
 				if (IsItemFocused() && MenuSelectionTexture()?.OutputTexture is { } selection)
 					labelBatch.Image(selection, Vector2.Zero, Color.White * (MenuSelectionOpacity * gameMenuLayoutEase));
 				var x = font['x'];
@@ -438,7 +439,6 @@ public partial class Manager
 
 	Game? menuSelectionRig;
 	NeuralTextureActor? menuSelectionTexture;
-	static float MenuSelectionOpacity => 0.6f;
 	static int MenuSelectionSeedSteps => 24;
 
 	// One button-sized neural texture in its own offscreen Game, kept for the session and stepped

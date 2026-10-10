@@ -1218,6 +1218,8 @@ public partial class Manager
 				SelectTileBrush(entry.Layer, id);
 			if (selected)
 				OutlineSelectedPaletteItem();
+			if (entry.DrawsVisual && !entry.HasNormals)
+				FlagMissingNormals(entry);
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				OpenTileSourceEditor(entry);
 
@@ -1261,6 +1263,24 @@ public partial class Manager
 		var inset = new Vector2(thickness / 2);
 		GetWindowDrawList().AddRect(GetItemRectMin() + inset, GetItemRectMax() - inset,
 			ImGuiColor(1, 1, 1, 1), GetStyle().FrameRounding, ImDrawFlags.None, thickness);
+	}
+
+	// Lighting reads the normal buffer, so a tile without normals lets whatever is behind it light its pixels.
+	void FlagMissingNormals(Factory.Entry entry)
+	{
+		var corner = new Vector2(GetItemRectMax().X - 5, GetItemRectMin().Y + 5);
+		var drawList = GetWindowDrawList();
+		drawList.AddCircleFilled(corner, 4.5f, ImGuiColor(0.85f, 0.1f, 0.1f, 1));
+		drawList.AddLine(corner - new Vector2(0, 2.5f), corner + new Vector2(0, 0.5f), ImGuiColor(1, 1, 1, 1), 1.5f);
+		drawList.AddCircleFilled(corner + new Vector2(0, 2.25f), 0.8f, ImGuiColor(1, 1, 1, 1));
+		if (!IsItemHovered())
+			return;
+		BeginTooltip();
+		TextColored(new Vector4(1.0f, 0.35f, 0.25f, 1.0f), "No normals");
+		TextUnformatted(FindTileKitSpec(entry) is not null || entry.NeuralTexture != null
+			? "Lighting shows through to whatever is behind it. Rebake this tile's normals."
+			: "Lighting shows through to whatever is behind it.\nAdd a 'height' layer group to its .ase (double-click to open).");
+		EndTooltip();
 	}
 
 	const string EditorButtonSubtexture_Plus = "buttons/18";

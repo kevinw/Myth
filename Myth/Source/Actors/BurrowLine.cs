@@ -78,6 +78,12 @@ public class BurrowLine : PointPathActor, IActivationSource
 		RenderRoundedPath(batcher, ProceduralWidth * 0.45f, ProceduralInnerColor);
 		RenderStitches(batcher);
 		RenderGlint(batcher);
+		// Sampled here rather than in Update so terminals are ready on the first frame, even mid room-transition.
+		if (terminalSampleTimer <= 0)
+		{
+			terminalSampleTimer = TerminalSampleInterval;
+			RefreshTerminals();
+		}
 		RenderTerminals(batcher);
 		if (Points.Length == 0)
 			return;
@@ -95,11 +101,6 @@ public class BurrowLine : PointPathActor, IActivationSource
 	{
 		base.Update();
 		terminalSampleTimer -= Time.Delta;
-		if (terminalSampleTimer <= 0)
-		{
-			terminalSampleTimer = TerminalSampleInterval;
-			RefreshTerminals();
-		}
 		var player = Game.GetFirst<Player>();
 		var firstActive = player?.AtBurrowLineEndpoint(this, 0) == true && IsSwitchPoint(0);
 		var last = Points.Length - 1;
@@ -187,13 +188,16 @@ public class BurrowLine : PointPathActor, IActivationSource
 			return;
 		}
 
-		firstConnected = Game.BurrowLinePointConnected(this, 0);
-		lastConnected = Game.BurrowLinePointConnected(this, Points.Length - 1);
+		firstConnected = Game.BurrowLinePointConnected(this, 0) || AtRoomEdge(0);
+		lastConnected = Game.BurrowLinePointConnected(this, Points.Length - 1) || AtRoomEdge(Points.Length - 1);
 		firstTerminalNormal = firstConnected || IsDoorPoint(0) || IsSwitchPoint(0)
 			? Vector2.Zero : FindTerminalNormal(0, 1);
 		lastTerminalNormal = lastConnected || IsDoorPoint(Points.Length - 1) || IsSwitchPoint(Points.Length - 1)
 			? Vector2.Zero : FindTerminalNormal(Points.Length - 1, -1);
 	}
+
+	// Endpoints flush with the room edge continue into a burrow line in the neighboring room.
+	bool AtRoomEdge(int pointIndex) => Room is { } room && !room.WorldBounds.Inflate(-2).Contains(WorldPoint(pointIndex));
 
 	Vector2 FindTerminalNormal(int pointIndex, int direction)
 	{

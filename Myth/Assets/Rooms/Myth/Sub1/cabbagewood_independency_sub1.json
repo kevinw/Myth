@@ -1,0 +1,81 @@
+{
+  "position": [0, -30],
+  "size": [40, 24],
+  "ambientColor": "606060",
+  "reverb": 0.805,
+  "legend": {
+    "#": "back",
+    "P": "dirt",
+    "a": "ajdkl",
+    "b": "blockyrock",
+    "t": "testjunkbg1",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "bbbbbbPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbPPPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbPPPPbbbb0bbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbPPPPPPPPbbb00b0bbbbbbbbbbbbbbbbbbbbbbb",
+    "bbPPPPPPbbbbb0000bbbbbbbbbbbbbbbbbbbbbbb",
+    "bbPPPPPPbbbbbb00bbbbbbbbbbbbbbbbbbbbbbbb",
+    "bPPPPPPPbbbbb000bbbb0bbbbbbbbbbbbbbbbbbb",
+    "bPPPPPPbbbbbbb00000000bbb00bbbbbbbbbbbbb",
+    "bPPPPPPbbbbbbbb000000000000bbbbbbbbbbbbb",
+    "bPPPPPPbbbbbbbb000000000000bbbbbbbbbbbbb",
+    "bPPPPPPPPPbbbbb000000000000bbbbbbbbbbbbb",
+    "bPPPPPPPPPbbbbb000000000000bbbbbbbbbbbbb",
+    "bPPPPPPPPPbbbbb000000000000bbbbbbbbbbbbb",
+    "bbbbPPPPPPbbbbb000000000000bbbbbbbbbbbbb",
+    "bbbbPPPPPPPbbbb000000000000bbbbbbbbbbbbb",
+    "bbbbbbbPPPPbbbb000000000000bbbbbbbbbbbbb",
+    "bbbbbbbPPPPbbbb000000000000bbbbbbbbbbbbb",
+    "bbbbbbbPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "backgroundTiles": [
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttttt0000000000000000000000",
+    "00000000tttttttt0v0v0v000vv0000000000000",
+    "00000000000aaaa00v000v000vv0000000000000",
+    "00000000000000#00v000v0000v0000000000000",
+    "00000000000000#00v000v0000v0000000000000",
+    "000000000000000000000v0000v0000000000000",
+    "000000000000000000000v0000v0000000000000",
+    "000000000000000000000v0000v0000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000"
+  ],
+  "actors": [
+    {
+      "Id": "7c643e82ea7e4090",
+      "Type": "LinkedDoor",
+      "Position": [176, 184],
+      "TargetActorId": "4d5b495d43124ffb"
+    },
+    {
+      "Id": "75b6b9fb92ae662f",
+      "Type": "Light",
+      "Position": [116, 84],
+      "Radius": 108.115,
+      "Intensity": 0.806
+    }
+  ]
+}

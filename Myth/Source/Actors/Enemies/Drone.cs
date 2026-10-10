@@ -4,7 +4,7 @@ using Foster.Framework;
 namespace Myth;
 
 [GameActor(Sprite = "fire", Tags = ActorTag.Enemy | ActorTag.Flying)]
-public class Drone : Actor
+public class Drone : Actor, IPenDrawn
 {
 	static float IdleRadius => 24f;
 	static float IdleAcceleration => 190f;
@@ -40,7 +40,6 @@ public class Drone : Actor
 	static float TurretBack => -2f;       // back edge tucked into the body
 	static float TurretWidth => 5f;
 	static float TurretTurnSpeed => 4.5f; // radians/sec
-	static float TurretBevel => 1.6f;     // width of the outward-normal rim in the normals pass
 
 	// Banking: the rotor assembly leans in the direction of travel, eased in so it reads as
 	// momentum rather than snapping. Tilt tracks velocity, which itself ramps via Acceleration.
@@ -328,87 +327,26 @@ public class Drone : Actor
 		SetState(KnockbackRoutine(away));
 	}
 
-	public override void Render(Batcher batcher)
-	{
-		if (SpriteBlinkHidden) return;
-		RenderShapes(batcher);
-	}
+	ContentRef<VisualTextureContent> IPenDrawn.PenTexture => PenMaterial.MachinedTexture;
 
-	public override void RenderShadow(Batcher batcher, Color color) {
-		if (SpriteBlinkHidden) return;
-		RenderShapes(batcher, color);
-	}
-
-	// The normals pass gets its own geometry: a lit sphere for the body (a triangle fan whose
-	// center normal faces the viewer and whose rim normals point radially outward in screen
-	// space, nz~0), and flat facing-camera normals for the rotor so it lights coherently with
-	// the body rather than inheriting the background. The lighting shader normalizes the
-	// interpolated result, so the fan reads as a smooth hemisphere.
-	public override void RenderNormals(Batcher batcher)
+	void IPenDrawn.Draw(Pen pen)
 	{
 		if (SpriteBlinkHidden)
 			return;
+		var material = new Vector2(48);
+		DrawRotor(pen, material);
 
-		var faceViewer = new Color(0x8080ff); // (0.5, 0.5, 1.0) => normal (0, 0, 1)
-		DrawRotor(batcher, faceViewer, faceViewer);
-		RenderTurretNormals(batcher);
-		RenderSphereNormals(batcher, Vector2.Zero, BodyRadius, 24);
+		var forward = Calc.AngleToVector(turretAngle);
+		var muzzle = forward * (TurretLength - 2);
+		pen.Tube(forward * TurretBack, muzzle, TurretWidth, TurretWidth, material, new Color(0x23262e), new Color(0x15171c));
+		pen.Tube(muzzle, forward * TurretLength, TurretWidth, TurretWidth, material + new Vector2(0, 8), new Color(0x8a90a0), new Color(0x23262e));
+
+		pen.Ball(Vector2.Zero, BodyRadius, material, Color.Violet, new Color(0x4a2a5a), round: true);
 	}
 
-	public override void RenderEmissive(Batcher batcher)
-	{
-		DrawEye(batcher);
-	}
-
-	void RenderShapes(Batcher batcher, Color? color = null)
-	{
-		if (SpriteBlinkHidden)
-			return;
-
-		DrawRotor(batcher, color ?? new Color(0x2a2e38), color ?? new Color(0xc0c6d0));
-		DrawTurret(batcher, color ?? new Color(0x23262e), color ?? new Color(0x8a90a0));
-		batcher.PushMatrix(Matrix3x2.CreateScale(1.0f, 0.95f));
-		batcher.Circle(Vector2.Zero, BodyRadius, 16, color ?? Color.Violet);
-		DrawEye(batcher);
-		batcher.PopMatrix();
-	}
-
-	void DrawTurret(Batcher batcher, Color barrelColor, Color muzzleColor)
-	{
-		batcher.PushMatrix(Matrix3x2.CreateRotation(turretAngle));
-		batcher.Rect(TurretBack, -TurretWidth / 2, TurretLength - TurretBack, TurretWidth, barrelColor);
-		batcher.Rect(TurretLength - 2, -TurretWidth / 2, 2, TurretWidth, muzzleColor); // muzzle tip
-		batcher.PopMatrix();
-	}
-
-	// Normal "outline": the barrel's interior faces the viewer while its four edges bevel outward
-	// (edge normals splay along the rim), so the turret catches a lit rim. The bevel normals must
-	// rotate with the barrel, and the batcher matrix only transforms positions (not vertex colors),
-	// so both the geometry and the encoded normals are rotated here in code rather than via PushMatrix.
-	void RenderTurretNormals(Batcher batcher)
-	{
-		var fwd = Calc.AngleToVector(turretAngle);
-		var side = new Vector2(-fwd.Y, fwd.X); // barrel +Y in screen space
-		float x0 = TurretBack, x1 = TurretLength, hw = TurretWidth * 0.5f;
-		var flat = new Color(0x8080ff);
-
-		Vector2 P(float px, float py) => fwd * px + side * py;
-
-		batcher.Quad(P(x0, -hw), P(x1, -hw), P(x1, hw), P(x0, hw), flat); // interior faces viewer
-		TurretBevel_(batcher, P(x1, -hw), P(x1, hw), fwd, flat);          // muzzle end
-		TurretBevel_(batcher, P(x0, hw), P(x0, -hw), -fwd, flat);         // back
-		TurretBevel_(batcher, P(x1, hw), P(x0, hw), side, flat);          // one long side
-		TurretBevel_(batcher, P(x0, -hw), P(x1, -hw), -side, flat);       // other long side
-	}
-
-	// A rim strip along edge a->b: outer vertices encode the outward normal, inner vertices are flat.
-	void TurretBevel_(Batcher batcher, Vector2 a, Vector2 b, Vector2 outward, Color flat)
-	{
-		var oc = RimNormalColor(outward);
-		batcher.Quad(a, b, b - outward * TurretBevel, a - outward * TurretBevel, oc, oc, flat, flat);
-	}
-
-	void DrawRotor(Batcher batcher, Color armColor, Color bladeColor)
+	// The rotor assembly (masts + blades) banks with travel; the body stays upright. Pen normals don't follow the
+	// batcher matrix, so the bank, spin and squash are applied to the points themselves.
+	void DrawRotor(Pen pen, Vector2 material)
 	{
 		const float armX = 5f;        // horizontal offset of each mast from center
 		const float armWidth = 2f;
@@ -417,31 +355,16 @@ public class Drone : Actor
 		const float bladeLength = 11f;
 		const float bladeThickness = 2f;
 
-		// Rotor assembly (masts + blades) banks with travel; the body stays upright.
-		batcher.PushMatrix(Matrix3x2.CreateRotation(tilt));
-		batcher.Rect(-armX - armWidth / 2, mastTop, armWidth, mastBottom - mastTop, armColor);
-		batcher.Rect(armX - armWidth / 2, mastTop, armWidth, mastBottom - mastTop, armColor);
-		DrawBlade(batcher, new Vector2(-armX, mastTop), bladeLength, bladeThickness, bladeColor);
-		DrawBlade(batcher, new Vector2(armX, mastTop), bladeLength, bladeThickness, bladeColor);
-		batcher.PopMatrix();
-	}
-
-	// Body as a lit sphere: center normal faces the viewer, rim normals splay outward (nz~0).
-	static void RenderSphereNormals(Batcher batcher, Vector2 center, float radius, int steps)
-		=> RigDraw.DrawSphereNormals(batcher, center, radius, steps);
-
-	static Color RimNormalColor(Vector2 dir) => RigDraw.ScreenNormalColor(dir);
-
-	static void DrawEye(Batcher batcher) {
-		//batcher.Circle(new Vector2(0, -1), 1.6f, 8, new Color(0xff4040)); // eye
-	}
-
-	void DrawBlade(Batcher batcher, Vector2 at, float length, float thickness, Color color)
-	{
-		// Squash X in screen space (between the spin and the translate) so the disc's sweep is an
-		// ellipse, reading as a rotor tilted away from the camera rather than a flat pinwheel.
-		batcher.PushMatrix(Matrix3x2.CreateRotation(bladeSpin) * Matrix3x2.CreateScale(1.0f, BladeSquash) * Matrix3x2.CreateTranslation(at));
-		batcher.Rect(-length / 2, -thickness / 2, length, thickness, color);
-		batcher.PopMatrix();
+		var bank = Matrix3x2.CreateRotation(tilt);
+		// Squash the spun blade so its sweep is an ellipse, reading as a rotor tilted away from the camera.
+		var blade = Calc.AngleToVector(bladeSpin) * new Vector2(1, BladeSquash) * bladeLength / 2;
+		for (var side = -1; side <= 1; side += 2)
+		{
+			var top = new Vector2(armX * side, mastTop);
+			pen.Tube(Vector2.Transform(new Vector2(armX * side, mastBottom), bank), Vector2.Transform(top, bank),
+				armWidth, armWidth, material, new Color(0x2a2e38), new Color(0x15171c));
+			pen.Tube(Vector2.Transform(top - blade, bank), Vector2.Transform(top + blade, bank),
+				bladeThickness, bladeThickness, material + new Vector2(0, 16), new Color(0xc0c6d0), new Color(0x5a606c));
+		}
 	}
 }
