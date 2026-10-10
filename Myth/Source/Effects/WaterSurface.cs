@@ -47,6 +47,7 @@ public sealed class WaterSurface
 	public float SurfaceY;           // rest world Y of the top edge
 	public Color Body = BodyColor;
 	public Color Foam = FoamColor;
+	public float LipCrawl;           // 0..1: how much the foam line flickers in brightness and thickness
 	readonly float[] height;
 	readonly float[] velocity;
 	readonly float[] bottom;         // per-sample floor world Y
@@ -73,6 +74,9 @@ public sealed class WaterSurface
 	}
 
 	public bool ContainsX(float worldX) => worldX >= Left && worldX <= Right;
+
+	public float TopAt(float worldX, float time)
+		=> TopY(Math.Clamp((int)MathF.Round((worldX - Left) / SampleSpacing), 0, SampleCount - 1), time);
 
 	public void SetColumnBottom(int column, float worldY)
 	{
@@ -171,7 +175,10 @@ public sealed class WaterSurface
 				Body);
 
 			// foam line riding the displaced top edge
-			batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), 1f, Foam);
+			var crawl = 0.5f + 0.25f * (MathF.Sin(xl * 0.7f + time * 6f) + MathF.Sin(xl * 0.29f - time * 3.7f));
+			var lip = LipCrawl > 0 ? Color.Lerp(Body, Foam, 1 - LipCrawl * (1 - crawl)) : Foam;
+			var weight = LipCrawl > 0 && crawl > 0.75f ? 2f : 1f;
+			batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), weight, lip);
 
 			topLeft = topRight;
 		}

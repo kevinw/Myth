@@ -1179,7 +1179,7 @@ public abstract partial class Pawn : Actor
 	{
 		if (this is not Player || Velocity.Y < 0 || MathF.Abs(Velocity.X) < WaterRollSinkSpeed)
 			return;
-		if (Game.WaterSurfaceAtX(Position.X) is not { } surface)
+		if (Game.WaterSurfaceAt(Position) is not { } surface)
 			return;
 		if (Position.Y < surface.SurfaceY - WaterRollSurfaceCatchHeight || Position.Y > surface.SurfaceY + Game.TileSize)
 			return;
@@ -1191,7 +1191,7 @@ public abstract partial class Pawn : Actor
 
 	bool UpdateWaterRoll()
 	{
-		if (Game.WaterSurfaceAtX(Position.X) is not { } surface)
+		if (Game.WaterSurfaceAt(Position) is not { } surface)
 		{
 			StopWaterRoll();
 			return false;
@@ -1599,12 +1599,12 @@ public abstract partial class Pawn : Actor
 
 	void EmitWaterSurfaceSplash(float strength, bool exiting, int count)
 	{
-		Game.SplashWater(Position.X, exiting ? -strength : strength);
+		Game.SplashWater(Position, exiting ? -strength : strength);
 
 		if (splashParticlesEffect >= 0 && Game.Particles is { Supported: true } particles)
 		{
 			// Emit at the waterline (segment surface Y) rather than the submerged torso.
-			var surfaceY = Game.WaterSurfaceAtX(Position.X)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
+			var surfaceY = Game.WaterSurfaceAt(Position)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
 			particles.Emit(splashParticlesEffect,
 				worldPosition: new Vector2(Position.X, surfaceY),
 				count: count,

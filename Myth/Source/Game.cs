@@ -1848,21 +1848,26 @@ public partial class Game : IDisposable
 
 	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:
 	// positive dips the surface down (plunging in), negative bulges it up (bursting out).
-	public void SplashWater(float worldX, float impulseSpeed)
-		=> WaterSurfaceAtX(worldX)?.Splash(worldX, impulseSpeed);
+	public void SplashWater(Vector2 worldPosition, float impulseSpeed)
+		=> WaterSurfaceAt(worldPosition)?.Splash(worldPosition.X, impulseSpeed);
 
-	// Returns the exposed water surface whose horizontal span contains worldX, or null.
-	public WaterSurface? WaterSurfaceAtX(float worldX)
+	public WaterSurface? WaterSurfaceAt(Vector2 worldPosition)
 	{
+		WaterSurface? best = null;
+		var bestDistance = float.MaxValue;
+		void Consider(WaterSurface surface)
+		{
+			var distance = MathF.Abs(surface.SurfaceY - worldPosition.Y);
+			if (surface.ContainsX(worldPosition.X) && distance < bestDistance)
+				(best, bestDistance) = (surface, distance);
+		}
 		foreach (var volume in LiquidVolumes)
-			if (volume.Surface is { } surface && surface.ContainsX(worldX))
-				return surface;
-		if (room == null)
-			return null;
-		foreach (var surface in room.WaterSurfaces)
-			if (surface.ContainsX(worldX))
-				return surface;
-		return null;
+			if (volume.Surface is { } surface)
+				Consider(surface);
+		if (room != null)
+			foreach (var surface in room.WaterSurfaces)
+				Consider(surface);
+		return best;
 	}
 
 	void UpdateWaterSurfaces()

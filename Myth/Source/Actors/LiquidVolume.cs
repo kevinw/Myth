@@ -42,6 +42,20 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	static readonly Color LavaLightColor = new(1f, 0.45f, 0.15f, 1f);
 	static readonly Color LavaBody = new(0.85f, 0.28f, 0.06f, 0.9f);
 	static readonly Color LavaFoam = new(1f, 0.78f, 0.3f, 1f);
+	static readonly Color LavaCrust = new(0.5f, 0.12f, 0.04f, 1f);
+	static float LavaLipCrawl => 0.6f;
+	static float BubbleInterval => 0.19f;
+	static float BubbleRiseRate => 2f;
+	static float BubblePopImpulse => 15f;
+	static float BubbleFlashTime => 0.15f;
+	static float BubbleFlashRadius => 28f;
+	static float BubbleFlashIntensity => 0.8f;
+
+	struct Bubble
+	{
+		public float X, Age, Life, Radius;
+		public readonly bool Popped => Age >= Life;
+	}
 
 	public WaterSurface? Surface { get; private set; }
 	public RectInt WorldRect => new(Position, Size);
@@ -60,6 +74,10 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	readonly HashSet<Point2> bleedVisited = [];
 	int steamEffect = -1;
 	readonly List<Point2> touchedWater = [];
+	readonly List<Bubble> bubbles = [];
+	int emberEffect = -1;
+	float bubbleTimer;
+	Rng rng = new((ulong)Environment.TickCount64);
 
 	public LiquidVolume()
 	{
@@ -76,12 +94,14 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		fill = Fill;
 		Game.LiquidVolumes.Add(this);
 		steamEffect = AcquireParticleEffect("steam");
+		emberEffect = AcquireParticleEffect("embers");
 	}
 
 	public override void Destroyed()
 	{
 		Game.LiquidVolumes.Remove(this);
 		ReleaseParticleEffect(ref steamEffect);
+		ReleaseParticleEffect(ref emberEffect);
 	}
 
 	public void SetActive(Actor source, bool active)
@@ -118,7 +138,9 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 
 		var surface = EnsureSurface();
 		surface.SurfaceY = surfaceY;
-		(surface.Body, surface.Foam) = Kind == LiquidKind.Lava ? (LavaBody, LavaFoam) : (WaterSurface.BodyColor, WaterSurface.FoamColor);
+		(surface.Body, surface.Foam, surface.LipCrawl) = Kind == LiquidKind.Lava
+			? (LavaBody, LavaFoam, LavaLipCrawl)
+			: (WaterSurface.BodyColor, WaterSurface.FoamColor, 0);
 		Flood(surface);
 		surface.Update(Time.Delta);
 
@@ -126,7 +148,48 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		{
 			BurnPawns();
 			BoilWater();
+			UpdateBubbles(surface);
 		}
+		else
+			bubbles.Clear();
+	}
+
+	// Bubbles swell on the surface, then pop: the pop dimples the wave sim, throws embers, flares
+	// a light and plays a sound. They churn faster while the level is moving.
+	void UpdateBubbles(WaterSurface surface)
+	{
+		var moving = delayTimer <= 0 && fill != (active ? ActiveFill : Fill);
+		bubbleTimer -= Time.Delta * (moving ? BubbleRiseRate : 1);
+		if (bubbleTimer <= 0)
+		{
+			bubbleTimer = BubbleInterval * rng.Float(0.3f, 1.7f);
+			var x = rng.Float(Size.X);
+			if (IsWet(new((int)x / Game.TileSize, surfaceRow)))
+				bubbles.Add(new() { X = Position.X + x, Life = rng.Float(0.35f, 0.7f), Radius = rng.Float(1.5f, 3.5f) });
+		}
+
+		for (var i = bubbles.Count - 1; i >= 0; i--)
+		{
+			var bubble = bubbles[i];
+			var wasSwelling = !bubble.Popped;
+			bubble.Age += Time.Delta;
+			if (wasSwelling && bubble.Popped)
+				Pop(bubble, surface);
+			if (bubble.Age >= bubble.Life + BubbleFlashTime)
+				bubbles.RemoveAt(i);
+			else
+				bubbles[i] = bubble;
+		}
+	}
+
+	void Pop(Bubble bubble, WaterSurface surface)
+	{
+		surface.Splash(bubble.X, BubblePopImpulse * bubble.Radius);
+		var top = new Vector2(bubble.X, surface.TopAt(bubble.X, Time.SecondsF));
+		if (emberEffect >= 0)
+			Game.Particles?.Emit(emberEffect, top, (int)bubble.Radius + 1);
+		if (Room == Game.CurrentRoom)
+			Game.PlayAudioEvent("liquid/bubble", "Size", bubble.Radius, top);
 	}
 
 	WaterSurface EnsureSurface()
@@ -201,6 +264,15 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		foreach (var rect in cappedRects)
 			batcher.Rect(rect, Surface.Body);
 		Surface.Render(batcher, time);
+		foreach (var bubble in bubbles)
+		{
+			if (bubble.Popped)
+				continue;
+			var radius = bubble.Radius * MathF.Sqrt(bubble.Age / bubble.Life);
+			var center = new Vector2(bubble.X, Surface.TopAt(bubble.X, time));
+			batcher.SemiCircle(center, MathF.PI, MathF.Tau, radius + 1, 8, Surface.Foam);
+			batcher.SemiCircle(center, MathF.PI, MathF.Tau, radius, 8, LavaCrust);
+		}
 
 		bleedVisited.Clear();
 		batcher.PushBlend(UnderBlend);
@@ -278,6 +350,10 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		for (var x = LavaLightSpacing * 0.5f; x < Size.X; x += LavaLightSpacing)
 			if (IsWet(new((int)x / Game.TileSize, surfaceRow)))
 				action(new Vector2(Position.X + x, surfaceY - 2), LavaLightRadius, LavaLightIntensity, LavaLightHeight, LavaLightColor);
+		foreach (var bubble in bubbles)
+			if (bubble.Popped)
+				action(new Vector2(bubble.X, surfaceY - 4), BubbleFlashRadius,
+					BubbleFlashIntensity * (1 - (bubble.Age - bubble.Life) / BubbleFlashTime), LavaLightHeight, LavaFoam);
 	}
 
 	public override void Render(Batcher batcher)
