@@ -123,6 +123,32 @@
   ],
   "actors": [
     {
+      "Id": "2d1a5d740c846f65",
+      "Type": "CurveRibbon",
+      "Position": [162, 191],
+      "Width": 21.261,
+      "EndWidth": 0.589,
+      "WobbleIntensity": 11.447,
+      "WobbleFrequency": 0.419,
+      "Bulge": 0.35,
+      "Points": [[8, 224],[24, 88],[-8, 16],[-8, -48],[-8, -208]
+      ],
+      "Tint": "53411C"
+    },
+    {
+      "Id": "70ff8e9174a7bbd7",
+      "Type": "CurveRibbon",
+      "Position": [162, 134],
+      "EndWidth": 0.589,
+      "WobbleIntensity": 11.447,
+      "WobbleFrequency": 0.419,
+      "Bulge": 0.35,
+      "Width": 9.945,
+      "Points": [[-8, 68],[16, 56],[48, 24],[64, -64]
+      ],
+      "Tint": "9C6717"
+    },
+    {
       "Id": "c3d52eaaf4406d01",
       "Type": "PlayerStart",
       "Position": [132, 304]

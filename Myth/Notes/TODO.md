@@ -1,3 +1,5 @@
+- a spell check pass on user visible strings
+- localized strings
 - ori-like glittering discoball wall; faking specular highlights with slight view angle noise
 - animate any rigged model with text https://github.com/Friedrich-M/UniMate
 - try Jev for a "similarity stamp" or "tile fill" in the editor

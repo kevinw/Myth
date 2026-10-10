@@ -85,29 +85,6 @@
   ],
   "actors": [
     {
-      "Id": "bd7f0dbf9e382554",
-      "Type": "NeuralTextureActor",
-      "Position": [0, 0],
-      "FlowOrigin": [0.0, -68.0],
-      "FlowSize": [320, 320],
-      "DetailOrigin": [160.0, 92.0],
-      "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
-      "WeightsFile2": "spiralled_0112_concentrate.bin",
-      "WeightsFile": "interlaced_0191_concentrate.bin",
-      "WeightsFile3": "broccoli_circular.bin",
-      "FireRate": 9.2,
-      "PaintedMask": "d556fe40765791e0.png",
-      "editorFlags": "Locked",
-      "ShutdownSourceActorId": "574c49f8e2ee020d",
-      "ActiveShutdown": true,
-      "StepsPerSecond": 60,
-      "Dynamism": "ProceduralCurlAdvection",
-      "CurlSpeed": 1.151,
-      "PrewarmSteps": 27,
-      "Size": [320, 184],
-      "SimulationScale": 0.401
-    },
-    {
       "Id": "dc4c3733f809df85",
       "Type": "NeuralTextureRippleActor",
       "Position": [128, 128],
@@ -195,7 +172,68 @@
       "Id": "eb47f55e7ac57f5a",
       "Type": "InspectPoint",
       "Position": [41, 168],
-      "Text": "RESEARCH_NOTE_409: Surprisingly, the best shape for nucular fusion has proven to be waterfowl"
+      "Text": "RESEARCH_NOTE_409: Surprisingly, the best shape for nucelar fusion has proven to be waterfowl"
+    },
+    {
+      "Id": "012ae95d96b1cd7c",
+      "Type": "Goal",
+      "Position": [58, 148],
+      "Name": "Duck Power",
+      "DemoTeleportTarget": true
+    },
+    {
+      "Id": "ffb9cdfc3ddf2b22",
+      "From": "BlueMemoryLight",
+      "Position": [319, 47],
+      "DrawSprite": false,
+      "Intensity": 0.622,
+      "Radius": 104.022
+    },
+    {
+      "Id": "70c59b3315899433",
+      "From": "FloLight",
+      "Position": [149, 16],
+      "Radius": 226.258,
+      "LightColor": "B5E2FF",
+      "Intensity": 1.388,
+      "Height": 21.905,
+      "CookieCutoff": 0.013
+    },
+    {
+      "Id": "14e57a6a068aa6f2",
+      "Type": "CurveRibbon",
+      "Position": [112, 169],
+      "Style": "cable",
+      "Width": 4.428,
+      "Points": [[40, -8],[72, 0],[103, -12],[139, -4],[144, -16],[160, -24],[165, -36],[175, -46],[183, -59],[183, -71],[192, -79],[194, -90],[200, -96],[202, -108],[216, -112]
+      ]
+    },
+    {
+      "Id": "0bbe6097812d9f28",
+      "Type": "CurveRibbon",
+      "Position": [160, 90],
+      "Style": "cable",
+      "Points": [[-21, 44],[-35, 44]
+      ],
+      "Width": 5.052
+    },
+    {
+      "Id": "7c08d0d588870291",
+      "Type": "CurveRibbon",
+      "Position": [122, 122],
+      "Style": "cable",
+      "Width": 5.052,
+      "Points": [[-21, 44],[-54, 44],[-80, 40]
+      ]
+    },
+    {
+      "Id": "6251fb828b2d915e",
+      "Type": "CurveRibbon",
+      "Position": [40, 147],
+      "Style": "cable",
+      "Width": 5.052,
+      "Points": [[0, 24],[0, -5],[-11, -11]
+      ]
     },
     {
       "Id": "340209a4b5a7fa2f",
@@ -222,29 +260,27 @@
       "PoseAnimationName": "Kneeling_Down"
     },
     {
-      "Id": "012ae95d96b1cd7c",
-      "Type": "Goal",
-      "Position": [58, 148],
-      "Name": "Duck Power",
-      "DemoTeleportTarget": true
-    },
-    {
-      "Id": "ffb9cdfc3ddf2b22",
-      "From": "BlueMemoryLight",
-      "Position": [319, 47],
-      "DrawSprite": false,
-      "Intensity": 0.622,
-      "Radius": 104.022
-    },
-    {
-      "Id": "70c59b3315899433",
-      "From": "FloLight",
-      "Position": [149, 16],
-      "Radius": 226.258,
-      "LightColor": "B5E2FF",
-      "Intensity": 1.388,
-      "Height": 21.905,
-      "CookieCutoff": 0.013
+      "Id": "bd7f0dbf9e382554",
+      "Type": "NeuralTextureActor",
+      "Position": [0, 0],
+      "FlowOrigin": [0.0, -68.0],
+      "FlowSize": [320, 320],
+      "DetailOrigin": [160.0, 92.0],
+      "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
+      "WeightsFile2": "spiralled_0112_concentrate.bin",
+      "WeightsFile": "interlaced_0191_concentrate.bin",
+      "WeightsFile3": "broccoli_circular.bin",
+      "FireRate": 9.2,
+      "PaintedMask": "d556fe40765791e0.png",
+      "editorFlags": "Locked",
+      "ShutdownSourceActorId": "574c49f8e2ee020d",
+      "ActiveShutdown": true,
+      "StepsPerSecond": 60,
+      "Dynamism": "ProceduralCurlAdvection",
+      "CurlSpeed": 1.151,
+      "PrewarmSteps": 27,
+      "Size": [320, 184],
+      "SimulationScale": 0.401
     }
   ]
 }
