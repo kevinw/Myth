@@ -48,6 +48,7 @@ static class EditorIcons
 	public const string LayerGroup = "\uf5fd";
 	public const string Wind = "\uf72e";
 	public const string Smog = "\uf75f";
+	public const string Water = "\uf773";
 	public const string WaveSquare = "\uf83e";
 	public const string Fan = "\uf863";
 	public const string SearchActors = Search + "  Actors";
@@ -97,6 +98,7 @@ static class EditorIcons
 		0xf5fd, 0xf5fd,
 		0xf72e, 0xf72e,
 		0xf75f, 0xf75f,
+		0xf773, 0xf773,
 		0xf83e, 0xf83e,
 		0xf863, 0xf863,
 		0
@@ -142,6 +144,7 @@ static class EditorIcons
 			"layer-group" => LayerGroup[0],
 			"wind" => Wind[0],
 			"smog" => Smog[0],
+			"water" => Water[0],
 			"wave-square" => WaveSquare[0],
 			"fan" => Fan[0],
 			"magnifying-glass" => Search[0],

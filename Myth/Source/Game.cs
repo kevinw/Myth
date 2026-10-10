@@ -1827,9 +1827,14 @@ public partial class Game : IDisposable
 
 	// True when the given world point falls inside a water tile. Water is a non-solid
 	// tile (Factory 'w'); pawns sample their torso here to drive swim physics.
-	public bool HasWater => room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
+	public bool HasWater => LiquidVolumes.Count > 0 || room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
+	internal readonly List<LiquidVolume> LiquidVolumes = [];
+
 	public bool IsWaterAt(Point2 worldPoint, bool continuePastTopEdge = false)
 	{
+		foreach (var volume in LiquidVolumes)
+			if (volume.Contains(worldPoint))
+				return true;
 		if (room == null)
 			return false;
 		var local = worldPoint - room.WorldBounds.TopLeft;
@@ -1844,20 +1849,14 @@ public partial class Game : IDisposable
 	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:
 	// positive dips the surface down (plunging in), negative bulges it up (bursting out).
 	public void SplashWater(float worldX, float impulseSpeed)
-	{
-		if (room == null)
-			return;
-		foreach (var surface in room.WaterSurfaces)
-			if (surface.ContainsX(worldX))
-			{
-				surface.Splash(worldX, impulseSpeed);
-				return;
-			}
-	}
+		=> WaterSurfaceAtX(worldX)?.Splash(worldX, impulseSpeed);
 
 	// Returns the exposed water surface whose horizontal span contains worldX, or null.
 	public WaterSurface? WaterSurfaceAtX(float worldX)
 	{
+		foreach (var volume in LiquidVolumes)
+			if (volume.Surface is { } surface && surface.ContainsX(worldX))
+				return surface;
 		if (room == null)
 			return null;
 		foreach (var surface in room.WaterSurfaces)
@@ -2378,25 +2377,71 @@ public partial class Game : IDisposable
 		if (room == null || tiles.Count == 0)
 			return false;
 
-		var dirtyBounds = TileWorldBounds(tiles);
 		var substancesBroken = new HashSet<string>();
 		foreach (var point in tiles)
 		{
 			if (Factory.Find(room.Tiles[point.X, point.Y]) is { Substance: { } substance })
 				substancesBroken.Add(substance);
-
-			room.Set(point, '0', rebuildGeometry: false);
 			Create<Pop>(TileWorldCenter(point));
 		}
 
-		room.RebuildGeometry(dirtyBounds);
-		RefreshRoomTiles();
-		View?.MarkRoomNormalCacheDirty(room);
-		View?.MarkRoomTileFieldCacheDirty(room);
+		ClearTiles(tiles);
 		foreach (var substance in substancesBroken)
 			PlayAudioEvent("tile_break", "Type", Factory.SubstanceSoundType(substance), position: soundPosition);
 
 		return true;
+	}
+
+	// One geometry rebuild + visual refresh for the whole batch, not one per tile.
+	void ClearTiles(List<Point2> tiles)
+	{
+		foreach (var point in tiles)
+			room!.Set(point, '0', rebuildGeometry: false);
+		room!.RebuildGeometry(TileWorldBounds(tiles));
+		RefreshRoomTiles();
+		View?.MarkRoomNormalCacheDirty(room);
+		View?.MarkRoomTileFieldCacheDirty(room);
+	}
+
+	readonly List<Point2> evaporateScratch = [];
+	readonly HashSet<Point2> evaporateVisited = [];
+
+	// Boils off every authored water body touching the given current-room tiles: each touched
+	// tile flood-fills its whole connected pool, so nothing is left floating.
+	internal void EvaporateWater(List<Point2> touchedTiles, int steamEffect)
+	{
+		if (room == null || touchedTiles.Count == 0)
+			return;
+
+		evaporateScratch.Clear();
+		evaporateVisited.Clear();
+		foreach (var start in touchedTiles)
+		{
+			if (!room.IsWaterTile(start) || !evaporateVisited.Add(start))
+				continue;
+			var head = evaporateScratch.Count;
+			evaporateScratch.Add(start);
+			while (head < evaporateScratch.Count)
+			{
+				var tile = evaporateScratch[head++];
+				foreach (var next in (ReadOnlySpan<Point2>)[tile + Point2.Left, tile + Point2.Right, tile + Point2.Up, tile + Point2.Down])
+					if (room.IsWaterTile(next) && evaporateVisited.Add(next))
+						evaporateScratch.Add(next);
+			}
+		}
+		if (evaporateScratch.Count == 0)
+			return;
+
+		var center = Vector2.Zero;
+		foreach (var tile in evaporateScratch)
+		{
+			var position = (Vector2)TileWorldCenter(tile);
+			center += position;
+			if (steamEffect >= 0)
+				Particles?.Emit(steamEffect, position, 6);
+		}
+		ClearTiles(evaporateScratch);
+		PlayAudioEvent("liquid/steam", "Size", evaporateScratch.Count, position: center / evaporateScratch.Count);
 	}
 
 	RectInt TileWorldBounds(List<Point2> tiles)

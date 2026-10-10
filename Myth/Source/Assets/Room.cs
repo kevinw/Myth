@@ -1373,6 +1373,11 @@ public class Room
 			&& WaterTiles.Length == Size.X * Size.Y
 			&& WaterTiles[tile.Y * Size.X + tile.X];
 
+	public bool IsSolidTile(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y)
+			&& SolidTiles.Length == Size.X * Size.Y
+			&& SolidTiles[tile.Y * Size.X + tile.X];
+
 	void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate, bool excludeSlopes = false)
 	{
 		var used = new bool[Size.X, Size.Y]; // TODO alloc

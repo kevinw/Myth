@@ -538,12 +538,15 @@ public sealed partial class GameView
 	// (mid-transition) next room correctly; the wave sim itself ticks in Game.PostUpdateSystems.
 	void DrawWaterBodies(Target target)
 	{
-		if (!HasWaterBody(room) && !HasWaterBody(nextRoom))
+		if (!HasWaterBody(room) && !HasWaterBody(nextRoom) && game.LiquidVolumes.Count == 0)
 			return;
 
 		PushWorldMatrix();
 		DrawRoomWaterBody(room);
 		DrawRoomWaterBody(nextRoom);
+		var time = Time.SecondsF;
+		foreach (var volume in game.LiquidVolumes)
+			volume.RenderBody(Batcher, time);
 		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();

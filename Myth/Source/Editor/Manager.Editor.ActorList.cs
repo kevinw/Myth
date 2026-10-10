@@ -41,11 +41,12 @@ public partial class Manager
 		}
 
 		var style = ImGui.GetStyle();
-		if (actorListTree)
+		var wasTree = actorListTree;
+		if (wasTree)
 			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
 		if (ImGui.SmallButton(EditorIcons.Sitemap + "##ActorListTree"))
 			actorListTree = !actorListTree;
-		if (actorListTree)
+		if (wasTree)
 			ImGui.PopStyleColor();
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip(actorListTree ? "Flat list" : "Nest attached actors under what they're attached to");

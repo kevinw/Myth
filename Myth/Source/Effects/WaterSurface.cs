@@ -40,11 +40,13 @@ public sealed class WaterSurface
 	// "lighting" gradient didn't match the scene's real lights and produced harsh vertical
 	// seams on exposed shafts. One color for the whole body, exposed or capped; the only
 	// bright accent is the thin foam line riding the animated surface.
-	static readonly Color BodyColor = new(0.09f, 0.28f, 0.52f, 0.5f);
-	static readonly Color FoamColor = new(0.35f, 0.65f, 0.9f, 0.5f);
+	public static readonly Color BodyColor = new(0.09f, 0.28f, 0.52f, 0.5f);
+	public static readonly Color FoamColor = new(0.35f, 0.65f, 0.9f, 0.5f);
 
 	public readonly int Left;        // world X of sample 0
-	public readonly float SurfaceY;  // rest world Y of the top edge
+	public float SurfaceY;           // rest world Y of the top edge
+	public Color Body = BodyColor;
+	public Color Foam = FoamColor;
 	readonly float[] height;
 	readonly float[] velocity;
 	readonly float[] bottom;         // per-sample floor world Y
@@ -71,6 +73,14 @@ public sealed class WaterSurface
 	}
 
 	public bool ContainsX(float worldX) => worldX >= Left && worldX <= Right;
+
+	public void SetColumnBottom(int column, float worldY)
+	{
+		var columns = (SampleCount - 1) / SamplesPerTile;
+		var end = column == columns - 1 ? SampleCount : (column + 1) * SamplesPerTile;
+		for (var i = column * SamplesPerTile; i < end; i++)
+			bottom[i] = worldY;
+	}
 
 	// Kick the surface around worldX. impulseSpeed is signed: positive dips it down (a pawn
 	// plunging in), negative bulges it up (a pawn bursting out). Magnitude sets how big the
@@ -146,17 +156,22 @@ public sealed class WaterSurface
 			var xl = Left + i * SampleSpacing;
 			var xr = xl + SampleSpacing;
 			var topRight = TopY(i + 1, time);
+			if (bottom[i] <= SurfaceY)
+			{
+				topLeft = topRight;
+				continue;
+			}
 
 			// body column: flat uniform tint
 			batcher.Quad(
 				new Vector2(xl, topLeft),
 				new Vector2(xr, topRight),
-				new Vector2(xr, bottom[i + 1]),
+				new Vector2(xr, bottom[i]),
 				new Vector2(xl, bottom[i]),
-				BodyColor);
+				Body);
 
 			// foam line riding the displaced top edge
-			batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), 1f, FoamColor);
+			batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), 1f, Foam);
 
 			topLeft = topRight;
 		}
