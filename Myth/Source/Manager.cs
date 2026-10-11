@@ -1664,6 +1664,7 @@ public partial class Manager : App
 		Array.Sort(times);
 		double Percentile(double p) => times[(int)(p * (times.Length - 1))];
 		Console.WriteLine($"[FrameTime] {times.Length} frames: avg {average:F2} ms ({1000 / average:F1} fps), p50 {Percentile(0.5):F2}, p95 {Percentile(0.95):F2}, p99 {Percentile(0.99):F2}, max {times[^1]:F2}");
+		Console.WriteLine($"[FrameTime] last second, ms: {PerfStats.Snapshot}");
 	}
 
 	bool AllocationProfileEnabled => args.allocMeasureFrames > 0;

@@ -64,11 +64,13 @@ public class DualGrid : Actor
 					continue;
 				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
 
-				drawCommands.Add(new DrawCommand(
-					art.Tile,
-					art.Normal,
-					position,
-					materialMask));
+				// Boundary tiles are pre-split into their filled quadrants, so drawing is a plain quad per command.
+				if (materialMask == TileQuadrants.All)
+					drawCommands.Add(new DrawCommand(art.Tile, art.Normal, position));
+				else
+					foreach (var (quadrant, clip) in Quadrants)
+						if ((materialMask & quadrant) != 0)
+							drawCommands.Add(new DrawCommand(art.Tile.GetClipSubtexture(clip), art.Normal.GetClipSubtexture(clip), position + clip.Position));
 
 				AppendWorldShadowSegments(position, materialMask, art.Occluders);
 			}
@@ -114,12 +116,21 @@ public class DualGrid : Actor
 		{
 			var tile = normals ? command.Normal : command.Tile;
 			if (tile.Texture != null && view.Overlaps(new Rect(command.Position, tile.Size)))
-				DrawTile(batcher, tile, command.Position, command.MaterialMask, Color.White);
+				batcher.Image(tile, command.Position, Color.White);
 		}
 	}
 
+	static readonly (int Quadrant, Rect Clip)[] Quadrants =
+	[
+		(TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize)),
+		(TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize)),
+		(TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize)),
+		(TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize)),
+	];
+
 	// Draw one dual-grid tile at a local position, clipping to only the quadrants its materialMask
-	// fills (so a boundary tile's transition art lines up with the filled cells).
+	// fills (so a boundary tile's transition art lines up with the filled cells). A clipped subtexture
+	// drawn at an offset is the same quad as Batcher's clip overload, without its per-quad matrix.
 	internal static void DrawTile(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, Color color)
 	{
 		if (materialMask == TileQuadrants.All)
@@ -128,18 +139,9 @@ public class DualGrid : Actor
 			return;
 		}
 
-		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize), color);
-		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize), color);
-		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize), color);
-		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize), color);
-	}
-
-	static void DrawQuadrant(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, int quadrant, Rect clip, Color color)
-	{
-		if ((materialMask & quadrant) == 0)
-			return;
-
-		batcher.Image(tile, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
+		foreach (var (quadrant, clip) in Quadrants)
+			if ((materialMask & quadrant) != 0)
+				batcher.Image(tile.GetClipSubtexture(clip), position + clip.Position, color);
 	}
 
 	// Render a solid cols x rows tile rectangle skinned with a dual tileset, in local space (origin at
@@ -340,11 +342,10 @@ public class DualGrid : Actor
 
 	private readonly record struct SegmentRun(float Axis, float Start, float End);
 
-	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position, int materialMask)
+	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position)
 	{
 		public readonly Subtexture Tile = tile;
 		public readonly Subtexture Normal = normal;
 		public readonly Vector2 Position = position;
-		public readonly int MaterialMask = materialMask;
 	}
 }
