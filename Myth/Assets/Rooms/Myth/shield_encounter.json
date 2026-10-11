@@ -107,6 +107,16 @@
       "Position": [172, 136]
     },
     {
+      "Id": "7cdbca8083f00e1e",
+      "Type": "CurveRibbon",
+      "Position": [169, 107],
+      "Style": "cable",
+      "Width": 4.428,
+      "Tint": "838383",
+      "Points": [[-168, -16],[-134, -14],[-120, -32]
+      ]
+    },
+    {
       "Id": "270889d43489462d",
       "Type": "Goal",
       "Position": [292, 84]
