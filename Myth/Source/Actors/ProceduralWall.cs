@@ -90,7 +90,7 @@ public abstract class ProceduralWall : Actor, IResizable, IPaintedMask
 	public override bool CastsReflection => false;
 
 	public override void Render(Batcher batcher) { }
-	public override void RenderEmissiveOccluder(Batcher batcher) { }
+	public override bool OccludesEmissive => false;
 	public override void RenderNormals(Batcher batcher) { }
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }

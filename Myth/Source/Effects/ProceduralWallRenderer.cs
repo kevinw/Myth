@@ -208,7 +208,7 @@ sealed class ProceduralWallRenderer : IDisposable
 				pipeParameters.NormalSettings.X = PipeNormalStrength * MathF.Max(wall.NormalStrength, 0);
 				pipeParameters.NormalSettings.Y = MathF.Max(PipeDetail(wall), 0.01f);
 				data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
-				var blend = pass == Pass.Normals ? NormalBufferBlend : BlendMode.Premultiply;
+				var blend = pass switch { Pass.Normals => NormalBufferBlend, Pass.Emissive => GameView.EmissiveBlend, _ => BlendMode.Premultiply };
 				DrawCubes(target, data, blend);
 				if (pass != Pass.Emissive)
 					DrawPipes(target, data, blend);

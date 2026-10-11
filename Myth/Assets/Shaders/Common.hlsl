@@ -25,3 +25,21 @@ float2 target_uv(float2 uv)
     // See Notes/BROWSER_TARGET_FLIP.md.
     return uv;
 }
+
+// World layers draw color and emissive in one pass, as two render targets (see GameView.DrawWorldLayer).
+// Emissive alpha is transmittance, so under the shared premultiplied blend a color draw occludes the glow
+// beneath it by writing (0, 0, 0, a). Phase: 0 = color that occludes, 1 = emissive only, 2 = color that
+// doesn't occlude. A single-target pass ignores SV_Target1.
+struct WorldOutput
+{
+    float4 Color : SV_Target0;
+    float4 Emissive : SV_Target1;
+};
+
+WorldOutput world_output(float4 color, float phase)
+{
+    WorldOutput output;
+    output.Color = phase > 0.5 && phase < 1.5 ? float4(0.0, 0.0, 0.0, 0.0) : color;
+    output.Emissive = phase > 1.5 ? float4(0.0, 0.0, 0.0, 0.0) : phase > 0.5 ? color : float4(0.0, 0.0, 0.0, color.a);
+    return output;
+}

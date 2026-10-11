@@ -7,7 +7,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
-    float4 FieldSize;
+    float4 FieldSize; // xy = size, z = world_output phase
 };
 
 Texture2D Texture : register(t0, space2);
@@ -41,7 +41,7 @@ VsOutput vertex_main(VsInput input)
     return output;
 }
 
-float4 fragment_main(VsOutput input) : SV_Target0
+WorldOutput fragment_main(VsOutput input)
 {
     float4 sampled = Texture.Sample(Sampler, input.TexCoord);
     float4 color =
@@ -52,5 +52,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 pixel = screen_pixel(input.Position, FieldSize.y);
     float4 field = Field.Sample(FieldSampler, target_uv(pixel / FieldSize.xy));
     color.rgb *= 1.0.xxx - field.aaa + field.rgb;
-    return color;
+    return world_output(color, FieldSize.z);
 }

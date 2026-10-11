@@ -349,7 +349,7 @@ float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pix
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
-    color = lerp(color, emissive.rgb, emissive.a);
+    color = lerp(color, emissive.rgb, 1.0 - emissive.a); // emissive alpha is transmittance
     return float4(saturate(color), scene.a);
 }
 

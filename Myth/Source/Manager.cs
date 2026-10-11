@@ -1647,24 +1647,26 @@ public partial class Manager : App
 		if (args.maxFrames == int.MaxValue)
 			return;
 		(frameTimestamps ??= new long[args.maxFrames])[completedGameFrames] = Stopwatch.GetTimestamp();
+		if (completedGameFrames == FrameTimeWarmupFrames)
+			PerfStats.ResetRun();
 		if (++completedGameFrames >= args.maxFrames)
 			Exit();
 	}
 
 	// --max-frames runs print steady-state frame times on exit, past the room-load frames.
+	const int FrameTimeWarmupFrames = 120;
 	void LogFrameTimes()
 	{
-		const int warmupFrames = 120;
-		if (frameTimestamps is not { } stamps || completedGameFrames < warmupFrames + 2)
+		if (frameTimestamps is not { } stamps || completedGameFrames < FrameTimeWarmupFrames + 2)
 			return;
-		var times = new double[completedGameFrames - warmupFrames - 1];
+		var times = new double[completedGameFrames - FrameTimeWarmupFrames - 1];
 		for (var i = 0; i < times.Length; i++)
-			times[i] = Stopwatch.GetElapsedTime(stamps[warmupFrames + i], stamps[warmupFrames + i + 1]).TotalMilliseconds;
-		var average = Stopwatch.GetElapsedTime(stamps[warmupFrames], stamps[completedGameFrames - 1]).TotalMilliseconds / times.Length;
+			times[i] = Stopwatch.GetElapsedTime(stamps[FrameTimeWarmupFrames + i], stamps[FrameTimeWarmupFrames + i + 1]).TotalMilliseconds;
+		var average = Stopwatch.GetElapsedTime(stamps[FrameTimeWarmupFrames], stamps[completedGameFrames - 1]).TotalMilliseconds / times.Length;
 		Array.Sort(times);
 		double Percentile(double p) => times[(int)(p * (times.Length - 1))];
 		Console.WriteLine($"[FrameTime] {times.Length} frames: avg {average:F2} ms ({1000 / average:F1} fps), p50 {Percentile(0.5):F2}, p95 {Percentile(0.95):F2}, p99 {Percentile(0.99):F2}, max {times[^1]:F2}");
-		Console.WriteLine($"[FrameTime] last second, ms: {PerfStats.Snapshot}");
+		Console.WriteLine($"[FrameTime] run averages, ms: {PerfStats.RunSummary()}");
 	}
 
 	bool AllocationProfileEnabled => args.allocMeasureFrames > 0;

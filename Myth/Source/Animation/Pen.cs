@@ -307,7 +307,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	{
 		if (pass != PenPass.Emissive)
 			return;
-		batcher.PushBlend(BlendMode.Premultiply);
+		batcher.PushBlend(GameView.EmissiveBlend);
 		batcher.Circle(center, radius, Math.Clamp((int)(radius * 3), 6, 24), Glowing(color));
 		batcher.PopBlend();
 	}
@@ -316,7 +316,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	{
 		if (pass != PenPass.Emissive)
 			return;
-		batcher.PushBlend(BlendMode.Premultiply);
+		batcher.PushBlend(GameView.EmissiveBlend);
 		batcher.Line(from, to, width, Glowing(color));
 		batcher.PopBlend();
 	}
@@ -325,7 +325,7 @@ readonly struct Pen(Batcher batcher, PenPass pass, Color tint)
 	{
 		if (pass != PenPass.Emissive)
 			return;
-		batcher.PushBlend(BlendMode.Premultiply);
+		batcher.PushBlend(GameView.EmissiveBlend);
 		batcher.CircleLine(center, radius, width, Math.Clamp((int)(radius * 1.5f), 12, 32), Glowing(color));
 		batcher.PopBlend();
 	}

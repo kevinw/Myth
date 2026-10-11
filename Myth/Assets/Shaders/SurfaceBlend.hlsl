@@ -15,7 +15,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
-    float4 SurfaceMeta;             // x = active layer count, y = elapsed seconds
+    float4 SurfaceMeta;             // x = active layer count, y = elapsed seconds, z = world_output phase
     float4 LayerConfig[MAX_LAYERS]; // xy = tile size in world px, z = blend mode, w = swizzle mode
     float4 LayerTint[MAX_LAYERS];   // rgba tint (straight alpha)
     float4 LayerMotion[MAX_LAYERS]; // xy = visual motion in world px / second, zw = static world px offset
@@ -126,7 +126,7 @@ float4 blend_over(float4 dst, float4 src, float mode)
     return float4(src.rgb * src.a + dst.rgb * (1.0 - src.a), a);
 }
 
-float4 fragment_main(VsOutput input) : SV_Target0
+WorldOutput fragment_main(VsOutput input)
 {
     float2 world = input.TexCoord;
     int count = (int)SurfaceMeta.x;
@@ -144,5 +144,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
     if (count > 5)
         acc = blend_over(acc, sample_layer(Layer5, Layer5Sampler, world, LayerConfig[5], LayerTint[5], LayerMotion[5], LayerBlack[5], LayerTransform[5], LayerAdjust[5]), LayerConfig[5].z);
 
-    return acc * input.Color;
+    return world_output(acc * input.Color, SurfaceMeta.z);
 }

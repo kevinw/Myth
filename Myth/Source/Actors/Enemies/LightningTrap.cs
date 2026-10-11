@@ -345,7 +345,7 @@ public class LightningTrap : Actor, IRoomInversionListener, IPenDrawn
 		// The beam is energy: colors and glow only, drawn last so the housing never erases it.
 		if (pen.Pass is PenPass.Color or PenPass.Emissive)
 		{
-			pen.Batcher.PushBlend(BlendMode.Premultiply);
+			pen.Batcher.PushBlend(pen.Pass == PenPass.Emissive ? GameView.EmissiveBlend : BlendMode.Premultiply);
 			DrawBeam(pen.Batcher);
 			pen.Batcher.PopBlend();
 		}

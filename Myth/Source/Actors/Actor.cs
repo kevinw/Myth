@@ -882,8 +882,6 @@ public class Actor
 		return true;
 	}
 
-	// A pen-drawn actor occludes shape by shape inside its emissive pass instead (see Pen), so a glow drawn
-	// behind its own body stays hidden.
 	public virtual void RenderEmissive(Batcher batcher)
 	{
 		if (this is not IPenDrawn)
@@ -895,11 +893,12 @@ public class Actor
 		DrawWithPen(batcher, PenPass.Emissive, Color.White);
 		batcher.PopBlend();
 	}
-	public virtual void RenderEmissiveOccluder(Batcher batcher)
-	{
-		if (this is not IPenDrawn)
-			Render(batcher);
-	}
+	// Whether the color draw hides glow drawn beneath it. A pen-drawn actor occludes shape by shape inside
+	// its emissive pass instead (see Pen), so a glow drawn behind its own body stays hidden.
+	public virtual bool OccludesEmissive => this is not IPenDrawn;
+	// Render and RenderEmissive draw into the color and emissive targets at once: a material pushed here
+	// must return world_output (Common.hlsl) with GameView.CurrentWorldPhase, and emissive alpha is
+	// transmittance, so glow blends with GameView.EmissiveBlend rather than Premultiply.
 	public virtual void Render(Batcher batcher)
 	{
 		if (!DrawWithPen(batcher, PenPass.Color, Color.White))

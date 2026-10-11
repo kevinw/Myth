@@ -224,7 +224,7 @@ public class Cutscene : Actor
 
 	public override void RenderNormals(Batcher batcher) { }
 	public override void RenderEmissive(Batcher batcher) { }
-	public override void RenderEmissiveOccluder(Batcher batcher) { }
+	public override bool OccludesEmissive => false;
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 

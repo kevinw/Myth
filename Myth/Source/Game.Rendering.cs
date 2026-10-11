@@ -51,39 +51,20 @@ public sealed partial class GameView
 			using (GraphicsDevice.DebugGroup("Myth/background color field"))
 				hasBackgroundColorField = DrawRoomColorField(ColorField, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
-				DrawWorldLayer(BackgroundScreen, background: true);
+				DrawWorldLayer(BackgroundScreen, BackgroundEmissive, BackgroundWorld, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/background pixel sort"))
 				ApplyPixelSort(BackgroundScreen, PixelSortLayer.Background);
 			using (GraphicsDevice.DebugGroup("Myth/foreground color field"))
 				hasForegroundColorField = DrawRoomColorField(ColorField, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
-				DrawWorldLayer(ForegroundScreen, background: false);
+				DrawWorldLayer(ForegroundScreen, ForegroundEmissive, ForegroundWorld, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/water"))
 				DrawWaterBodies(ForegroundScreen);
 			if (PerfToggles.Reflections)
 				using (GraphicsDevice.DebugGroup("Myth/flat reflections"))
 					CompositeFlatReflections(ForegroundScreen);
 			using (GraphicsDevice.DebugGroup("Myth/hidden covers"))
-				DrawHiddenCovers(ForegroundScreen);
-		}
-		if (
-#if EDITOR
-			!Manager.FullBright &&
-#endif
-			PerfToggles.Emissive)
-		{
-			using (PerfStats.Time(PerfStat.Emissive))
-			{
-				using (GraphicsDevice.DebugGroup("Myth/background emissive"))
-					DrawEmissiveLayer(BackgroundEmissive, background: true);
-				using (GraphicsDevice.DebugGroup("Myth/foreground emissive"))
-					DrawEmissiveLayer(ForegroundEmissive, background: false);
-			}
-		}
-		else
-		{
-			BackgroundEmissive.Clear(Color.Transparent);
-			ForegroundEmissive.Clear(Color.Transparent);
+				DrawHiddenCovers();
 		}
 
 		if (
@@ -400,24 +381,39 @@ public sealed partial class GameView
 			_ => 0
 		};
 
-	void DrawWorldLayer(Target target, bool background)
+	bool EmissiveEnabled =>
+#if EDITOR
+		!Manager.FullBright &&
+#endif
+		PerfToggles.Emissive && worldMaterials != null;
+
+	// Actors draw color and emissive in one pass: `world` writes both targets at once (multiple render
+	// targets), each actor's color occluding the glow beneath it before adding its own (see world_output).
+	void DrawWorldLayer(Target target, Target emissive, Target world, bool background)
 	{
+		var drawEmissive = EmissiveEnabled;
 		target.Clear(Color.Transparent);
+		emissive.Clear(EmissiveClear);
 		if (background)
 		{
 			DrawBackdrop(target);
 			Batcher.Render(target);
 			Batcher.Clear();
 			if (ShowBackgroundLayer && hasProceduralWalls)
+			{
 				proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
 					ProceduralWallRenderer.Pass.Color);
+				if (drawEmissive)
+					proceduralWallRenderer?.Render(emissive, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+						ProceduralWallRenderer.Pass.Emissive);
+			}
 		}
 
 		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
 			return;
 
 		PushWorldMatrix();
-		var atlasWander = PushAtlasWanderMaterial();
+		var baseMaterial = PushWorldBaseMaterial(drawEmissive, out var atlasWander);
 
 		// draw actors
 		foreach (var actor in rendering)
@@ -427,7 +423,7 @@ public sealed partial class GameView
 			if (IsBackgroundActor(actor) != background)
 				continue;
 
-			DrawWorldActor(actor, background, atlasWander);
+			DrawWorldActor(actor, background, atlasWander, drawEmissive);
 		}
 
 		if (!background && debugView == DebugView.CollisionRects)
@@ -435,10 +431,10 @@ public sealed partial class GameView
 		if (!background && debugView == DebugView.ReachField)
 			game.reach.Field?.Render(Batcher, game.GetFirst<Bud>()?.Position);
 
-		if (atlasWander)
+		if (baseMaterial)
 			Batcher.PopMaterial();
 		Batcher.PopMatrix();
-		Batcher.Render(target);
+		Batcher.Render(drawEmissive ? world : target);
 		Batcher.Clear();
 
 		if (PerfToggles.Reflections)
@@ -450,30 +446,111 @@ public sealed partial class GameView
 		}
 	}
 
-	void DrawHiddenCovers(Target target)
+	void DrawHiddenCovers()
 	{
 		if (!ShowForegroundLayer)
 			return;
 
+		var drawEmissive = EmissiveEnabled;
 		PushWorldMatrix();
-		var atlasWander = PushAtlasWanderMaterial();
+		var baseMaterial = PushWorldBaseMaterial(drawEmissive, out var atlasWander);
 		foreach (var actor in rendering)
 			if (actor is HiddenCoverGrid { Visible: true })
-				DrawWorldActor(actor, background: false, atlasWander);
-		if (atlasWander)
+				DrawWorldActor(actor, background: false, atlasWander, drawEmissive);
+		if (baseMaterial)
 			Batcher.PopMaterial();
 		Batcher.PopMatrix();
-		Batcher.Render(target);
+		Batcher.Render(drawEmissive ? ForegroundWorld : ForegroundScreen);
 		Batcher.Clear();
 	}
 
-	void DrawWorldActor(Actor actor, bool background, bool atlasWander)
+	// What a world-layer draw writes; the value is world_output's phase (see Common.hlsl).
+	internal enum WorldPhase { ColorOccluding, Emissive, ColorOnly }
+
+	// The phase of the world draw in progress. Materials that write the world layers pass it to their
+	// shader, including ones pushed from actor code, like Surface.
+	internal static WorldPhase CurrentWorldPhase;
+
+	// Every shader drawing into the two-target world pass must write both, so the plain World shader
+	// stands in for Batcher's default under the whole layer.
+	bool PushWorldBaseMaterial(bool emissive, out bool atlasWander)
+	{
+		atlasWander = PushAtlasWanderMaterial();
+		return atlasWander || (emissive && PushWorldMaterial());
+	}
+
+	bool PushWorldMaterial() => PushPhasedMaterial(worldMaterials);
+
+	bool PushPhasedMaterial(ReloadableMaterial[]? materials)
+	{
+		if (materials == null)
+			return false;
+		Batcher.PushSharedMaterial(materials[(int)CurrentWorldPhase].Material);
+		return true;
+	}
+
+	// One material per world_output phase, bound to the render targets once (BindPhasedMaterials) and pushed
+	// shared, so nothing is copied per push and same-phase draws batch together -- an actor that draws no
+	// glow adds no batch. Takes uniforms (target width, target height, phase, 0).
+	ReloadableMaterial[]? CreatePhasedMaterials(string name, int samplerCount)
+	{
+		var materials = new ReloadableMaterial[Enum.GetValues<WorldPhase>().Length];
+		for (var phase = 0; phase < materials.Length; phase++)
+		{
+			if (CreateFragmentMaterial(name, samplerCount, uniformBufferCount: 1) is not { } material)
+				return null; // without World, the world layers draw without emissive, as one target each
+			material.Material.Vertex.Shader = GraphicsDevice.Defaults.BatchMaterial.Vertex.Shader;
+			materials[phase] = material;
+		}
+		return materials;
+	}
+
+	ReloadableMaterial[]?[] PhasedMaterials => [worldMaterials, colorFieldMaterials, backgroundDecalMaskMaterials,
+		foregroundDecalMaskMaterials, backgroundColorFieldDecalMaterials, foregroundColorFieldDecalMaterials];
+
+	void BindPhasedMaterials()
+	{
+		Bind(worldMaterials);
+		var field = new BoundSampler(ColorField, new(TextureFilter.Linear, TextureWrap.Clamp));
+		var backgroundCoverage = new BoundSampler(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var foregroundCoverage = new BoundSampler(ParticleSolidMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		Bind(colorFieldMaterials, field);
+		Bind(backgroundDecalMaskMaterials, backgroundCoverage);
+		Bind(foregroundDecalMaskMaterials, foregroundCoverage);
+		Bind(backgroundColorFieldDecalMaterials, backgroundCoverage, field);
+		Bind(foregroundColorFieldDecalMaterials, foregroundCoverage, field);
+
+		void Bind(ReloadableMaterial[]? materials, params ReadOnlySpan<BoundSampler> samplers)
+		{
+			for (var phase = 0; phase < (materials?.Length ?? 0); phase++)
+			{
+				var fragment = materials![phase].Material.Fragment;
+				fragment.SetUniformBuffer([Screen.Width, Screen.Height, phase, 0]);
+				samplers.CopyTo(fragment.Samplers.AsSpan(1));
+			}
+		}
+	}
+
+	void DrawWorldActor(Actor actor, bool background, bool atlasWander, bool emissive)
 	{
 		Batcher.PushMatrix(actor.RenderPosition);
-		var actorMaterial = !atlasWander && PushWorldActorMaterial(actor, background);
+		CurrentWorldPhase = emissive && !actor.OccludesEmissive ? WorldPhase.ColorOnly : WorldPhase.ColorOccluding;
+		var actorMaterial = !atlasWander &&
+			(PushWorldActorMaterial(actor, background) || (CurrentWorldPhase == WorldPhase.ColorOnly && PushWorldMaterial()));
 		actor.Render(Batcher);
 		if (actorMaterial)
 			Batcher.PopMaterial();
+		if (emissive)
+		{
+			CurrentWorldPhase = WorldPhase.Emissive;
+			if (!PushPropDecalMaterial(actor))
+				PushWorldMaterial();
+			Batcher.PushBlend(EmissiveBlend);
+			actor.RenderEmissive(Batcher);
+			Batcher.PopBlend();
+			Batcher.PopMaterial();
+		}
+		CurrentWorldPhase = WorldPhase.ColorOccluding;
 		Batcher.PopMatrix();
 	}
 
@@ -510,27 +587,11 @@ public sealed partial class GameView
 		if (!hasField)
 			return PushPropDecalMaterial(actor);
 
-		var field = ColorField;
 		if (actor is Prop { Decal: true })
-		{
-			var coverage = background ? BackgroundCoverage : ParticleSolidMask;
-			var material = background ? backgroundColorFieldDecalMaterial : foregroundColorFieldDecalMaterial;
-			if (material == null)
-				return PushPropDecalMaterial(actor);
-			material.Material.Fragment.SetUniformBuffer([field.Width, field.Height, 0, 0]);
-			material.Material.Fragment.Samplers[1] = new(coverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
-			material.Material.Fragment.Samplers[2] = new(field, new(TextureFilter.Linear, TextureWrap.Clamp));
-			Batcher.PushMaterial(material.Material);
-			return true;
-		}
+			return PushPhasedMaterial(background ? backgroundColorFieldDecalMaterials : foregroundColorFieldDecalMaterials) ||
+				PushPropDecalMaterial(actor);
 
-		if (actor is not Grid and not DualGrid and not Prop and not HiddenCoverGrid and not HiddenWallGrid || colorFieldMaterial == null)
-			return false;
-
-		colorFieldMaterial.Material.Fragment.SetUniformBuffer([field.Width, field.Height, 0, 0]);
-		colorFieldMaterial.Material.Fragment.Samplers[1] = new(field, new(TextureFilter.Linear, TextureWrap.Clamp));
-		Batcher.PushMaterial(colorFieldMaterial.Material);
-		return true;
+		return actor is Grid or DualGrid or Prop or HiddenCoverGrid or HiddenWallGrid && PushPhasedMaterial(colorFieldMaterials);
 	}
 
 	// Draws the dynamic water bodies (the static 'w' tile visual is suppressed in Factory).
@@ -645,48 +706,8 @@ public sealed partial class GameView
 	}
 
 	bool PushPropDecalMaterial(Actor actor)
-	{
-		if (actor is not Prop { Decal: true } prop)
-			return false;
-		var background = prop.Layer == Factory.TileLayer.Background;
-		var coverage = background ? BackgroundCoverage : ParticleSolidMask;
-		var material = background ? backgroundDecalMaskMaterial : foregroundDecalMaskMaterial;
-		if (material == null)
-			return false;
-		material.Material.Fragment.SetUniformBuffer([coverage.Width, coverage.Height, 0, 0]);
-		material.Material.Fragment.Samplers[1] = new(coverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		Batcher.PushMaterial(material.Material);
-		return true;
-	}
-
-	void DrawEmissiveLayer(Target target, bool background)
-	{
-		target.Clear(Color.Transparent);
-		if (background && ShowBackgroundLayer && hasProceduralWalls)
-			proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-				ProceduralWallRenderer.Pass.Emissive);
-		PushWorldMatrix();
-		foreach (var actor in rendering)
-		{
-			if (!actor.Visible)
-				continue;
-			if (IsBackgroundActor(actor) != background)
-				continue;
-
-			Batcher.PushMatrix(actor.RenderPosition);
-			var decal = PushPropDecalMaterial(actor);
-			Batcher.PushBlend(EmissiveOccluderBlend);
-			actor.RenderEmissiveOccluder(Batcher);
-			Batcher.PopBlend();
-			actor.RenderEmissive(Batcher);
-			if (decal)
-				Batcher.PopMaterial();
-			Batcher.PopMatrix();
-		}
-		Batcher.PopMatrix();
-		Batcher.Render(target);
-		Batcher.Clear();
-	}
+		=> actor is Prop { Decal: true } prop &&
+			PushPhasedMaterial(prop.Layer == Factory.TileLayer.Background ? backgroundDecalMaskMaterials : foregroundDecalMaskMaterials);
 
 	void DrawSpriteReflections(Target target)
 	{
@@ -2268,6 +2289,8 @@ public sealed partial class GameView
 		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
+		BackgroundWorld = new Target(GraphicsDevice, [BackgroundScreen.Attachments[0], BackgroundEmissive.Attachments[0]], "BackgroundWorld");
+		ForegroundWorld = new Target(GraphicsDevice, [ForegroundScreen.Attachments[0], ForegroundEmissive.Attachments[0]], "ForegroundWorld");
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask", TextureFormat.R16G16B16A16Float));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask", TextureFormat.R16G16B16A16Float));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
@@ -2289,6 +2312,7 @@ public sealed partial class GameView
 		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
 		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoBlurScratch"));
 		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
+		BindPhasedMaterials();
 	}
 
 	Target Track(Target target)
@@ -2328,6 +2352,8 @@ public sealed partial class GameView
 	void DisposeRenderTargets()
 	{
 		layerTransitionCaptured = false;
+		BackgroundWorld?.Dispose();
+		ForegroundWorld?.Dispose();
 		foreach (var target in debugTargets)
 			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask)
 				target.Dispose();
@@ -2460,6 +2486,7 @@ public sealed partial class GameView
 		uniforms[6] = camera.X;
 		uniforms[7] = camera.Y;
 		uniforms[30] = zoomLevel;
+		uniforms[31] = (float)WorldPhase.ColorOnly; // additive light on color, hiding no glow
 
 		sdfAuraMaterial.Material.Fragment.SetUniformBuffer(uniforms);
 		batcher.PushMaterial(sdfAuraMaterial.Material);
@@ -2522,7 +2549,18 @@ public sealed partial class GameView
 	// --- view state moved from Game.cs (fields/consts/caches) ---
 	// Fullscreen tuning display: 3008x1692 logical points at 2x backing scale.
 	static Vector2 RenderTargetShakeReferenceSize => new(6016, 3384);
-	internal static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
+	// Emissive targets keep transmittance (1 - glow coverage) in alpha: occluding is then a plain premultiplied
+	// "over" of (0, 0, 0, a) -- the same blend as color, so a color draw can occlude emissive as a second render
+	// target -- and glow multiplies transmittance down.
+	internal static readonly Color EmissiveClear = new(0, 0, 0, 255);
+	internal static readonly BlendMode EmissiveOccluderBlend = new(
+		BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.RGBA, Color.White);
+	internal static readonly BlendMode EmissiveBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.RGBA, Color.White);
 	static readonly BlendMode ColorFieldCopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	// Stir strokes keep the strongest of whatever they overlap; see DrawPixelSortStir.
 	static readonly BlendMode PixelSortStirBlend = new(BlendOp.Max, BlendFactor.One, BlendFactor.One);
@@ -2564,6 +2602,9 @@ public sealed partial class GameView
 	Target ColorField { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
+	// The Screen and Emissive targets above, drawn together (see DrawWorldLayer).
+	Target BackgroundWorld { get; set; } = null!;
+	Target ForegroundWorld { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
@@ -2592,8 +2633,9 @@ public sealed partial class GameView
 	public bool ShowBackgroundLayer { get; set; } = true;
 	readonly ReloadableMaterial? crtMaterial;
 	Target? compositeTarget;
+	readonly ReloadableMaterial[]? worldMaterials;
 	readonly ReloadableMaterial? atlasWanderMaterial;
-	readonly ReloadableMaterial? colorFieldMaterial;
+	readonly ReloadableMaterial[]? colorFieldMaterials;
 	readonly ReloadableMaterial? lightingCompositeMaterial;
 	readonly ReloadableMaterial? reflectionDistortMaterial;
 	readonly ReloadableMaterial? tileFieldStampMaterial;
@@ -2607,10 +2649,10 @@ public sealed partial class GameView
 #endif
 	readonly ReloadableMaterial? blurMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
-	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
-	readonly ReloadableMaterial? foregroundDecalMaskMaterial;
-	readonly ReloadableMaterial? backgroundColorFieldDecalMaterial;
-	readonly ReloadableMaterial? foregroundColorFieldDecalMaterial;
+	readonly ReloadableMaterial[]? backgroundDecalMaskMaterials;
+	readonly ReloadableMaterial[]? foregroundDecalMaskMaterials;
+	readonly ReloadableMaterial[]? backgroundColorFieldDecalMaterials;
+	readonly ReloadableMaterial[]? foregroundColorFieldDecalMaterials;
 	readonly ReloadableMaterial? coverageMaskMaterial;
 	bool hasBackgroundColorField;
 	bool hasForegroundColorField;

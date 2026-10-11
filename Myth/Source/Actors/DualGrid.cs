@@ -107,8 +107,8 @@ public class DualGrid : Actor
 	public override void RenderNormals(Batcher batcher) => RenderTiles(batcher, normals: true);
 
 	// drawCommands covers the whole room, so without culling a big room costs the same as a
-	// big screen -- and these tiles are drawn three times a frame (color, emissive occluder,
-	// normals). Cull to the view in the actor's local space.
+	// big screen -- and these tiles are drawn twice a frame (color, normals). Cull to the view
+	// in the actor's local space.
 	private void RenderTiles(Batcher batcher, bool normals)
 	{
 		var view = Game.VisibleWorldBounds - Position;

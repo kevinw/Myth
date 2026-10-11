@@ -195,6 +195,7 @@ public sealed class Surface : IDisposable
 		Span<float> u = stackalloc float[4 + SurfaceSpec.MaxLayers * 4 * 6];
 		u[0] = layers.Length;
 		u[1] = time;
+		u[2] = (float)GameView.CurrentWorldPhase;
 		for (var i = 0; i < SurfaceSpec.MaxLayers; i++)
 		{
 			var layer = i < layers.Length ? layers[i] : layers[0];

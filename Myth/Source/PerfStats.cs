@@ -7,7 +7,6 @@ public enum PerfStat
 	Update,
 	Render,
 	World,
-	Emissive,
 	Normal,
 	TileDither,
 	Lighting,
@@ -41,7 +40,6 @@ public readonly record struct PerfSnapshot(
 	float Update,
 	float Render,
 	float World,
-	float Emissive,
 	float Normal,
 	float TileDither,
 	float Lighting,
@@ -54,6 +52,9 @@ public static class PerfStats
 {
 	private static readonly double[] Totals = new double[Enum.GetValues<PerfStat>().Length];
 	private static readonly int[] Counts = new int[Totals.Length];
+	// Never published: whole-run averages since ResetRun, for --max-frames A/B runs.
+	private static readonly double[] RunTotals = new double[Totals.Length];
+	private static readonly int[] RunCounts = new int[Totals.Length];
 	private static readonly double[] DetailTotals = new double[Enum.GetValues<PerfDetail>().Length];
 	private static readonly int[] DetailCounts = new int[DetailTotals.Length];
 	private static readonly string[] DetailNames =
@@ -94,6 +95,23 @@ public static class PerfStats
 		var index = (int)stat;
 		Totals[index] += milliseconds;
 		Counts[index]++;
+		RunTotals[index] += milliseconds;
+		RunCounts[index]++;
+	}
+
+	public static void ResetRun()
+	{
+		Array.Clear(RunTotals);
+		Array.Clear(RunCounts);
+	}
+
+	public static string RunSummary()
+	{
+		var summary = new System.Text.StringBuilder();
+		foreach (var stat in Enum.GetValues<PerfStat>())
+			if (RunCounts[(int)stat] > 0)
+				summary.Append($"{stat} {RunTotals[(int)stat] / RunCounts[(int)stat]:F3}  ");
+		return summary.ToString();
 	}
 
 	public static void Record(PerfDetail detail, double milliseconds)
@@ -109,7 +127,6 @@ public static class PerfStats
 			Average(PerfStat.Update),
 			Average(PerfStat.Render),
 			Average(PerfStat.World),
-			Average(PerfStat.Emissive),
 			Average(PerfStat.Normal),
 			Average(PerfStat.TileDither),
 			Average(PerfStat.Lighting),

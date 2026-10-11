@@ -14,7 +14,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 B0;       // bud:    xy = padded top-left (unflipped, local), zw = padded size
     float4 B1;       // bud:    xy = atlas source top-left (px), z = facing, w = mirror axis X (local)
     float4 A0;       // x = scrolled time, y = max aura dist, z = stripe width, w = stored-distance scale
-    float4 A1;       // x = smooth-min k, y = fade amount, z = zoom
+    float4 A1;       // x = smooth-min k, y = fade amount, z = zoom, w = world_output phase
 };
 
 Texture2D Texture : register(t0, space2);
@@ -73,7 +73,7 @@ float sample_dist(float2 pos, float2 padTopLeft, float2 padSize, float2 atlasTop
     return Texture.SampleLevel(Sampler, uv, 0.0).r * distScale;
 }
 
-float4 fragment_main(VsOutput input) : SV_Target0
+WorldOutput fragment_main(VsOutput input)
 {
     // Prevent the optimizer from removing input.type - D3D12 requires matching signatures
     if (input.type.x < -1000) discard;
@@ -113,5 +113,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
     // 2px rainbow bands scrolling outward.
     float band = floor((d - A0.x) / A0.z);
     float3 color = hsv2rgb(frac(band / 6.0), 1.0, 1.0);
-    return float4(color, 1.0) * input.color;
+    return world_output(float4(color, 1.0) * input.color, A1.w);
 }

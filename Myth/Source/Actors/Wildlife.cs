@@ -318,6 +318,6 @@ public class Wildlife : Actor
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 	public override void RenderEmissive(Batcher batcher) { }
-	public override void RenderEmissiveOccluder(Batcher batcher) { }
+	public override bool OccludesEmissive => false;
 	public override Rect GetVisualBounds() => Room?.WorldBounds ?? new Rect(Position.X, Position.Y, 1, 1);
 }

@@ -63,7 +63,7 @@ public class Grid : Actor
 	}
 
 	// The grid spans the whole room, so without this the tile loop costs room area rather than
-	// screen area -- three times a frame (color, emissive occluder, normals). One tile of slack
+	// screen area -- twice a frame (color, normals). One tile of slack
 	// covers tiles whose art overhangs their cell.
 	RectInt VisibleTiles()
 	{

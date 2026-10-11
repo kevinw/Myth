@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -37,12 +39,12 @@ VsOutput vertex_main(VsInput input)
     return output;
 }
 
-float4 fragment_main(VsOutput input) : SV_Target0
+WorldOutput fragment_main(VsOutput input)
 {
     float4 original = Texture.Sample(Sampler, input.TexCoord);
     float3 wandering = Texture.Sample(Sampler, frac(input.TexCoord + Atlas.zw / Atlas.xy)).rgb;
     float4 color = float4(wandering, original.a);
-    return input.Type.x * color * input.Color
+    return world_output(input.Type.x * color * input.Color
          + input.Type.y * original.a * input.Color
-         + input.Type.z * input.Color;
+         + input.Type.z * input.Color, 0.0);
 }
