@@ -2542,7 +2542,8 @@ public sealed partial class GameView
 	{
 		if (particleSystem is not { Supported: true })
 			return;
-		DrawParticleSolidMask();
+		if (particleSystem.Busy) // the sim's collision input; idle, the sim skips its step
+			DrawParticleSolidMask();
 		particleSystem.Update(dt, ParticleSolidMask.Attachments[0], RenderCamera, zoomLevel);
 	}
 

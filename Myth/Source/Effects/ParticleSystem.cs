@@ -138,6 +138,12 @@ public sealed class ParticleSystem : IDisposable
 	readonly List<Vector4> pendingEmitPoints = [];
 	int emitCursor;
 	float time;
+	// No particle outlives its emit time + LifeMax + TrailSeconds (age only grows), so past these the
+	// sim and the draws -- which always cover all Capacity slots -- have nothing to do and are skipped.
+	float liveUntil = float.NegativeInfinity;
+	float trailsUntil = float.NegativeInfinity;
+	const float LiveMargin = 0.25f; // a few frames of slack, and room for a trail lengthened live in the editor
+	public bool Busy => pendingEmits.Count > 0 || time <= liveUntil;
 	readonly Rng rng = new(1234);
 
 	public bool AutoBurst;
@@ -486,6 +492,10 @@ public sealed class ParticleSystem : IDisposable
 			BaseVelocityY = baseVelocity.Y,
 		});
 		emitCursor = (emitCursor + count) % Capacity;
+		var until = time + effect.LifeMax + effect.TrailSeconds + LiveMargin;
+		liveUntil = MathF.Max(liveUntil, until);
+		if (effect.TrailSeconds > 0)
+			trailsUntil = MathF.Max(trailsUntil, until);
 	}
 
 	readonly UniformBuffer uniforms = new();
@@ -498,10 +508,16 @@ public sealed class ParticleSystem : IDisposable
 		if (!supported || updateShader == null)
 			return;
 
-		BuildEffectData();
-
 		dt = Math.Min(dt, 1.0f / 30.0f); // avoid blowups on a hitch
 		time += dt;
+		if (!Busy)
+		{
+			pendingEmitPoints.Clear();
+			Array.Clear(fieldData);
+			return;
+		}
+
+		BuildEffectData();
 
 		var emitCount = Math.Min(pendingEmits.Count, MaxEmitsPerFrame);
 		if (emitCount > 0)
@@ -556,7 +572,7 @@ public sealed class ParticleSystem : IDisposable
 
 	public void Render(Target target, Target lightMask, Vector2 camera, float zoom, bool lightingEnabled, Color ambientLight)
 	{
-		if (!supported)
+		if (!supported || !Busy)
 			return;
 
 		var vertexParams = new VertexParams
@@ -581,17 +597,20 @@ public sealed class ParticleSystem : IDisposable
 		var blend = new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One);
 
 		// Trails first so particle heads draw on top of their own ribbons.
-		trailMaterial!.Vertex.SetUniformBuffer(vertexParams);
-		trailMaterial.Vertex.Samplers[0] = new(colorLut, lutSampler);
-		trailMaterial.Fragment.SetUniformBuffer(fragmentParams);
-		trailMaterial.Fragment.Samplers[0] = new(lightMask, lutSampler);
-
-		new DrawCommand(target, mesh!, trailMaterial)
+		if (time <= trailsUntil)
 		{
-			InstanceCount = Capacity * TrailSegs,
-			BlendMode = blend,
-			VertexStorageBuffers = [Current, effectsBuffer, CurrentTrail],
-		}.Submit(graphicsDevice);
+			trailMaterial!.Vertex.SetUniformBuffer(vertexParams);
+			trailMaterial.Vertex.Samplers[0] = new(colorLut, lutSampler);
+			trailMaterial.Fragment.SetUniformBuffer(fragmentParams);
+			trailMaterial.Fragment.Samplers[0] = new(lightMask, lutSampler);
+
+			new DrawCommand(target, mesh!, trailMaterial)
+			{
+				InstanceCount = Capacity * TrailSegs,
+				BlendMode = blend,
+				VertexStorageBuffers = [Current, effectsBuffer, CurrentTrail],
+			}.Submit(graphicsDevice);
+		}
 
 		material!.Vertex.SetUniformBuffer(vertexParams);
 		material.Vertex.Samplers[0] = new(colorLut, lutSampler);
