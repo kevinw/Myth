@@ -637,11 +637,8 @@ public class Room
 
 	internal bool SupportsBurrowInverse => BurrowInverts;
 
-	internal bool ToggleBurrowInverse(bool inverted, List<InvertPin> pins)
+	internal void ToggleBurrowInverse(bool inverted, List<InvertPin> pins)
 	{
-		if (!SupportsBurrowInverse)
-			return false;
-
 		PrepareBurrowInverse();
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
@@ -669,7 +666,6 @@ public class Room
 				tileFlags[x, y] = original ? burrowOriginalTileFlags![x, y] : burrowInverseTileFlags![x, y];
 			}
 		RebuildGeometry();
-		return true;
 	}
 
 	static bool HasBakedDualOccluders(Factory.Entry entry)

@@ -103,7 +103,9 @@
       "Id": "b31b01d6d1f14f28",
       "From": "FloLight",
       "Position": [148, 113],
-      "DrawSprite": false
+      "DrawSprite": false,
+      "AttachedToActorId": "08a90ab317bc8c89",
+      "AttachmentOffset": [28, 113]
     },
     {
       "Id": "61e4a0fd268d81e7",

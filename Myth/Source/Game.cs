@@ -2635,14 +2635,14 @@ public partial class Game : IDisposable
 	internal Vector2 RoomInversionOrigin { get; private set; }
 	internal float RoomInversionEffectProgress => Math.Clamp((Time.SecondsF - roomInversionStartedAt) / RoomInversionEffectDuration, 0, 1);
 	internal bool RoomInversionEffectActive => Time.SecondsF - roomInversionStartedAt < RoomInversionEffectDuration;
-	internal bool RoomSupportsInversion => room?.SupportsBurrowInverse == true;
+	internal bool RoomSupportsInversion => room?.SupportsBurrowInverse == true || GetFirst<Player>()?.InvertChordHeld == true;
 	internal float RoomInversionStartedAt => roomInversionStartedAt;
 	static float RoomInversionEffectDuration => 0.7f;
 	float roomInversionStartedAt = float.NegativeInfinity;
 
-	internal bool ToggleBurrowRoomInverse(Vector2 origin)
+	internal bool ToggleBurrowRoomInverse(Vector2 origin, bool anyRoom = false)
 	{
-		if (!ToggleRoomInverse())
+		if (!ToggleRoomInverse(anyRoom))
 			return false;
 
 		RoomInversionOrigin = origin;
@@ -2657,9 +2657,9 @@ public partial class Game : IDisposable
 	internal bool SetEditorRoomInverted(bool inverted)
 		=> IsEditorPreview && invertedNow != inverted && ToggleRoomInverse();
 
-	bool ToggleRoomInverse()
+	bool ToggleRoomInverse(bool anyRoom = false)
 	{
-		if (room?.SupportsBurrowInverse != true)
+		if (room == null || !anyRoom && !room.SupportsBurrowInverse)
 			return false;
 
 		inversionPins.Clear();
@@ -2667,9 +2667,7 @@ public partial class Game : IDisposable
 			if (actor is InvertPin pin && pin.Room == room && !destroying.Contains(pin))
 				inversionPins.Add(pin);
 
-		if (!room.ToggleBurrowInverse(!invertedNow, inversionPins))
-			return false;
-
+		room.ToggleBurrowInverse(!invertedNow, inversionPins);
 		invertedNow = !invertedNow;
 		ActivateParkedActors(room);
 

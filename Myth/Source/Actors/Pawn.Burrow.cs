@@ -20,6 +20,8 @@ public abstract partial class Pawn
 	internal float BurrowBarOpacity => burrowHudSpent ? 0.5f : 1f;
 	internal static float BurrowMaxSpeed => 150f;
 	internal static float DashBurrowSpeedMultiplier => 1.3f;
+	// Holding dash steers the burrow onward in the dash-run direction when no direction is pressed.
+	static bool DashBurrowAutoForward => false;
 	internal static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	internal static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
@@ -175,7 +177,7 @@ public abstract partial class Pawn
 		burrowIntent = GetBurrowIntent();
 		var entryDirection = previousVelocity.X != 0
 			? Math.Sign(previousVelocity.X)
-			: input.DashDown ? Math.Sign(horizontalInput) : 0;
+			: input.DashDown && DashBurrowAutoForward ? Math.Sign(horizontalInput) : 0;
 		if (entryDirection != 0 && burrow.Heading.X != 0
 			&& entryDirection != Math.Sign(burrow.Heading.X))
 		{
@@ -267,7 +269,7 @@ public abstract partial class Pawn
 
 		dashRunArmed = true;
 		horizontalInput = UpdateDashRunDirection(input.MoveX);
-		if (intent == Vector2.Zero)
+		if (intent == Vector2.Zero && DashBurrowAutoForward)
 			intent.X = horizontalInput;
 		return intent;
 	}

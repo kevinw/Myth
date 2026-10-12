@@ -80,6 +80,12 @@ public class Controls(Input input)
 		.Add(Axes.RightTrigger, 1, 0.25f)
 	);
 
+	// Held together with Dash as the chord that turns a burrow into an invert burrow in any room.
+	public readonly VirtualAction BurrowInvert = new(input, "BurrowInvert",
+		new ActionBindingSet()
+		.Add(Axes.LeftTrigger, 1, 0.25f)
+	);
+
 	public readonly VirtualAction Zoom = new(input, "Zoom"
 		/*
 		// not sure this is useful, disabling it.

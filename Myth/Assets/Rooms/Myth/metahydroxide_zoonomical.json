@@ -17,6 +17,9 @@
       0.9814625
     ]
   },
+  "colorFields": {
+    "foreground": "c915074065ce17da.png"
+  },
   "legend": {
     "#": "back",
     "H": "sporgy",
@@ -232,6 +235,16 @@
       "Type": "RevealDoor",
       "Position": [160, 239],
       "Direction": "Left"
+    },
+    {
+      "Id": "c49449b7ffb66fb3",
+      "Type": "CurveRibbon",
+      "Position": [72, 145],
+      "Style": "cable",
+      "Tint": "A37C7C",
+      "Width": 10.544,
+      "Points": [[0, -40],[-9, -38],[-16, -24],[0, -8],[0, 24],[-24, 72],[-72, 80]
+      ]
     },
     {
       "Id": "10ba8c5edd515d86",

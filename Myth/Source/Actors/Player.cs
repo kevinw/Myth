@@ -11,7 +11,8 @@ public readonly record struct PawnInput(
 	bool DashPressed,
 	bool DashDown = false,
 	bool AllowWallJump = true,
-	bool AttackPressed = false);
+	bool AttackPressed = false,
+	bool InvertChordDown = false);
 
 
 // What a pawn is capable of at all, as opposed to what it can do right now (CanBurrow()).
@@ -1720,7 +1721,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 			JumpDown: Controls.Jump.Down,
 			DashPressed: Controls.Dash.Pressed,
 			DashDown: Controls.Dash.Down,
-			AttackPressed: Controls.Attack.Pressed
+			AttackPressed: Controls.Attack.Pressed,
+			InvertChordDown: Controls.BurrowInvert.Down && Controls.Dash.Down
 		);
 	}
 
@@ -2115,7 +2117,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	protected override PawnAbilities Abilities => PawnAbilities.Burrow;
 	protected override Bud? TryTakeBurrowPassenger()
 		=> Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
-	protected override bool TryToggleBurrowRoomInverse() => Game.ToggleBurrowRoomInverse(Position);
+	// The invert chord inverts any room, not just the ones built for it.
+	protected override bool TryToggleBurrowRoomInverse() => Game.ToggleBurrowRoomInverse(Position, anyRoom: input.InvertChordDown);
+	internal bool InvertChordHeld => input.InvertChordDown;
 	protected override bool TryCatchBurrowPopCarryable() => TryCatchCarryable();
 
 	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
