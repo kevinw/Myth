@@ -1540,6 +1540,7 @@ public partial class Manager : App
 			activeRoomPreviewAnimating = selectedEmitterId != null || UpdateRigAnimationPreviewInEditor();
 			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);
 			particleEditor.Update(Time.Delta);
+			UpdateRoomDecoration();
 #endif
 		}
 
@@ -1603,6 +1604,7 @@ public partial class Manager : App
 #if EDITOR
 			EditorUI();
 			DrawCommandConsole();
+			DrawDecorWindow();
 			DrawDebugHelp();
 #endif
 #if DEBUG && !BROWSER

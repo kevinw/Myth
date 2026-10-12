@@ -1,0 +1,32 @@
+{
+  "_about": "What decoration looks like, for the editor's `decorate` command: the model only sees names, so describe the art. Keys are tile names (as in room legends) and light/prop labels (preset name, 'Light', or 'Prop <sprite>').",
+  "tiles": {
+    "stone": "blue-grey cobblestone with cyan flecks",
+    "dirt": "rust-orange earth speckled with glowing embers",
+    "castle": "white and grey masonry blocks over brown fill",
+    "crosshatch": "brown diamond lattice over gold",
+    "metal": "dark steel with a pale grey face",
+    "back": "dark purple brick wall",
+    "back-left": "dark purple brick wall, left edge",
+    "back-right": "dark purple brick wall, right edge",
+    "back-nw": "dark purple brick wall, top-left corner",
+    "back-ne": "dark purple brick wall, top-right corner",
+    "Myth Back": "dark navy carved stone blocks",
+    "Myth Runes": "dark slate panel carved with pale runes",
+    "Myth Vines": "thin pale vine strands hanging straight down, dotted with white buds",
+    "plants": "small green sprouts and grass tufts",
+    "flowers": "tiny yellow and pink flowers and mushroom caps",
+    "debris": "small brown rubble and broken bits",
+    "rocks": "small orange and white pebbles",
+    "Glow Shells": "softly glowing teal shell mounds",
+    "gates": "a row of small grey studs -- reads like spikes, so it can look like a hazard"
+  },
+  "actors": {
+    "Light": "a torch flame (warm unless recolored)",
+    "SoftFireLight": "a small, soft warm torch flame",
+    "StrongFireLight": "a large, bright, flickering fire",
+    "BlueMemoryLight": "a cool blue flame, calm and dreamlike",
+    "FloLight": "a hanging bulb casting a downward cone of cool light",
+    "PlayerGlowLight": "a faint glow around a character"
+  }
+}

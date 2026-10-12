@@ -27,3 +27,6 @@ Myth/Production/World Map/
 Myth/Production/World Map.tmp/
 Myth/Production/.world-map-venv/
 .wrangler
+
+# Local secrets (API keys)
+.env
