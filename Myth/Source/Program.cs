@@ -16,13 +16,14 @@ catch (ArgumentException e)
 	return;
 }
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
-#if !BROWSER
+#if !BROWSER && !MYTHSHIP
 if (startArgs.devCommand != null)
 {
 	Environment.ExitCode = DevHost.Send(startArgs.devCommand) ? 0 : 1;
 	return;
 }
 #endif
+#if !MYTHSHIP
 if (startArgs.unscramblePakPath != null)
 {
 	Assets.UnscrambleContentPak(startArgs.unscramblePakPath);
@@ -35,6 +36,7 @@ if (startArgs.buildAssetPack || startArgs.stageContentTargets.Length > 0)
 		Assets.StageContent(target, startArgs.worldId);
 	return;
 }
+#endif
 
 #if !BROWSER
 // Route the windowed game's logs to %APPDATA%\Mycelon\logs so the console-less shipped build
@@ -45,7 +47,7 @@ if (!startArgs.IsToolRun)
 
 try
 {
-#if !BROWSER
+#if !BROWSER && !MYTHSHIP
 	if (startArgs.devHost)
 	{
 		DevHost.Run(startArgs);

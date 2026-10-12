@@ -20,4 +20,11 @@
     <_FosterGamesIntermediateFlavor Condition="'$(MythTestShip)' == 'true'">$(_FosterGamesIntermediateFlavor)-testship</_FosterGamesIntermediateFlavor>
     <BaseIntermediateOutputPath>obj/$(_FosterGamesIntermediateFlavor)/</BaseIntermediateOutputPath>
   </PropertyGroup>
+
+  <!-- Ship flavors also get their own bin/ 
+       The dev flavor keeps the default bin/ that tools/*.sh hardcode. -->
+  <PropertyGroup Condition="'$(BaseOutputPath)' == ''">
+    <BaseOutputPath Condition="'$(MythShip)' == 'true'">bin/ship/</BaseOutputPath>
+    <BaseOutputPath Condition="'$(MythTestShip)' == 'true'">bin/testship/</BaseOutputPath>
+  </PropertyGroup>
 </Project>

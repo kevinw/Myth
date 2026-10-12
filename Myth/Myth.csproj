@@ -46,6 +46,8 @@
     <PublishAot>true</PublishAot>
     <OptimizationPreference>Speed</OptimizationPreference>
     <StripSymbols>true</StripSymbols>
+    <!-- Drops ~180 KB of culture data, and keeps float parsing/formatting locale-proof. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <!-- Homebrew's dotnet ships a non-portable (source-build) ILC pack that links system

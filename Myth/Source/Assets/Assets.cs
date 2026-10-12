@@ -676,7 +676,9 @@ public static partial class Assets
 		var packOnly = useVisualAssetPack || OperatingSystem.IsBrowser() || ContentIsPak || !Directory.Exists(SourcesPath);
 		if (buildPackPath == null && packOnly && TryLoadVisualAssetPack(gfx, reloadRooms))
 			return;
-
+#if MYTHSHIP
+		throw new InvalidDataException("Shipped builds load visuals only from the visual asset pack.");
+#else
 		using var bake = BakeVisualAssets();
 		var output = bake.Output;
 
@@ -705,6 +707,7 @@ public static partial class Assets
 		if (reloadRooms)
 			LoadRooms();
 		LoadWorldMap(gfx);
+#endif
 	}
 
 	static VisualAssetBake BakeVisualAssets()
