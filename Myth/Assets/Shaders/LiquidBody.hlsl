@@ -1,7 +1,7 @@
 #include "Common.hlsl"
 
 // Liquid body (see LiquidBody.cs). TexCoord is the fragment's WORLD pixel and Color.r its depth below
-// the surface in px / 255, both fed by the CPU. Smooth noise, warped by a slower copy of itself, is cut
+// the surface in px / 255, both fed by the CPU; Color.g is the share of pixels drawn, dithered. Smooth noise, warped by a slower copy of itself, is cut
 // into band lines over a depth gradient: on lava, thin dark crust streaks that flow sideways. Water
 // instead draws a caustic web: the edges of slowly wandering cells, bright, like light through ripples. The shared stir field washes the lines out and brightens the body. Quantized to a
 // four-color palette (alpha included, so water stays translucent) to stay pixel art.
@@ -142,5 +142,6 @@ WorldOutput fragment_main(VsOutput input)
         + (bayer(world) - 0.5) * Stir.y;
     float level = saturate(heat) * 4.0;
     float4 color = level < 1.0 ? Palette[0] : level < 2.0 ? Palette[1] : level < 3.0 ? Palette[2] : Palette[3];
+    color *= bayer(world + 2.0) < input.Color.g ? 1.0 : 0.0;
     return world_output(color, Meta.y);
 }

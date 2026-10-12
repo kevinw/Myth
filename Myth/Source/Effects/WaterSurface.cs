@@ -50,7 +50,9 @@ public sealed class WaterSurface
 	public float LipCrawl;           // 0..1: how much the foam line flickers in brightness and thickness
 	readonly float[] height;
 	readonly float[] velocity;
-	readonly float[] bottom;         // per-sample floor world Y
+	readonly float[] bottom;         // per-segment floor world Y at its left sample
+	readonly float[] bottomRight;    // ...and at its right sample, so a floor can follow a slope
+	readonly bool[] lip;             // per-segment foam line
 
 	public int SampleCount => height.Length;
 	public float Right => Left + (SampleCount - 1) * SampleSpacing;
@@ -66,10 +68,13 @@ public sealed class WaterSurface
 		height = new float[count];
 		velocity = new float[count];
 		bottom = new float[count];
+		bottomRight = new float[count];
+		lip = new bool[count];
 		for (var i = 0; i < count; i++)
 		{
 			var tile = Math.Min(i / SamplesPerTile, widthTiles - 1);
-			bottom[i] = tileBottomsWorldY[tile];
+			bottom[i] = bottomRight[i] = tileBottomsWorldY[tile];
+			lip[i] = bottom[i] > surfaceY;
 		}
 	}
 
@@ -78,12 +83,23 @@ public sealed class WaterSurface
 	public float TopAt(float worldX, float time)
 		=> TopY(Math.Clamp((int)MathF.Round((worldX - Left) / SampleSpacing), 0, SampleCount - 1), time);
 
-	public void SetColumnBottom(int column, float worldY)
+	public float BottomAt(float worldX)
+		=> bottom[Math.Clamp((int)((worldX - Left) / SampleSpacing), 0, SampleCount - 1)];
+
+	// The floor runs straight from left to right across the column. lipOverFloor keeps the foam line
+	// even where the floor rises above the rest line, for liquid drawn over submerged terrain.
+	public void SetColumn(int column, float left, float right, bool lipOverFloor)
 	{
 		var columns = (SampleCount - 1) / SamplesPerTile;
-		var end = column == columns - 1 ? SampleCount : (column + 1) * SamplesPerTile;
-		for (var i = column * SamplesPerTile; i < end; i++)
-			bottom[i] = worldY;
+		var start = column * SamplesPerTile;
+		var end = column == columns - 1 ? SampleCount : start + SamplesPerTile;
+		for (var i = start; i < end; i++)
+		{
+			var t = (i - start) / (float)SamplesPerTile;
+			bottom[i] = Calc.Lerp(left, right, t);
+			bottomRight[i] = Calc.Lerp(left, right, t + 1f / SamplesPerTile);
+			lip[i] = lipOverFloor || MathF.Max(bottom[i], bottomRight[i]) > SurfaceY;
+		}
 	}
 
 	// Kick the surface around worldX. impulseSpeed is signed: positive dips it down (a pawn
@@ -159,14 +175,14 @@ public sealed class WaterSurface
 			var xl = Left + i * SampleSpacing;
 			var xr = xl + SampleSpacing;
 			var topRight = TopY(i + 1, time);
-			if (bottom[i] > SurfaceY)
+			if (bottom[i] > SurfaceY || bottomRight[i] > SurfaceY)
 			{
 				var a = new Vector2(xl, topLeft);
 				var b = new Vector2(xr, topRight);
-				var c = new Vector2(xr, bottom[i]);
-				var d = new Vector2(xl, bottom[i]);
-				var (top, deep) = (LiquidBody.Depth(0), LiquidBody.Depth(bottom[i] - SurfaceY));
-				batcher.Quad(stir, a, b, c, d, a, b, c, d, top, top, deep, deep);
+				var c = new Vector2(xr, MathF.Max(bottomRight[i], topRight));
+				var d = new Vector2(xl, MathF.Max(bottom[i], topLeft));
+				var top = LiquidBody.Depth(0);
+				batcher.Quad(stir, a, b, c, d, a, b, c, d, top, top, LiquidBody.Depth(c.Y - SurfaceY), LiquidBody.Depth(d.Y - SurfaceY));
 			}
 			topLeft = topRight;
 		}
@@ -177,8 +193,11 @@ public sealed class WaterSurface
 	{
 		const int samplesPerColumn = (int)(LiquidBody.RefractCell / SampleSpacing);
 		for (var i = 0; i < SampleCount - 1; i += samplesPerColumn)
-			if (bottom[i] > SurfaceY + 2)
-				LiquidBody.Refract(batcher, new Rect(Left + i * SampleSpacing, SurfaceY + 2, LiquidBody.RefractCell, bottom[i] - SurfaceY - 2), time, stir);
+		{
+			var floor = MathF.Min(bottom[i], bottomRight[Math.Min(i + samplesPerColumn, SampleCount) - 1]);
+			if (floor > SurfaceY + 2)
+				LiquidBody.Refract(batcher, new Rect(Left + i * SampleSpacing, SurfaceY + 2, LiquidBody.RefractCell, floor - SurfaceY - 2), time, stir);
+		}
 	}
 
 	// Foam line riding the displaced top edge.
@@ -190,7 +209,7 @@ public sealed class WaterSurface
 			var xl = Left + i * SampleSpacing;
 			var xr = xl + SampleSpacing;
 			var topRight = TopY(i + 1, time);
-			if (bottom[i] > SurfaceY)
+			if (lip[i])
 			{
 				var crawl = 0.5f + 0.25f * (MathF.Sin(xl * 0.7f + time * 6f) + MathF.Sin(xl * 0.29f - time * 3.7f));
 				var lip = LipCrawl > 0 ? Color.Lerp(Body, Foam, 1 - LipCrawl * (1 - crawl)) : Foam;

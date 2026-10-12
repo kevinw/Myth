@@ -1535,9 +1535,7 @@ public partial class Manager : App
 					UpdateEditorNavigation();
 			}
 			// Preview only the selected particle emitter live in the editor.
-			string? selectedEmitterId = null;
-			if (CurrentRoom is { } previewRoom && selectedRoomActorIndex >= 0 && selectedRoomActorIndex < previewRoom.Actors.Count)
-				selectedEmitterId = ActorSpecs.GetActorId(previewRoom.Actors[selectedRoomActorIndex]);
+			var selectedEmitterId = SelectedRoomActorId;
 			// Live editor previews must re-render while particles or a rig animation are advancing.
 			activeRoomPreviewAnimating = selectedEmitterId != null || UpdateRigAnimationPreviewInEditor();
 			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);

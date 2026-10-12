@@ -28,6 +28,12 @@ public class Blob : Actor
 	{
 		base.Update();
 		UpdateLiquidState();
+		if (InLava)
+		{
+			Game.PlayAudioEvent("liquid/steam", "Size", 4, Position);
+			Die();
+			return;
+		}
 
 		float gravity = 300;
 		if (InLiquid)
@@ -88,14 +94,17 @@ public class Blob : Actor
 		Squish = new Vector2(0.5f, 1.00f);
 
 		if (Health <= 0)
-		{
-			Game.Create<Pop>(Position + new Point2(0, -4));
-			Game.Destroy(this);
-		}
+			Die();
 		else
 		{
 			var sign = MathF.Sign(Position.X - hitInfo.By.Position.X);
 			Velocity.X = sign * 120;
 		}
+	}
+
+	void Die()
+	{
+		Game.Create<Pop>(Position + new Point2(0, -4));
+		Game.Destroy(this);
 	}
 }

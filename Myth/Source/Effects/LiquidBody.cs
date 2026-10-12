@@ -7,7 +7,8 @@ namespace Myth;
 // read against the shared LiquidStir field, snapped to a four-color palette. Lava's lines are dark
 // crust streaks flowing sideways on a molten body; water's are a bright, wandering caustic web on a
 // clear, translucent one. Vertices
-// carry their world position as texcoords and their depth below the surface (px) in the color's red.
+// carry their world position as texcoords, their depth below the surface (px) in the color's red, and
+// in green the share of pixels the body covers (dithered), so submerged terrain can show through.
 static class LiquidBody
 {
 	public readonly record struct Style(
@@ -73,7 +74,7 @@ static class LiquidBody
 		batcher.PopSampler();
 	}
 
-	public static Color Depth(float px) => new((byte)Calc.Clamp(px, 0, 255), 0, 0, 255);
+	public static Color Depth(float px, float cover = 1) => new((byte)Calc.Clamp(px, 0, 255), (byte)(Calc.Clamp(cover, 0, 1) * 255), 0, 255);
 
 	public static void Rect(Batcher batcher, Texture texture, Rect r, float topDepth)
 	{

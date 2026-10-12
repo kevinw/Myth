@@ -100,6 +100,8 @@ public partial class Manager
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
+	internal string? SelectedRoomActorId => CurrentRoom is { } room && selectedRoomActorIndex >= 0 && selectedRoomActorIndex < room.Actors.Count
+		? ActorSpecs.GetActorId(room.Actors[selectedRoomActorIndex]) : null;
 	// The selected point of the selected path actor, plus the actor it was selected on. Actor
 	// selection is reassigned from a couple dozen places, so rather than clear this at each of them,
 	// SelectedPathPoint validates it on read and a stale selection simply reads as "none".

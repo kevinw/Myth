@@ -126,14 +126,17 @@ public sealed partial class GameView
 
 		//var heart = Assets.GetSubtexture(health > 0 ? "heart/0" : "heart/1");
 		//Batcher.Image(heart, pos, color);
-		if (Assets.Font is not { } font)
+		if (Assets.GetSprite("numbers") is not { Frames.Count: 10 } digits)
 			return;
 		Span<char> text = stackalloc char[3];
 		((int)MathF.Ceiling(displayedHealth)).TryFormat(text, out var length);
-		// The heart's art sits inside a padded frame: line the number up with what's drawn.
-		var drawn = new Rect(pos, new(0, 0));
-		var at = new Vector2(drawn.Right + 2, drawn.Bottom).Round();
-		Batcher.Text(font, text[..length], at, font.Size, color);
+		var at = (pos + Vector2.UnitX * 2).Round();
+		foreach (var digit in text[..length])
+		{
+			var frame = digits.Frames[digit - '0'].Subtexture;
+			Batcher.Image(frame, at, color);
+			at.X += frame.Width;
+		}
 	}
 
 	float displayedHealth = -1;

@@ -11,7 +11,8 @@ public enum LiquidKind
 
 // A basin whose liquid level moves between Fill and ActiveFill when an IActivatable source
 // toggles it. Below the line the volume's liquid wins: lava boils off any authored water pool
-// it touches.
+// it touches. By default the liquid fills only the open space, cut along slopes; Submerge floods
+// over the terrain too, which shows through near the surface.
 [GameActor(Sprite = "Editor/particles", Icon = "water", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System,
 	BoundsW = Game.TileSize * 8, BoundsH = Game.TileSize * 6, LivePositionEditable = true, LiveResizable = true)]
 public class LiquidVolume : Actor, IResizable, IActivatable
@@ -26,12 +27,15 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	[I(0, 10)] public float Delay;
 	[I(0, 16)] public float TideAmplitude;
 	[I(0.5f, 20)] public float TidePeriod = 6;
+	public bool Submerge;
 
 	internal static float LavaBurnPerSecond => 25f; // health points; full health lasts a bit over two seconds
 	static float HeatHeight => 36f;
 	static float HeatStrength => 0.8f;
 	static int HeatCell => 4;
 	static float EdgeBleed => 3f;
+	static float SubmergedCover => 0.35f; // share of lava pixels over terrain at the surface...
+	static float SubmergedClearDepth => 24f; // ...rising to all of them this far down
 	// Draws only where nothing is drawn yet, so a bleed strip fills the gaps around inset
 	// terrain without painting over the terrain itself.
 	static readonly BlendMode UnderBlend = new(BlendOp.Add, BlendFactor.OneMinusDstAlpha, BlendFactor.One);
@@ -53,6 +57,13 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	static float BubbleFlashRadius => 28f;
 	static float BubbleFlashIntensity => 0.8f;
 
+	// A capped stretch of one tile column. Its top and bottom run straight across the column, so a
+	// slope cuts it along the slope's line.
+	readonly record struct Slab(float Left, float TopLeft, float TopRight, float BottomLeft, float BottomRight, bool Terrain)
+	{
+		public Rect Bounds => Rect.Between(new(Left, MathF.Min(TopLeft, TopRight)), new(Left + Game.TileSize, MathF.Max(BottomLeft, BottomRight)));
+	}
+
 	struct Bubble
 	{
 		public float X, Age, Life, Radius;
@@ -72,7 +83,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	int surfaceRow;
 	bool[] wet = [];
 	readonly List<Point2> fillQueue = [];
-	readonly List<RectInt> cappedRects = [];
+	readonly List<Slab> slabs = [];
 	readonly HashSet<Point2> bleedVisited = [];
 	int steamEffect = -1;
 	readonly List<Point2> touchedWater = [];
@@ -88,8 +99,6 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		Sprite = null;
 		CollidesWithSolids = false;
 		Hitbox = new(new RectInt(0, 0, 0, 0));
-		// Behind the foreground terrain, so the terrain's emissive occluder erases any glow bleed it covers.
-		Depth = Depths.ForegroundDualGrid + 1;
 	}
 
 	public override void Added()
@@ -137,16 +146,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			delayTimer -= Time.Delta;
 		else
 			fill = Calc.Approach(fill, active ? ActiveFill : Fill, Speed / MathF.Max(Size.Y, 1) * Time.Delta);
-
-		var tide = TideAmplitude * MathF.Sin(Time.SecondsF * MathF.Tau / TidePeriod);
-		surfaceY = Calc.Clamp(Position.Y + Size.Y * (1 - fill) + tide, Position.Y, Position.Y + Size.Y);
-
-		var surface = EnsureSurface();
-		surface.SurfaceY = surfaceY;
-		(surface.Body, surface.Foam, surface.LipCrawl) = Kind == LiquidKind.Lava
-			? (LavaBody, LavaFoam, LavaLipCrawl)
-			: (WaterSurface.BodyColor, WaterSurface.FoamColor, 0);
-		Flood(surface);
+		var surface = Settle();
 		surface.Update(Time.Delta);
 
 		if (Kind == LiquidKind.Lava)
@@ -161,6 +161,25 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		flowTime += Time.Delta * (LevelMoving ? BubbleRiseRate : 1);
 	}
 
+	// Places the level and floods it. The editor runs only this, with no time passed, so it previews
+	// the room exactly as it starts.
+	WaterSurface Settle()
+	{
+		// Behind the foreground terrain, so the terrain's emissive occluder erases any glow bleed it
+		// covers; a submerging volume glows over the terrain instead.
+		Depth = Submerge ? Depths.ForegroundProp : Depths.ForegroundDualGrid + 1;
+		surfaceY = Calc.Clamp(Position.Y + Size.Y * (1 - fill) + Tide(age), Position.Y, Position.Y + Size.Y);
+		var surface = EnsureSurface();
+		surface.SurfaceY = surfaceY;
+		(surface.Body, surface.Foam, surface.LipCrawl) = Kind == LiquidKind.Lava
+			? (LavaBody, LavaFoam, LavaLipCrawl)
+			: (WaterSurface.BodyColor, WaterSurface.FoamColor, 0);
+		Flood(surface);
+		return surface;
+	}
+
+	float Tide(float time) => TideAmplitude * MathF.Sin(time * MathF.Tau / TidePeriod);
+
 	bool LevelMoving => delayTimer <= 0 && fill != (active ? ActiveFill : Fill);
 
 	// Bubbles swell on the surface, then pop: the pop dimples the wave sim, throws embers, flares
@@ -172,7 +191,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		{
 			bubbleTimer = BubbleInterval * rng.Float(0.3f, 1.7f);
 			var x = rng.Float(Size.X);
-			if (IsWet(new((int)x / Game.TileSize, surfaceRow)))
+			if (IsWet(new((int)x / Game.TileSize, surfaceRow)) && (Submerge || surface.BottomAt(Position.X + x) > surfaceY))
 				bubbles.Add(new() { X = Position.X + x, Life = rng.Float(0.35f, 0.7f), Radius = rng.Float(1.5f, 3.5f) });
 		}
 
@@ -246,16 +265,33 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	}
 
 	bool IsSolid(Point2 tile)
-		=> Room is { } room && room.IsSolidTile((Position - room.WorldBounds.TopLeft) / Game.TileSize + tile);
+		=> Room is { } room && room.IsSolidTile(RoomTile(room, tile));
+
+	bool TryGetSlope(Point2 tile, out Vector2 left, out Vector2 right, out bool floor)
+	{
+		(left, right, floor) = (default, default, false);
+		if (Room is not { } room || !room.TryGetSlopeTile(RoomTile(room, tile), out var slope))
+			return false;
+		room.GetSlopeSurface(slope, out left, out right);
+		floor = slope.Fill == Room.SlopeFill.BelowLine;
+		return true;
+	}
+
+	Point2 RoomTile(Room room, Point2 tile) => (Position - room.WorldBounds.TopLeft) / Game.TileSize + tile;
 
 	// Liquid pours in from the surface row and spreads to every open tile it can reach below the
-	// line, so it flows under overhangs while sealed pockets stay dry. Wet runs that hang off the
-	// surface row ride the wave sim; the rest are capped bodies.
+	// line, so it flows under overhangs while sealed pockets stay dry (Submerge floods every tile).
+	// Each column is then walked top-down into open stretches, cut at terrain and along slope lines:
+	// the stretch hanging off the surface rides the wave sim, the rest are capped slabs. Submerged
+	// terrain becomes slabs of its own.
+	bool open, openAtSurface;
+	float openLeft, openRight, floorLeft, floorRight, columnLeft;
+
 	void Flood(WaterSurface surface)
 	{
 		Array.Clear(wet);
 		fillQueue.Clear();
-		cappedRects.Clear();
+		slabs.Clear();
 		surfaceRow = (int)MathF.Floor((surfaceY - Position.Y) / Game.TileSize);
 		if (surfaceRow < tiles.Y)
 			for (var x = 0; x < tiles.X; x++)
@@ -272,39 +308,90 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 
 		for (var x = 0; x < tiles.X; x++)
 		{
-			var bottom = surfaceY;
+			columnLeft = Position.X + x * Game.TileSize;
+			(floorLeft, floorRight) = (surfaceY, surfaceY);
 			for (var y = Math.Max(surfaceRow, 0); y < tiles.Y; y++)
 			{
-				if (!IsWet(new(x, y)))
-					continue;
-				var top = y;
-				while (y + 1 < tiles.Y && IsWet(new(x, y + 1)))
-					y++;
-				if (top == surfaceRow)
-					bottom = Position.Y + (y + 1) * Game.TileSize;
+				var tile = new Point2(x, y);
+				var top = Position.Y + y * Game.TileSize;
+				var bottom = top + Game.TileSize;
+				var surfaceTop = y == surfaceRow ? surfaceY : top;
+				if (!IsWet(tile))
+					Close(top, top);
+				else if (IsSolid(tile))
+				{
+					Close(top, top);
+					slabs.Add(new(columnLeft, surfaceTop, surfaceTop, bottom, bottom, true));
+				}
+				else if (TryGetSlope(tile, out var left, out var right, out var floor) && floor)
+				{
+					Open(surfaceTop, surfaceTop, y == surfaceRow);
+					Close(left.Y, right.Y);
+					AddSubmerged(left.Y, right.Y, bottom, bottom);
+				}
+				else if (TryGetSlope(tile, out left, out right, out _))
+				{
+					Close(top, top);
+					AddSubmerged(surfaceTop, surfaceTop, left.Y, right.Y);
+					Open(MathF.Max(left.Y, surfaceY), MathF.Max(right.Y, surfaceY), false);
+				}
 				else
-					cappedRects.Add(new(Position + new Point2(x, top) * Game.TileSize, new Point2(1, y - top + 1) * Game.TileSize));
+					Open(surfaceTop, surfaceTop, y == surfaceRow);
 			}
-			columnBottoms[x] = bottom;
-			surface.SetColumnBottom(x, bottom);
+			Close(Position.Y + Size.Y, Position.Y + Size.Y);
+			surface.SetColumn(x, floorLeft, floorRight, Submerge && IsWet(new(x, surfaceRow)));
 		}
+	}
+
+	void Open(float left, float right, bool atSurface)
+	{
+		if (open)
+			return;
+		(open, openLeft, openRight, openAtSurface) = (true, left, right, atSurface);
+	}
+
+	void Close(float left, float right)
+	{
+		if (!open)
+			return;
+		open = false;
+		if (openAtSurface)
+			(floorLeft, floorRight) = (left, right);
+		else
+			slabs.Add(new(columnLeft, openLeft, openRight, left, right, false));
+	}
+
+	void AddSubmerged(float topLeft, float topRight, float bottomLeft, float bottomRight)
+	{
+		if (Submerge)
+			slabs.Add(new(columnLeft, MathF.Max(topLeft, surfaceY), MathF.Max(topRight, surfaceY), bottomLeft, bottomRight, true));
 	}
 
 	void TryWet(Point2 tile)
 	{
-		if (tile.X < 0 || tile.X >= tiles.X || tile.Y < surfaceRow || tile.Y >= tiles.Y || IsWet(tile) || IsSolid(tile))
+		if (tile.X < 0 || tile.X >= tiles.X || tile.Y < surfaceRow || tile.Y >= tiles.Y || IsWet(tile) || !Submerge && IsSolid(tile))
 			return;
 		wet[tile.Y * tiles.X + tile.X] = true;
 		fillQueue.Add(tile);
 	}
+
+	void RenderSlab(Batcher batcher, Texture stir, in Slab slab)
+	{
+		var right = slab.Left + Game.TileSize;
+		Vector2 a = new(slab.Left, slab.TopLeft), b = new(right, slab.TopRight), c = new(right, slab.BottomRight), d = new(slab.Left, slab.BottomLeft);
+		batcher.Quad(stir, a, b, c, d, a, b, c, d, SlabDepth(a.Y, slab.Terrain), SlabDepth(b.Y, slab.Terrain), SlabDepth(c.Y, slab.Terrain), SlabDepth(d.Y, slab.Terrain));
+	}
+
+	Color SlabDepth(float y, bool terrain)
+		=> LiquidBody.Depth(y - surfaceY, terrain ? Calc.Lerp(SubmergedCover, 1, Calc.Clamp((y - surfaceY) / SubmergedClearDepth, 0, 1)) : 1);
 
 	internal void RenderBody(Batcher batcher, float time)
 	{
 		if (Surface == null)
 			return;
 		var stir = LiquidBody.Push(batcher, Kind == LiquidKind.Lava ? LiquidBody.Lava : LiquidBody.Water, flowTime, Game.LiquidStir);
-		foreach (var rect in cappedRects)
-			LiquidBody.Rect(batcher, stir, rect, rect.Top - surfaceY);
+		foreach (var slab in slabs)
+			RenderSlab(batcher, stir, slab);
 		Surface.RenderBody(batcher, time, stir);
 		LiquidBody.Pop(batcher);
 		Surface.RenderLip(batcher, time);
@@ -318,13 +405,19 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			batcher.SemiCircle(center, MathF.PI, MathF.Tau, radius, 8, LavaCrust);
 		}
 
+		if (Submerge)
+			return;
 		bleedVisited.Clear();
 		batcher.PushBlend(UnderBlend);
 		foreach (var tile in fillQueue)
+		{
+			if (TryGetSlope(tile, out var left, out var right, out var floor))
+				BleedUnder(batcher, left, right, Vector2.UnitY * (floor ? EdgeBleed : -EdgeBleed), Surface.Body);
 			for (var y = -1; y <= 1; y++)
 				for (var x = -1; x <= 1; x++)
 					if (IsSolid(tile + new Point2(x, y)) && bleedVisited.Add(tile + new Point2(x, y)))
 						BleedInto(batcher, tile + new Point2(x, y), Surface.Body);
+		}
 		batcher.PopBlend();
 	}
 
@@ -355,6 +448,12 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		var top = MathF.Max(rect.Y, surfaceY);
 		if (rect.Bottom > top && rect.Width > 0)
 			batcher.Rect(new Rect(rect.X, top, rect.Width, rect.Bottom - top), color);
+	}
+
+	void BleedUnder(Batcher batcher, Vector2 left, Vector2 right, Vector2 offset, Color color)
+	{
+		Vector2 Clip(Vector2 p) => p with { Y = MathF.Max(p.Y, surfaceY) };
+		batcher.Quad(Clip(left), Clip(right), Clip(right + offset), Clip(left + offset), color);
 	}
 
 	Rect TileRect(Point2 tile) => new(Position + tile * Game.TileSize, Point2.One * Game.TileSize);
@@ -406,10 +505,19 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	{
 		if (!Game.Editing)
 			return;
-		var color = Kind == LiquidKind.Lava ? LavaBody : WaterSurface.BodyColor;
-		batcher.Rect(new Rect(0, Size.Y * (1 - Fill), Size.X, Size.Y * Fill), color * 0.5f);
-		var activeY = Size.Y * (1 - ActiveFill);
-		batcher.Line(new Vector2(0, activeY), new Vector2(Size.X, activeY), 1, color);
+		fill = Fill;
+		Settle();
+#if EDITOR
+		if (Game.Manager.SelectedRoomActorId != ActorId)
+			return;
+#endif
+		// Guides for where the level goes from here: the activated level, and the tide's high and low marks.
+		var color = Kind == LiquidKind.Lava ? LavaFoam : WaterSurface.FoamColor;
+		var restY = Size.Y * (1 - Fill);
+		batcher.Line(new Vector2(0, Size.Y * (1 - ActiveFill)), new Vector2(Size.X, Size.Y * (1 - ActiveFill)), 1, color);
+		if (TideAmplitude > 0)
+			foreach (var y in (ReadOnlySpan<float>)[restY - TideAmplitude, restY + TideAmplitude])
+				batcher.Line(new Vector2(0, y), new Vector2(Size.X, y), 1, color * 0.4f);
 	}
 
 	public override void RenderEmissive(Batcher batcher)
@@ -432,8 +540,8 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		if (Kind == LiquidKind.Water)
 		{
 			batcher.PushMatrix(-RenderPosition);
-			foreach (var rect in cappedRects)
-				LiquidBody.Refract(batcher, rect, time, Game.LiquidStir);
+			foreach (var slab in slabs)
+				LiquidBody.Refract(batcher, slab.Bounds, time, Game.LiquidStir);
 			Surface!.RenderRefraction(batcher, time, Game.LiquidStir);
 			batcher.PopMatrix();
 			return;

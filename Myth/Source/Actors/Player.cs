@@ -1194,7 +1194,7 @@ public abstract partial class Pawn : Actor
 			return;
 		if (Game.WaterSurfaceAt(Position) is not { } surface)
 			return;
-		if (Position.Y < surface.SurfaceY - WaterRollSurfaceCatchHeight || Position.Y > surface.SurfaceY + Game.TileSize)
+		if (Position.Y < surface.SurfaceY - WaterRollSurfaceCatchHeight || Position.Y > surface.SurfaceY + Game.TileSize || !WaterRollClear(surface))
 			return;
 
 		rollingOnWater = true;
@@ -1217,6 +1217,12 @@ public abstract partial class Pawn : Actor
 			return false;
 		}
 
+		// Ground rising into the surface (a shore) hands the roll back to the ground.
+		if (!WaterRollClear(surface))
+		{
+			StopWaterRoll();
+			return true;
+		}
 		SnapRollToWater(surface);
 		waterRollSplashDistance -= MathF.Abs(Velocity.X) * Time.Delta;
 		if (waterRollSplashDistance <= 0)
@@ -1229,9 +1235,14 @@ public abstract partial class Pawn : Actor
 		return true;
 	}
 
+	int WaterRollY(WaterSurface surface) => (int)MathF.Round(surface.SurfaceY + WaterRollSurfaceDepth);
+
+	// Too shallow to skim where the ground sits within the snap depth, e.g. rolling down a slope into liquid.
+	bool WaterRollClear(WaterSurface surface) => !OverlapsAny(new Point2(0, WaterRollY(surface) - Position.Y), Masks.Solid);
+
 	void SnapRollToWater(WaterSurface surface)
 	{
-		Position.Y = (int)MathF.Round(surface.SurfaceY + WaterRollSurfaceDepth);
+		Position.Y = WaterRollY(surface);
 		StopY();
 	}
 
