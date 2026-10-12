@@ -587,6 +587,7 @@ public partial class Game : IDisposable
 		destroying.Clear();
 		parkedActors.Clear();
 		View?.Dispose();
+		LiquidStir.Dispose();
 	}
 
 	// Manager owns input and feeds the per-frame controls in; the sim never reads the
@@ -1827,6 +1828,7 @@ public partial class Game : IDisposable
 
 	public bool HasLiquid => LiquidVolumes.Count > 0 || room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
 	internal readonly List<LiquidVolume> LiquidVolumes = [];
+	internal readonly LiquidStir LiquidStir = new();
 
 	internal LiquidVolume? LiquidVolumeAt(Point2 worldPoint)
 	{
@@ -1884,6 +1886,8 @@ public partial class Game : IDisposable
 	{
 		if (room == null)
 			return;
+		if (HasLiquid)
+			LiquidStir.Update(this, room.WorldBounds, Time.Delta);
 		foreach (var surface in room.WaterSurfaces)
 			surface.Update(Time.Delta);
 	}

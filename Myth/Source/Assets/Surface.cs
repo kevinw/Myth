@@ -284,7 +284,7 @@ public sealed class Surface : IDisposable
 	static Material NormalMaterial(GraphicsDevice gfx)
 		=> normalMaterial ??= new Material(null, LoadFragment(gfx, "SurfaceNormal", samplerCount: 1));
 
-	static Shader LoadFragment(GraphicsDevice gfx, string name, int samplerCount)
+	internal static Shader LoadFragment(GraphicsDevice gfx, string name, int samplerCount)
 	{
 		var ext = gfx.Driver.GetShaderExtension();
 		var code = Assets.TryReadCompiledShader($"{name}.fragment.{ext}")

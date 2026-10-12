@@ -40,10 +40,12 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	static float LavaLightIntensity => 0.9f;
 	static float LavaLightHeight => 12f;
 	static readonly Color LavaLightColor = new(1f, 0.45f, 0.15f, 1f);
-	static readonly Color LavaBody = new(0.85f, 0.28f, 0.06f, 0.9f);
-	static readonly Color LavaFoam = new(1f, 0.78f, 0.3f, 1f);
-	static readonly Color LavaCrust = new(0.5f, 0.12f, 0.04f, 1f);
+	internal static readonly Color LavaBody = new(0.85f, 0.28f, 0.06f, 0.9f);
+	internal static readonly Color LavaFoam = new(1f, 0.78f, 0.3f, 1f);
+	internal static readonly Color LavaCrust = new(0.5f, 0.12f, 0.04f, 1f);
 	static float LavaLipCrawl => 0.6f;
+	static float BubbleStirHeat => 0.5f;
+	static float LavaLightStirBoost => 0.8f;
 	static float BubbleInterval => 0.19f;
 	static float BubbleRiseRate => 2f;
 	static float BubblePopImpulse => 15f;
@@ -77,6 +79,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	readonly List<Bubble> bubbles = [];
 	int emberEffect = -1;
 	float bubbleTimer;
+	float flowTime;
 	Rng rng = new((ulong)Environment.TickCount64);
 
 	public LiquidVolume()
@@ -152,14 +155,16 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		}
 		else
 			bubbles.Clear();
+		flowTime += Time.Delta * (LevelMoving ? BubbleRiseRate : 1);
 	}
+
+	bool LevelMoving => delayTimer <= 0 && fill != (active ? ActiveFill : Fill);
 
 	// Bubbles swell on the surface, then pop: the pop dimples the wave sim, throws embers, flares
 	// a light and plays a sound. They churn faster while the level is moving.
 	void UpdateBubbles(WaterSurface surface)
 	{
-		var moving = delayTimer <= 0 && fill != (active ? ActiveFill : Fill);
-		bubbleTimer -= Time.Delta * (moving ? BubbleRiseRate : 1);
+		bubbleTimer -= Time.Delta * (LevelMoving ? BubbleRiseRate : 1);
 		if (bubbleTimer <= 0)
 		{
 			bubbleTimer = BubbleInterval * rng.Float(0.3f, 1.7f);
@@ -185,6 +190,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	void Pop(Bubble bubble, WaterSurface surface)
 	{
 		surface.Splash(bubble.X, BubblePopImpulse * bubble.Radius);
+		Game.LiquidStir.Stir(new Vector2(bubble.X, surface.SurfaceY + 2), bubble.Radius * 3, BubbleStirHeat);
 		var top = new Vector2(bubble.X, surface.TopAt(bubble.X, Time.SecondsF));
 		if (emberEffect >= 0)
 			Game.Particles?.Emit(emberEffect, top, (int)bubble.Radius + 1);
@@ -261,9 +267,12 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	{
 		if (Surface == null)
 			return;
+		var stir = LiquidBody.Push(batcher, Kind == LiquidKind.Lava ? LiquidBody.Lava : LiquidBody.Water, flowTime, Game.LiquidStir);
 		foreach (var rect in cappedRects)
-			batcher.Rect(rect, Surface.Body);
-		Surface.Render(batcher, time);
+			LiquidBody.Rect(batcher, stir, rect, rect.Top - surfaceY);
+		Surface.RenderBody(batcher, time, stir);
+		LiquidBody.Pop(batcher);
+		Surface.RenderLip(batcher, time);
 		foreach (var bubble in bubbles)
 		{
 			if (bubble.Popped)
@@ -350,7 +359,8 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			return;
 		for (var x = LavaLightSpacing * 0.5f; x < Size.X; x += LavaLightSpacing)
 			if (IsWet(new((int)x / Game.TileSize, surfaceRow)))
-				action(new Vector2(Position.X + x, surfaceY - 2), LavaLightRadius, LavaLightIntensity, LavaLightHeight, LavaLightColor);
+				action(new Vector2(Position.X + x, surfaceY - 2), LavaLightRadius,
+					LavaLightIntensity * (1 + Game.LiquidStir.At(new Vector2(Position.X + x, surfaceY + 2)) * LavaLightStirBoost), LavaLightHeight, LavaLightColor);
 		foreach (var bubble in bubbles)
 			if (bubble.Popped)
 				action(new Vector2(bubble.X, surfaceY - 4), BubbleFlashRadius,
@@ -376,13 +386,23 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		batcher.PopMatrix();
 	}
 
-	public override bool HasWorldDistortion => Kind == LiquidKind.Lava && Surface != null;
+	public override bool HasWorldDistortion => Surface != null;
 
-	// Heat shimmer: a band of wobbling offsets rising off every exposed stretch of lava. It eases in
-	// just above the surface so the lava edge itself stays crisp, then fades out with height.
+	// Water refracts whatever is behind or inside it. Lava instead throws heat shimmer: a band of
+	// wobbling offsets rising off every exposed stretch, easing in just above the surface so the lava
+	// edge itself stays crisp, then fading out with height.
 	public override void RenderWorldDistortion(Batcher batcher)
 	{
 		var time = Time.SecondsF;
+		if (Kind == LiquidKind.Water)
+		{
+			batcher.PushMatrix(-RenderPosition);
+			foreach (var rect in cappedRects)
+				LiquidBody.Refract(batcher, rect, time, Game.LiquidStir);
+			Surface!.RenderRefraction(batcher, time, Game.LiquidStir);
+			batcher.PopMatrix();
+			return;
+		}
 		var surface = surfaceY - Position.Y;
 		for (var column = 0; column < tiles.X; column++)
 		{

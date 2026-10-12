@@ -41,6 +41,8 @@ public class AirBubble : Actor
 		}
 
 		base.Update(); // moves by Velocity, advances the animation, pops on a solid via OnCollide*
+		if (!popped)
+			Game.LiquidStir.Stir(Position, 4, 0.8f * Time.Delta); // a faint trail of aerated water
 
 		if (popped)
 		{

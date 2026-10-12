@@ -1619,6 +1619,7 @@ public abstract partial class Pawn : Actor
 	{
 		Game.SplashWater(Position, (exiting ? -strength : strength) * LavaSplashImpulseScale);
 		var surfaceY = Game.WaterSurfaceAt(Position)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
+		StirLiquidSurface(surfaceY, strength);
 		if (embersParticlesEffect >= 0)
 			Game.Particles?.Emit(embersParticlesEffect,
 				worldPosition: new Vector2(Position.X, surfaceY),
@@ -1643,9 +1644,14 @@ public abstract partial class Pawn : Actor
 		AudioEventDebounced("player/splash", 0.2f);
 	}
 
+	// A splash churns the liquid it lands in: lava flares and melts its crust, water aerates.
+	void StirLiquidSurface(float surfaceY, float strength)
+		=> Game.LiquidStir.Stir(new Vector2(Position.X, surfaceY + 4), 8 + strength * 0.08f, Calc.Clamp(strength / 100f, 0.3f, 1f));
+
 	void EmitWaterSurfaceSplash(float strength, bool exiting, int count)
 	{
 		Game.SplashWater(Position, exiting ? -strength : strength);
+		StirLiquidSurface(Game.WaterSurfaceAt(Position)?.SurfaceY ?? (Hitbox.Rect + Position).Top, strength);
 
 		if (splashParticlesEffect >= 0 && Game.Particles is { Supported: true } particles)
 		{
@@ -2631,7 +2637,10 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (drained >= Health)
 			ApplyHurt(-drained, source, bounceMultiplier: 0); // the usual death
 		else
+		{
 			Health -= drained;
+			Game.Shake(0.1f);
+		}
 		return drained;
 	}
 

@@ -84,7 +84,7 @@ public sealed partial class GameView
 				Rect.Between(WorldToFrame(playerWorld.TopLeft), WorldToFrame(playerWorld.BottomRight)).Overlaps(hudRect.Inflate(HudOcclusionMargin));
 			hudOpacity = Calc.Approach(hudOpacity, occluded ? HudOccludedOpacity : 1, HudFadeRate * game.Manager.Time.Delta);
 			rectColor *= hudOpacity;
-			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 40, 3), rectColor);
+			//Batcher.Rect(new Rect(pos.X, pos.Y + 7, 40, 3), rectColor);
 			displayedBurrowBarOpacity = Calc.Approach(displayedBurrowBarOpacity, player.BurrowBarOpacity,
 				BurrowBarOpacityRate * game.Manager.Time.Delta);
 			Batcher.Rect(new Rect(0, burrowY, burrowWidth, burrowBarHeight), rectColor * displayedBurrowBarOpacity);
@@ -124,15 +124,15 @@ public sealed partial class GameView
 		var color = Color.Lerp(Color.Lerp(Color.White, HealthLowColor, low), HealthBurnColor, heat) * (0.75f * hudOpacity);
 		pos = (pos + new Vector2(MathF.Sin(Time.SecondsF * 90), MathF.Cos(Time.SecondsF * 70)) * (heat * HealthBurnShiver)).Round();
 
-		var heart = Assets.GetSubtexture(health > 0 ? "heart/0" : "heart/1");
-		Batcher.Image(heart, pos, color);
+		//var heart = Assets.GetSubtexture(health > 0 ? "heart/0" : "heart/1");
+		//Batcher.Image(heart, pos, color);
 		if (Assets.Font is not { } font)
 			return;
 		Span<char> text = stackalloc char[3];
 		((int)MathF.Ceiling(displayedHealth)).TryFormat(text, out var length);
 		// The heart's art sits inside a padded frame: line the number up with what's drawn.
-		var drawn = new Rect(pos - heart.Frame.Position, heart.Source.Size);
-		var at = new Vector2(drawn.Right + 2, drawn.Bottom - font.Size).Round();
+		var drawn = new Rect(pos, new(0, 0));
+		var at = new Vector2(drawn.Right + 2, drawn.Bottom).Round();
 		Batcher.Text(font, text[..length], at, font.Size, color);
 	}
 

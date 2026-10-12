@@ -149,43 +149,55 @@ public sealed class WaterSurface
 		return SurfaceY + height[i] + ambient;
 	}
 
-	// Draws the translucent body + foam line in world space. The caller is expected to
-	// have pushed the world matrix (see Game.Rendering.DrawWaterBodies).
-	public void Render(Batcher batcher, float time)
+	// The body columns, drawn for LiquidBody's material (pushed by the caller, which also pushed the
+	// world matrix): world position as texcoords, depth below the surface in the vertex color.
+	public void RenderBody(Batcher batcher, float time, Texture stir)
 	{
-		var n = SampleCount;
 		var topLeft = TopY(0, time);
-		for (var i = 0; i < n - 1; i++)
+		for (var i = 0; i < SampleCount - 1; i++)
 		{
 			var xl = Left + i * SampleSpacing;
 			var xr = xl + SampleSpacing;
 			var topRight = TopY(i + 1, time);
-			if (bottom[i] <= SurfaceY)
+			if (bottom[i] > SurfaceY)
 			{
-				topLeft = topRight;
-				continue;
+				var a = new Vector2(xl, topLeft);
+				var b = new Vector2(xr, topRight);
+				var c = new Vector2(xr, bottom[i]);
+				var d = new Vector2(xl, bottom[i]);
+				var (top, deep) = (LiquidBody.Depth(0), LiquidBody.Depth(bottom[i] - SurfaceY));
+				batcher.Quad(stir, a, b, c, d, a, b, c, d, top, top, deep, deep);
 			}
-
-			// body column: flat uniform tint
-			batcher.Quad(
-				new Vector2(xl, topLeft),
-				new Vector2(xr, topRight),
-				new Vector2(xr, bottom[i]),
-				new Vector2(xl, bottom[i]),
-				Body);
-
-			// foam line riding the displaced top edge
-			var crawl = 0.5f + 0.25f * (MathF.Sin(xl * 0.7f + time * 6f) + MathF.Sin(xl * 0.29f - time * 3.7f));
-			var lip = LipCrawl > 0 ? Color.Lerp(Body, Foam, 1 - LipCrawl * (1 - crawl)) : Foam;
-			var weight = LipCrawl > 0 && crawl > 0.75f ? 2f : 1f;
-			batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), weight, lip);
-
 			topLeft = topRight;
 		}
 	}
 
-	// Flat tint for water that has no free surface (capped by solid above / pockets under
-	// ledges). No waves or foam — just the deep body color so every water tile reads as wet.
-	public static void RenderCappedBody(Batcher batcher, in RectInt rect)
-		=> batcher.Rect(new Rect(rect.X, rect.Y, rect.Width, rect.Height), BodyColor);
+	// Refraction for the body below the rest line, one tile column at a time.
+	public void RenderRefraction(Batcher batcher, float time, LiquidStir stir)
+	{
+		const int samplesPerColumn = (int)(LiquidBody.RefractCell / SampleSpacing);
+		for (var i = 0; i < SampleCount - 1; i += samplesPerColumn)
+			if (bottom[i] > SurfaceY + 2)
+				LiquidBody.Refract(batcher, new Rect(Left + i * SampleSpacing, SurfaceY + 2, LiquidBody.RefractCell, bottom[i] - SurfaceY - 2), time, stir);
+	}
+
+	// Foam line riding the displaced top edge.
+	public void RenderLip(Batcher batcher, float time)
+	{
+		var topLeft = TopY(0, time);
+		for (var i = 0; i < SampleCount - 1; i++)
+		{
+			var xl = Left + i * SampleSpacing;
+			var xr = xl + SampleSpacing;
+			var topRight = TopY(i + 1, time);
+			if (bottom[i] > SurfaceY)
+			{
+				var crawl = 0.5f + 0.25f * (MathF.Sin(xl * 0.7f + time * 6f) + MathF.Sin(xl * 0.29f - time * 3.7f));
+				var lip = LipCrawl > 0 ? Color.Lerp(Body, Foam, 1 - LipCrawl * (1 - crawl)) : Foam;
+				var weight = LipCrawl > 0 && crawl > 0.75f ? 2f : 1f;
+				batcher.Line(new Vector2(xl, topLeft), new Vector2(xr, topRight), weight, lip);
+			}
+			topLeft = topRight;
+		}
+	}
 }

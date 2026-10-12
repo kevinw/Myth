@@ -60,6 +60,7 @@ public class Actor
 	protected bool atLiquidSurface; // torso submerged but head is above the surface
 	public bool InLiquid => inLiquid;
 	public bool InLava => (fluidContact & FluidContact.Lava) != 0;
+	public bool InLiquidBody => (fluidContact & FluidContact.Liquid) != 0; // water or lava, not a neural field
 
 	internal void UpdateLiquidState()
 	{
@@ -908,7 +909,7 @@ public class Actor
 	public virtual bool HasWorldDistortion => false;
 	public virtual void RenderWorldDistortion(Batcher batcher) { }
 	public virtual void StirPixelSort(PixelSortCanvas canvas) { }
-	protected static Color EncodeWorldDistortion(Vector2 direction, float strength)
+	internal static Color EncodeWorldDistortion(Vector2 direction, float strength)
 	{
 		var encoded = direction * 0.5f + Vector2.One * 0.5f;
 		return new(encoded.X * strength, encoded.Y * strength, 0, strength);

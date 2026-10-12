@@ -215,6 +215,7 @@ public class Wildlife : Actor
 		}
 		if (Game.IsWaterAt(next.RoundToPoint2()))
 			state.Position = next;
+		Game.LiquidStir.Stir(state.Position, 3, 0.4f * Time.Delta);
 		state.Phase += Time.Delta * 11;
 	}
 

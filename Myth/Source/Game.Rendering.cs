@@ -620,12 +620,17 @@ public sealed partial class GameView
 	{
 		if (r == null)
 			return;
-		// Flat tint for capped water first, then the animated exposed surfaces + foam on top.
-		foreach (var rect in r.CappedWaterRects)
-			WaterSurface.RenderCappedBody(Batcher, rect);
+		// Capped water first, then the animated exposed surfaces, then foam on top. Capped water has no
+		// surface of its own to measure depth from, so it starts partway down the depth gradient.
 		var time = Time.SecondsF;
+		var stir = LiquidBody.Push(Batcher, LiquidBody.Water, time, game.LiquidStir);
+		foreach (var rect in r.CappedWaterRects)
+			LiquidBody.Rect(Batcher, stir, rect, LiquidBody.Water.DepthFade * 0.5f);
 		foreach (var surface in r.WaterSurfaces)
-			surface.Render(Batcher, time);
+			surface.RenderBody(Batcher, time, stir);
+		LiquidBody.Pop(Batcher);
+		foreach (var surface in r.WaterSurfaces)
+			surface.RenderLip(Batcher, time);
 	}
 
 	bool PushAtlasWanderMaterial()
@@ -1054,8 +1059,8 @@ public sealed partial class GameView
 
 	bool DrawWorldDistortionMask()
 	{
-		var hasDistortion = false;
-		for (var i = 0; i < rendering.Count; i++)
+		var hasDistortion = HasWaterBody(room);
+		for (var i = 0; !hasDistortion && i < rendering.Count; i++)
 			if (rendering[i].Visible && rendering[i].HasWorldDistortion)
 			{
 				hasDistortion = true;
@@ -1066,6 +1071,14 @@ public sealed partial class GameView
 
 		DistortionMask.Clear(Color.Transparent);
 		PushWorldMatrix();
+		if (room != null)
+		{
+			var time = Time.SecondsF;
+			foreach (var rect in room.CappedWaterRects)
+				LiquidBody.Refract(Batcher, rect, time, game.LiquidStir);
+			foreach (var surface in room.WaterSurfaces)
+				surface.RenderRefraction(Batcher, time, game.LiquidStir);
+		}
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible || !actor.HasWorldDistortion)
