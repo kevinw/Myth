@@ -27,10 +27,10 @@ public class Blob : Actor
 	public override void Update()
 	{
 		base.Update();
-		UpdateWaterState();
+		UpdateLiquidState();
 
 		float gravity = 300;
-		if (InWater)
+		if (InLiquid)
 		{
 			gravity *= 0.3f;
 		}

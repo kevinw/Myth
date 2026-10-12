@@ -1825,25 +1825,35 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	// True when the given world point falls inside a water tile. Water is a non-solid
-	// tile (Factory 'w'); pawns sample their torso here to drive swim physics.
-	public bool HasWater => LiquidVolumes.Count > 0 || room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
+	public bool HasLiquid => LiquidVolumes.Count > 0 || room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
 	internal readonly List<LiquidVolume> LiquidVolumes = [];
 
-	public bool IsWaterAt(Point2 worldPoint, bool continuePastTopEdge = false)
+	internal LiquidVolume? LiquidVolumeAt(Point2 worldPoint)
 	{
 		foreach (var volume in LiquidVolumes)
 			if (volume.Contains(worldPoint))
-				return true;
+				return volume;
+		return null;
+	}
+
+	public bool IsWaterAt(Point2 worldPoint, bool continuePastTopEdge = false)
+		=> LiquidAt(worldPoint, continuePastTopEdge) == LiquidKind.Water;
+
+	// Water tiles (Factory 'w') and LiquidVolumes; pawns sample their torso here to drive swim physics.
+	// Volumes win over tiles, so lava boiling into an authored pool reads as lava.
+	public LiquidKind? LiquidAt(Point2 worldPoint, bool continuePastTopEdge = false)
+	{
+		if (LiquidVolumeAt(worldPoint) is { } volume)
+			return volume.Kind;
 		if (room == null)
-			return false;
+			return null;
 		var local = worldPoint - room.WorldBounds.TopLeft;
 		var tile = new Point2(
 			(int)MathF.Floor(local.X / (float)TileSize),
 			(int)MathF.Floor(local.Y / (float)TileSize));
 		if (continuePastTopEdge && tile.Y < 0 && tile.X >= 0 && tile.X < room.Size.X)
 			tile.Y = 0;
-		return room.IsWaterTile(tile);
+		return room.IsWaterTile(tile) ? LiquidKind.Water : null;
 	}
 
 	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:

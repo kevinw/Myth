@@ -27,6 +27,8 @@ public enum FluidContact
 	None = 0,
 	Water = 1 << 0,
 	NeuralTexture = 1 << 1,
+	Lava = 1 << 2,
+	Liquid = Water | Lava,
 }
 
 public class Actor
@@ -52,26 +54,25 @@ public class Actor
 		Locked = 1, // no live edit
 	}
 
-	protected bool inWater;
+	protected bool inLiquid;
 	protected FluidContact fluidContact;
 	protected FluidContact previousFluidContact;
-	protected bool atWaterSurface; // torso submerged but head is above the waterline
-	public bool InWater => inWater;
-	public bool AtWaterSurface => atWaterSurface;
+	protected bool atLiquidSurface; // torso submerged but head is above the surface
+	public bool InLiquid => inLiquid;
+	public bool InLava => (fluidContact & FluidContact.Lava) != 0;
 
-	internal void UpdateWaterState()
+	internal void UpdateLiquidState()
 	{
-		var waterBounds = Hitbox.Rect + Position;
-		waterBounds = waterBounds.Inflate(8);
-		var inTileWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
-		fluidContact = inTileWater ? FluidContact.Water : FluidContact.None;
-		var headSubmerged = inTileWater && Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
+		var bounds = (Hitbox.Rect + Position).Inflate(8);
+		var liquid = Game.HasLiquid ? Game.LiquidAt(bounds.Center, continuePastTopEdge: true) : null;
+		fluidContact = liquid switch { LiquidKind.Water => FluidContact.Water, LiquidKind.Lava => FluidContact.Lava, _ => FluidContact.None };
+		var headSubmerged = liquid != null && Game.LiquidAt(new Point2(bounds.Center.X, bounds.Top), continuePastTopEdge: true) != null;
 		if (this is Player player)
 			foreach (var actor in Game.Actors)
 				if (actor is NeuralTextureActor texture)
 					texture.ApplyGameplay(player, ref fluidContact, ref headSubmerged);
-		inWater = fluidContact != FluidContact.None;
-		atWaterSurface = inWater && !headSubmerged;
+		inLiquid = fluidContact != FluidContact.None;
+		atLiquidSurface = inLiquid && !headSubmerged;
 	}
 
 	public Signs Facing = Signs.Positive;
@@ -244,13 +245,13 @@ public class Actor
 	}
 
 	readonly Dictionary<string, float> audioEventDebounceTimes = [];
-	public void AudioEventDebounced(string name, float waitSeconds)
+	public void AudioEventDebounced(string name, float waitSeconds, string parameterName = "", float parameterFloat = 0)
 	{
 		var now = Time.SecondsF;
 		if (audioEventDebounceTimes.TryGetValue(name, out var lastTime) && now - lastTime < waitSeconds)
 			return;
 		audioEventDebounceTimes[name] = now;
-		Game.PlayAudioEvent(name, "", "", Position);
+		Game.PlayAudioEvent(name, parameterName, parameterFloat, Position);
 	}
 
 	public void AudioEvent(string name)

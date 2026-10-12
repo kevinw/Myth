@@ -27,7 +27,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	[I(0, 16)] public float TideAmplitude;
 	[I(0.5f, 20)] public float TidePeriod = 6;
 
-	static float LavaBurnPerSecond => 45f; // health points; full health lasts a bit over two seconds
+	internal static float LavaBurnPerSecond => 25f; // health points; full health lasts a bit over two seconds
 	static float HeatHeight => 36f;
 	static float HeatStrength => 0.8f;
 	static int HeatCell => 4;
@@ -325,7 +325,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			if (!Contains(center))
 				continue;
 			// A puff of steam per point burned, so the sizzle tracks the drain.
-			var burned = player.Burn(LavaBurnPerSecond, this);
+			var burned = player.Burn(LavaBurnPerSecond * Time.Delta, this);
 			if (burned > 0 && steamEffect >= 0)
 				Game.Particles?.Emit(steamEffect, center, burned);
 		}

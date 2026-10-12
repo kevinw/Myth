@@ -88,7 +88,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	{
 		if (owner.State == Pawn.States.Climb)
 			return Climb(field, p);
-		if (owner.InWater)
+		if (owner.InLiquid)
 			return Swim(field, p, p);
 		if (!owner.IsGrounded)
 			return Air(field, p);
@@ -128,7 +128,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 		var landing = intended.Kind is ReachField.NodeKind.Stand or ReachField.NodeKind.Ride && !owner.IsGrounded && k < moveFrames + LandingGrace;
 		if (k >= moveFrames && !landing || k >= recorded.Inputs.Length ||
 			toRope && owner.State == Pawn.States.Climb ||
-			k > 0 && owner.InWater ||
+			k > 0 && owner.InLiquid ||
 			k > recorded.GroundedFrames + 1 && owner.IsGrounded)
 			return false;
 		if (checkStray && k > 0 && (bonk == 0 || k < bonk))
@@ -211,7 +211,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 			input = new(0, 0, JumpPressed: first, JumpDown: true, false, AllowWallJump: false);
 			return true;
 		}
-		if (owner.IsGrounded || owner.InWater ||
+		if (owner.IsGrounded || owner.InLiquid ||
 			intended.Kind == ReachField.NodeKind.Wall && (owner.Position.Y <= intended.Position.Y + 1 || owner.Velocity.Y > 0))
 			return false;
 		Label = "pop";
@@ -228,7 +228,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 			ReachField.NodeKind.Stand => owner.IsGrounded && Math.Abs(off.X) <= Game.TileSize + 2 && Math.Abs(off.Y) <= 3,
 			ReachField.NodeKind.Rope => owner.State == Pawn.States.Climb,
 			ReachField.NodeKind.Ride => owner.IsGrounded && owner.GroundActor() is MovingPlatform,
-			ReachField.NodeKind.Swim => owner.InWater,
+			ReachField.NodeKind.Swim => owner.InLiquid,
 			_ => !owner.IsGrounded && Math.Abs(off.X) <= 1 && Math.Abs(off.Y) <= 3,
 		};
 	}

@@ -312,7 +312,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		{
 			if (State == States.Climb)
 				launched = false; // grabbed a rope mid-flight: the climb takes over
-			else if (grounded || InWater)
+			else if (grounded || InLiquid)
 			{
 				launched = false;
 				lingerTimer = LaunchLingerTime;

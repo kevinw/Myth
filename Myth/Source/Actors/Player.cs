@@ -28,6 +28,7 @@ public abstract partial class Pawn : Actor
 
 	protected int jumpParticlesEffect = -1;
 	int splashParticlesEffect = -1;
+	int embersParticlesEffect = -1;
 
 	override public void Added()
 	{
@@ -35,6 +36,7 @@ public abstract partial class Pawn : Actor
 
 		jumpParticlesEffect = AcquireParticleEffect("jump");
 		splashParticlesEffect = AcquireParticleEffect("splash");
+		embersParticlesEffect = AcquireParticleEffect("embers");
 
 		Game.RoomChanged += OnRoomChanged;
 	}
@@ -44,6 +46,7 @@ public abstract partial class Pawn : Actor
 		Game.RoomChanged -= OnRoomChanged;
 		ReleaseParticleEffect(ref jumpParticlesEffect);
 		ReleaseParticleEffect(ref splashParticlesEffect);
+		ReleaseParticleEffect(ref embersParticlesEffect);
 		ReleaseBurrowParticles();
 		StopAndReleaseSound(ref wallSlideSound, true);
 		StopAndReleaseSound(ref burrowSound, true);
@@ -129,6 +132,19 @@ public abstract partial class Pawn : Actor
 	static float WaterRollSplashSpacing => 16f;
 	static float WaterRollSplashStrength => 20f;
 	static float WaterRollHopHeight => 3f;
+	// Lava: the same swim rules, but thick -- it grabs harder as you plunge in, you sink and
+	// drift slower, and each stroke lifts you less.
+	public static float LavaGravityMultiplier => 0.2f.T();
+	public static float LavaMaxSinkSpeed => 22f.T();
+	public static float LavaSinkDamping => 400f.T();
+	public static float LavaSwimStroke => -42f.T();
+	public static float LavaSurfaceTensionMultiplier => 0.3f.T();
+	public static float LavaHorizontalSpeedMultiplier => 0.4f.T();
+	public static float LavaHorizontalDrag => 600f.T();
+	static float LavaSplashImpulseScale => 0.5f; // thick liquid ripples less than water
+	static float LavaSkimBurnScale => 0.5f; // skimming burns at this fraction of the submerged rate
+
+	protected float SwimStroke => InLava ? LavaSwimStroke : WaterSwimStroke;
 
 	protected static float WallHugGravityMultiplier => 0.25f;
 	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
@@ -378,34 +394,31 @@ public abstract partial class Pawn : Actor
 		if (regrabTimer > 0)
 			regrabTimer = Calc.Approach(regrabTimer, 0, Time.Delta);
 
-		UpdateWaterState();
+		UpdateLiquidState();
 
 		if (!rollingOnWater && State == States.Roll)
 			TryStartWaterRoll();
 		if (rollingOnWater)
 		{
-			fluidContact |= FluidContact.Water;
-			inWater = true;
-			atWaterSurface = true;
+			fluidContact |= Game.LiquidAt(Position + Point2.Down * 2) == LiquidKind.Lava ? FluidContact.Lava : FluidContact.Water;
+			inLiquid = true;
+			atLiquidSurface = true;
 		}
 		var enteredFluid = fluidContact & ~previousFluidContact;
 		var exitedFluid = previousFluidContact & ~fluidContact;
-		// Only tile water owns the splash presentation and surface tension. Neural fields still
+		// Only real liquids (water, lava) own the splash presentation and surface tension. Neural fields still
 		// use the same swim physics, but their actors handle their own crossing feedback.
-		if ((enteredFluid & FluidContact.Water) != 0)
+		var crossedLava = ((enteredFluid | exitedFluid) & FluidContact.Lava) != 0;
+		if ((enteredFluid & FluidContact.Liquid) != 0)
 		{
-			OnCrossedWaterSurface(Velocity.Y, exiting: false); // downward plunge -> dip
+			OnCrossedLiquidSurface(Velocity.Y, exiting: false, crossedLava); // downward plunge -> dip
 			if (!rollingOnWater)
-				Velocity *= WaterSurfaceTensionMultiplier;
-			AudioEventDebounced("player/splash", 0.2f);
+				Velocity *= InLava ? LavaSurfaceTensionMultiplier : WaterSurfaceTensionMultiplier;
 		}
-		if ((exitedFluid & FluidContact.Water) != 0)
-		{
-			OnCrossedWaterSurface(-Velocity.Y, exiting: true); // upward exit -> crown
-			AudioEventDebounced("player/splash", 0.2f);
-		}
+		if ((exitedFluid & FluidContact.Liquid) != 0)
+			OnCrossedLiquidSurface(-Velocity.Y, exiting: true, crossedLava); // upward exit -> crown
 		previousFluidContact = fluidContact;
-		if (inWater)
+		if (inLiquid)
 			EndDashRun();
 		UpdateAirBubbles();
 
@@ -452,20 +465,20 @@ public abstract partial class Pawn : Actor
 		if (!grounded && State != States.Burrow && State != States.Climb && !rollingOnWater)
 		{
 			var grav = Gravity;
-			if (inWater)
-				grav *= WaterGravityMultiplier;
+			if (inLiquid)
+				grav *= InLava ? LavaGravityMultiplier : WaterGravityMultiplier;
 			else if (jumpTimer > 0)
 				grav *= JumpHoldGravityMultiplier;
 			else if (Velocity.Y > 0)
 				grav *= FastFallMultiplier;
-			if (!inWater && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
+			if (!inLiquid && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
 			if (Velocity.Y > TerminalVelocity) Velocity.Y = TerminalVelocity;
-			var maxSink = input.MoveY > 0 ? WaterMaxSinkSpeed * WaterFastSinkMultiplier : WaterMaxSinkSpeed;
-			if (inWater && Velocity.Y > maxSink)
-				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, WaterSinkDamping * Time.Delta);
-			if (!inWater && State == States.Normal && Velocity.Y > WallSlideMaxFallSpeed && IsWallHugging())
+			var maxSink = (InLava ? LavaMaxSinkSpeed : WaterMaxSinkSpeed) * (input.MoveY > 0 ? WaterFastSinkMultiplier : 1);
+			if (inLiquid && Velocity.Y > maxSink)
+				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, (InLava ? LavaSinkDamping : WaterSinkDamping) * Time.Delta);
+			if (!inLiquid && State == States.Normal && Velocity.Y > WallSlideMaxFallSpeed && IsWallHugging())
 				Velocity.Y = Calc.Approach(Velocity.Y, WallSlideMaxFallSpeed, WallSlideFallDamping * Time.Delta);
 
 			JumpUpSquish -= Time.Delta;
@@ -626,7 +639,7 @@ public abstract partial class Pawn : Actor
 
 	void RumbleLanding(float speed)
 	{
-		if (inWater || speed < LandingRumbleMinSpeed)
+		if (inLiquid || speed < LandingRumbleMinSpeed)
 			return;
 		Rumble(RumbleEffect.Lerp(LandingRumbleSoft, LandingRumbleHard,
 			Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed)));
@@ -693,7 +706,7 @@ public abstract partial class Pawn : Actor
 	protected bool DashBursting => !DashEngagesRunOnly && dashCooldownTimer > 0;
 
 	protected bool IsDashRunning() =>
-		state.Current == States.Normal && dashRunArmed && input.DashDown && !ducking && !inWater;
+		state.Current == States.Normal && dashRunArmed && input.DashDown && !ducking && !inLiquid;
 
 	protected void EndDashRun()
 	{
@@ -751,8 +764,8 @@ public abstract partial class Pawn : Actor
 			maxSpeed = (dashRunning ? DashRunAirSpeed : MaxAirSpeed) * AirSpeedMultiplier;
 		if (ducking)
 			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
-		if (inWater)
-			maxSpeed *= WaterHorizontalSpeedMultiplier;
+		if (inLiquid)
+			maxSpeed *= InLava ? LavaHorizontalSpeedMultiplier : WaterHorizontalSpeedMultiplier;
 		if (grounded && movementInput != 0 && !dashBursting)
 			maxSpeed *= MathF.Abs(movementInput);
 
@@ -780,8 +793,8 @@ public abstract partial class Pawn : Actor
 		}
 		else if (moveX == 0 && grounded && !dashBursting)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
-		else if (moveX == 0 && inWater)
-			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
+		else if (moveX == 0 && inLiquid)
+			Velocity.X = Calc.Approach(Velocity.X, 0, (InLava ? LavaHorizontalDrag : WaterHorizontalDrag) * Time.Delta);
 	}
 
 	protected void NormalState()
@@ -869,7 +882,7 @@ public abstract partial class Pawn : Actor
 		else
 		{
 			var wallJumpDir = GetWallJumpDirection();
-			if (!inWater && IsWallHugging(wallJumpDir))
+			if (!inLiquid && IsWallHugging(wallJumpDir))
 			{
 				Facing = -(Signs)wallJumpDir;
 				Play("wall_slide");
@@ -910,7 +923,7 @@ public abstract partial class Pawn : Actor
 		}
 		// Underwater you swim-turn: face the input direction even while airborne, unlike
 		// the usual air control that keeps your facing through a mid-air direction change.
-		else if (inWater && moveX != 0)
+		else if (inLiquid && moveX != 0)
 		{
 			Facing = facing;
 		}
@@ -920,11 +933,11 @@ public abstract partial class Pawn : Actor
 		// no ground/coyote requirement. At the surface (head above the waterline) it instead
 		// becomes a full-strength jump so you can hop clean out of the water. Ground and wall
 		// jumps are suppressed while submerged.
-		if (inWater && input.JumpPressed)
+		if (inLiquid && input.JumpPressed)
 		{
 			jumpBufferTimer = 0;
 			JumpUpSquish = 0;
-			if (atWaterSurface)
+			if (atLiquidSurface)
 			{
 				Squish = new Vector2(0.65f, 1.4f);
 				StartJump(JumpForce, JumpTime);
@@ -932,7 +945,7 @@ public abstract partial class Pawn : Actor
 			else
 			{
 				Squish = new Vector2(0.8f, 1.2f);
-				Velocity.Y = MathF.Min(Velocity.Y, WaterSwimStroke);
+				Velocity.Y = MathF.Min(Velocity.Y, SwimStroke);
 			}
 			OnPawnJump();
 		}
@@ -949,7 +962,7 @@ public abstract partial class Pawn : Actor
 
 		lastGroundedJumpTimer = Calc.Approach(lastGroundedJumpTimer, 0, Time.Delta);
 
-		if (!inWater && jumpPressed)
+		if (!inLiquid && jumpPressed)
 		{
 			if (canGroundJump || canWallJump)
 			{
@@ -1049,7 +1062,7 @@ public abstract partial class Pawn : Actor
 	bool BurrowAvailable()
 	{
 		if (!Abilities.Has(PawnAbilities.Burrow)) return false;
-		if (inWater) return false;
+		if (inLiquid) return false;
 		if (IsCarrying) return false;
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down
@@ -1094,7 +1107,7 @@ public abstract partial class Pawn : Actor
 		return true;
 	}
 
-	float RollSpeedScale => inWater ? WaterRollSpeedMultiplier : 1f;
+	float RollSpeedScale => inLiquid ? WaterRollSpeedMultiplier : 1f;
 
 	(float, float) TargetRollSpeedAndFriction()
 	{
@@ -1208,7 +1221,7 @@ public abstract partial class Pawn : Actor
 		waterRollSplashDistance -= MathF.Abs(Velocity.X) * Time.Delta;
 		if (waterRollSplashDistance <= 0)
 		{
-			EmitWaterRollSplash();
+			EmitWaterRollSplash(surface);
 			waterRollSplashDistance += WaterRollSplashSpacing;
 		}
 		var hopProgress = 1f - waterRollSplashDistance / WaterRollSplashSpacing;
@@ -1580,7 +1593,7 @@ public abstract partial class Pawn : Actor
 	// the speed into the surface (downward on entry, upward on exit), so a faster crossing
 	// splashes harder; a slow drift over the line barely disturbs it. On exit the wave impulse
 	// flips to push the surface up into a crown instead of dipping it.
-	void OnCrossedWaterSurface(float crossingSpeed, bool exiting)
+	void OnCrossedLiquidSurface(float crossingSpeed, bool exiting, bool lava)
 	{
 		// The nav-graph build steps throwaway pawns through Pawn.Update; don't splash the
 		// real room during that simulation.
@@ -1588,11 +1601,44 @@ public abstract partial class Pawn : Actor
 			return;
 
 		var strength = MathF.Max(0f, crossingSpeed);
-		EmitWaterSurfaceSplash(strength, exiting, (int)Calc.Clamp(6f + strength * 0.25f, 6f, 28f));
+		if (lava)
+		{
+			EmitLavaSplash(strength, exiting);
+			AudioEventDebounced("player/lava_splash", 0.2f, "Speed", strength);
+		}
+		else
+		{
+			EmitWaterSurfaceSplash(strength, exiting, (int)Calc.Clamp(6f + strength * 0.25f, 6f, 28f));
+			AudioEventDebounced("player/splash", 0.2f);
+		}
 	}
 
-	void EmitWaterRollSplash()
+	// A heavy gloop instead of a splash: a smaller dip in the surface, and embers thrown up
+	// instead of droplets, scaled by the crossing strength.
+	void EmitLavaSplash(float strength, bool exiting)
 	{
+		Game.SplashWater(Position, (exiting ? -strength : strength) * LavaSplashImpulseScale);
+		var surfaceY = Game.WaterSurfaceAt(Position)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
+		if (embersParticlesEffect >= 0)
+			Game.Particles?.Emit(embersParticlesEffect,
+				worldPosition: new Vector2(Position.X, surfaceY),
+				count: (int)Calc.Clamp(3f + strength * 0.15f, 3f, 16f),
+				directionRadians: -MathF.PI / 2f, // up
+				speedScale: Calc.Clamp(strength / SplashDropletSpeedRef, 0.5f, 1.8f),
+				spreadRadians: 50f * Calc.DegToRad);
+	}
+
+	void EmitWaterRollSplash(WaterSurface surface)
+	{
+		if (Game.LiquidVolumeAt(new Point2(Position.X, (int)surface.SurfaceY + 2)) is { Kind: LiquidKind.Lava } lava)
+		{
+			// Each skip pays out the burn for the stretch since the last one, so a faster roll
+			// hurts less per bounce and the total tracks time spent on the lava.
+			var burned = (this as Player)?.Burn(LiquidVolume.LavaBurnPerSecond * LavaSkimBurnScale * WaterRollSplashSpacing / MathF.Abs(Velocity.X), lava) ?? 0;
+			EmitLavaSplash(WaterRollSplashStrength, exiting: false);
+			AudioEventDebounced("player/lava_skim", 0.1f, "Damage", burned);
+			return;
+		}
 		EmitWaterSurfaceSplash(WaterRollSplashStrength, exiting: false, count: 6);
 		AudioEventDebounced("player/splash", 0.2f);
 	}
@@ -1791,7 +1837,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 		base.OnLanded(previousVelocity);
 		PlayLandingSound();
-		if (!InWater && previousVelocity.Y >= HardLandingSpeed)
+		if (!InLiquid && previousVelocity.Y >= HardLandingSpeed)
 			EmitJumpParticles(Position);
 		CanPlaySquishSound = true;
 	}
@@ -1844,7 +1890,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		else if (Position.Y < Game.Bounds.Top)
 		{
 			if (Game.Transition(Point2.Up))
-				Velocity.Y = inWater ? MathF.Min(Velocity.Y, WaterSwimStroke) : -150;
+				Velocity.Y = inLiquid ? MathF.Min(Velocity.Y, SwimStroke) : -150;
 			else
 				Position.Y = Game.Bounds.Top;
 		}
@@ -2148,7 +2194,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	protected override void OnPawnJump()
 	{
-		if (InWater)
+		if (InLiquid)
 			AudioEvent("player/swim");
 		else
 			AudioEvent("jump");
@@ -2574,12 +2620,12 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	// Lava and the like drain health while touched, with none of a hit's stun, knockback or iframes:
 	// it reads as heat, not a blow, and you can still steer out. Returns the whole points drained.
-	internal int Burn(float healthPerSecond, Actor source)
+	internal int Burn(float health, Actor source)
 	{
 		if (Health <= 0 || Game.Manager.GodMode || Game.Simulating)
 			return 0;
 		BurnedAt = Time.SecondsF;
-		burnDrain += healthPerSecond * Time.Delta;
+		burnDrain += health;
 		var drained = (int)burnDrain;
 		burnDrain -= drained;
 		if (drained >= Health)
