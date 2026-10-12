@@ -98,10 +98,10 @@
       "Size": [224, 112],
       "Kind": "Lava",
       "Fill": 0.05,
-      "ActiveFill": 0.7,
       "Speed": 20,
       "Delay": 0.5,
-      "TideAmplitude": 1.5
+      "TideAmplitude": 1.5,
+      "ActiveFill": 0.891
     },
     {
       "Id": "34650d46e4ed7086",

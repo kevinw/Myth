@@ -7,10 +7,6 @@ namespace Myth;
 // then pops and vanishes the moment it touches a solid.
 public class AirBubble : Actor
 {
-	static float RiseSpeed => 16f;
-	static float DriftSpeed => 4f;
-	static float DriftInterval => 0.35f;
-
 	bool popped;
 	float driftTimer;
 
@@ -29,6 +25,10 @@ public class AirBubble : Actor
 
 	public override void Update()
 	{
+		const float RiseSpeed = 16f;
+		const float DriftSpeed = 4f;
+		const float DriftInterval = 0.35f;
+			
 		if (!popped)
 		{
 			driftTimer -= Time.Delta;

@@ -95,14 +95,7 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 			DrawBurrowUpgradeLabel(capacity * pixelsPerBurrowSecond * BurrowUpgradeHudScale);
 
-			// draw little icons for each unit of health
-			var healthColor = Color.White * (0.75f * hudOpacity);
-			for (var i = 0; i < Player.MaxHealth; i++)
-			{
-				var subTexture = player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1");
-				Batcher.Image(subTexture, pos, healthColor);
-				pos.X += 7;
-			}
+			DrawHealth(player, pos);
 		}
 		if (atlasWander)
 			Batcher.PopMaterial();
@@ -118,6 +111,39 @@ public sealed partial class GameView
 	// Burrow bar width eases toward the player's capacity (in seconds) so collecting an upgrade
 	// animates the bar growing; -1 snaps on first show / room load. Eased on real time so it still
 	// grows while the BurrowUpgradeGet modal freezes the sim (TimeScale 0).
+	// Health reads as a number that counts down to the real value, so a hit visibly ticks away. Lava's
+	// drain heats it (color and a shiver) for a moment after each point, and the last hit's worth pulses.
+	void DrawHealth(Player player, Vector2 pos)
+	{
+		var health = Math.Max(player.Health, 0);
+		displayedHealth = displayedHealth < 0 || health > displayedHealth
+			? health
+			: Calc.Approach(displayedHealth, health, HealthCountRate * game.Manager.Time.Delta);
+		var heat = Calc.ClampedMap(Time.SecondsF - player.BurnedAt, 0, HealthBurnGlowSeconds, 1, 0);
+		var low = health <= Player.HitDamage ? Time.SineWave(0, 1, HealthLowPulseSeconds) : 0;
+		var color = Color.Lerp(Color.Lerp(Color.White, HealthLowColor, low), HealthBurnColor, heat) * (0.75f * hudOpacity);
+		pos = (pos + new Vector2(MathF.Sin(Time.SecondsF * 90), MathF.Cos(Time.SecondsF * 70)) * (heat * HealthBurnShiver)).Round();
+
+		var heart = Assets.GetSubtexture(health > 0 ? "heart/0" : "heart/1");
+		Batcher.Image(heart, pos, color);
+		if (Assets.Font is not { } font)
+			return;
+		Span<char> text = stackalloc char[3];
+		((int)MathF.Ceiling(displayedHealth)).TryFormat(text, out var length);
+		// The heart's art sits inside a padded frame: line the number up with what's drawn.
+		var drawn = new Rect(pos - heart.Frame.Position, heart.Source.Size);
+		var at = new Vector2(drawn.Right + 2, drawn.Bottom - font.Size).Round();
+		Batcher.Text(font, text[..length], at, font.Size, color);
+	}
+
+	float displayedHealth = -1;
+	static float HealthCountRate => 60f; // points per second the readout falls toward a hit
+	static float HealthBurnGlowSeconds => 0.35f;
+	static float HealthBurnShiver => 0.6f;
+	static float HealthLowPulseSeconds => 0.8f;
+	static readonly Color HealthBurnColor = new(1f, 0.55f, 0.2f, 1f);
+	static readonly Color HealthLowColor = new(1f, 0.35f, 0.35f, 1f);
+
 	float displayedBurrowCapacity = -1f;
 	float displayedBurrowBarOpacity = 1;
 	float hudOpacity = 1;

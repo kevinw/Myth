@@ -126,7 +126,7 @@ public class Actor
 	// Game.GetSubstanceBelow). Null means the actor isn't a walkable surface of its own.
 	public virtual string? SurfaceSubstance => null;
 
-	internal virtual int DamageValue => 1;
+	internal virtual int DamageValue => Player.HitDamage;
 	internal virtual bool ContactDamageEnabled => true;
 
 	public Time Time => Game.Time;

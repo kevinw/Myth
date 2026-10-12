@@ -1661,7 +1661,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 		);
 	}
 
-	public const int MaxHealth = 6;
+	public const int MaxHealth = 99;
+	// One hit's worth: six still kill from full, as when health was six hearts, and five don't.
+	public const int HitDamage = 17;
 
 	static float AttackFriction => 150;
 	static float AttackWaveDuration => 0.39f;
@@ -1848,7 +1850,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		}
 	}
 
-	static int CliffFallDamage => 1;
+	static int CliffFallDamage => HitDamage;
 	// How far to pull the respawn in from the room-entry edge, and how far up/down to hunt
 	// for footing as we step inward (a step follows a ≤45° slope by ~1px per pixel).
 	static int RespawnInset => 16; // ~2 tiles
@@ -2514,7 +2516,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 			ApplyHurt(healthDelta, fromActor: by);
 	}
 
-	void ApplyHurt(int healthDelta = -1, Actor? fromActor = null, float bounceMultiplier = 1,
+	void ApplyHurt(int healthDelta = -HitDamage, Actor? fromActor = null, float bounceMultiplier = 1,
 		float hurtDurationMultiplier = 1, bool glitch = true)
 	{
 		if (Game.Simulating) {
@@ -2566,9 +2568,30 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (Health <= 0 || Game.Manager.GodMode || Game.Simulating || HasIFrames)
 			return false;
 		GrantIFrames();
-		ApplyHurt(-1, source, bounceMultiplier: 0, hurtDurationMultiplier: 0.5f);
+		ApplyHurt(-HitDamage, source, bounceMultiplier: 0, hurtDurationMultiplier: 0.5f);
 		return true;
 	}
+
+	// Lava and the like drain health while touched, with none of a hit's stun, knockback or iframes:
+	// it reads as heat, not a blow, and you can still steer out. Returns the whole points drained.
+	internal int Burn(float healthPerSecond, Actor source)
+	{
+		if (Health <= 0 || Game.Manager.GodMode || Game.Simulating)
+			return 0;
+		BurnedAt = Time.SecondsF;
+		burnDrain += healthPerSecond * Time.Delta;
+		var drained = (int)burnDrain;
+		burnDrain -= drained;
+		if (drained >= Health)
+			ApplyHurt(-drained, source, bounceMultiplier: 0); // the usual death
+		else
+			Health -= drained;
+		return drained;
+	}
+
+	// When Burn last drained us, on the game clock: the HUD glows hot for a moment after.
+	internal float BurnedAt = float.NegativeInfinity;
+	float burnDrain;
 
 	internal void ApplyNeuralBuoyancy(float acceleration)
 	{
