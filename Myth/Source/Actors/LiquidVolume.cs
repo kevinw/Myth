@@ -80,6 +80,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	int emberEffect = -1;
 	float bubbleTimer;
 	float flowTime;
+	SoundInstance? poolSound;
 	Rng rng = new((ulong)Environment.TickCount64);
 
 	public LiquidVolume()
@@ -105,6 +106,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		Game.LiquidVolumes.Remove(this);
 		ReleaseParticleEffect(ref steamEffect);
 		ReleaseParticleEffect(ref emberEffect);
+		StopAndReleaseSound(ref poolSound, true);
 	}
 
 	public void SetActive(Actor source, bool active)
@@ -152,6 +154,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			BurnPawns();
 			BoilWater();
 			UpdateBubbles(surface);
+			UpdatePoolSound();
 		}
 		else
 			bubbles.Clear();
@@ -196,6 +199,38 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 			Game.Particles?.Emit(emberEffect, top, (int)bubble.Radius + 1);
 		if (Room == Game.CurrentRoom)
 			Game.PlayAudioEvent("liquid/bubble", "Size", bubble.Radius, top);
+	}
+
+	// One looping voice sits on the exposed surface point nearest the player, so a wide pool pans
+	// and attenuates from its closest edge without stacking copies of the loop.
+	void UpdatePoolSound()
+	{
+		Vector2? nearest = null;
+		var exposed = 0;
+		var player = Game.GetFirst(Masks.Player)?.Position;
+		if (Room == Game.CurrentRoom && !Game.Editing)
+		{
+			var listener = player ?? Game.Camera + new Vector2(Game.Width, Game.Height) / 2;
+			for (var column = 0; column < tiles.X; column++)
+			{
+				if (!IsWet(new(column, surfaceRow)))
+					continue;
+				exposed++;
+				var left = Position.X + column * Game.TileSize;
+				var point = new Vector2(Calc.Clamp(listener.X, left, left + Game.TileSize), surfaceY);
+				if (nearest is not { } best || Vector2.DistanceSquared(point, listener) < Vector2.DistanceSquared(best, listener))
+					nearest = point;
+			}
+		}
+		if (nearest is not { } at)
+		{
+			StopAndReleaseSound(ref poolSound);
+			return;
+		}
+		poolSound ??= Game.CreateAudioEvent("lava/pool", at, start: true);
+		Game.SetAudioEventPosition(poolSound, at, player);
+		Game.SetAudioEventParameter(poolSound, "Size", exposed * Game.TileSize);
+		Game.SetAudioEventParameter(poolSound, "Churn", Game.LiquidStir.At(at + Vector2.UnitY * 2) + (LevelMoving ? 1 : 0));
 	}
 
 	WaterSurface EnsureSurface()

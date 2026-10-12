@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{e736e343-e5cc-4bb7-b10d-279f5dad431a}">
+		<property name="name">
+			<value>Churn</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{3077e650-7000-48ac-bf4e-1afd14196595}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{3077e650-7000-48ac-bf4e-1afd14196595}">
+		<property name="initialValue">
+			<value>0</value>
+		</property>
+	</object>
+</objects>
