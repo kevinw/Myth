@@ -89,7 +89,7 @@
       "Id": "coil_switch_o",
       "Type": "Switch",
       "Position": [264, 144],
-      "TargetActorId": "coil_chest_gate_o",
+      "TargetActorIds": ["coil_chest_gate_o"],
       "Points": [[0, 0],[-48, -40],[-104, -40]
       ]
     },

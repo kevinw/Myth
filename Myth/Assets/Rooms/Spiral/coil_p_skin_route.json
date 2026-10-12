@@ -105,7 +105,7 @@
       "Position": [48, 168],
       "Mode": "PressesOnce",
       "Persistent": true,
-      "TargetActorId": "coil_gate_p"
+      "TargetActorIds": ["coil_gate_p"]
     },
     {
       "Id": "coil_wild_p",

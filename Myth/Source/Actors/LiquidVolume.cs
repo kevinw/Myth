@@ -78,6 +78,7 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 	float delayTimer;
 	float age;
 	bool active;
+	readonly HashSet<Actor> activators = [];
 	float[] columnBottoms = [];
 	Point2 tiles;
 	int surfaceRow;
@@ -118,9 +119,10 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 		StopAndReleaseSound(ref poolSound, true);
 	}
 
+	// Active while any source holds it, so two buttons on one basin don't fight.
 	public void SetActive(Actor source, bool active)
 	{
-		if (this.active == active)
+		if (!(active ? activators.Add(source) : activators.Remove(source)) || this.active == activators.Count > 0)
 			return;
 		this.active = active;
 		delayTimer = Delay;
@@ -503,10 +505,15 @@ public class LiquidVolume : Actor, IResizable, IActivatable
 
 	public override void Render(Batcher batcher)
 	{
+		// Not simulating -- the editor, or a room preview, which renders without ever updating -- shows the
+		// room as it starts.
+		if (Game.Editing || age == 0)
+		{
+			fill = Fill;
+			Settle();
+		}
 		if (!Game.Editing)
 			return;
-		fill = Fill;
-		Settle();
 #if EDITOR
 		if (Game.Manager.SelectedRoomActorId != ActorId)
 			return;

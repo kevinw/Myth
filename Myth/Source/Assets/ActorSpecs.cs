@@ -494,6 +494,7 @@ public static class ActorSpecs
 			int it => JsonValue.Create(it),
 			float it => JsonValue.Create(it),
 			string it => StringToJson(it),
+			string[] it => new JsonArray([.. it.Select(StringToJson)]),
 			IContentReference it => StringToJson(it.Name),
 			Point2 it => new JsonArray(it.X, it.Y),
 			Point2[] it => PointArrayToJson(it),
@@ -729,6 +730,7 @@ public static class ActorSpecs
 		   type == typeof(int) ||
 		   type == typeof(float) ||
 		   type == typeof(string) ||
+		   type == typeof(string[]) ||
 		   type == typeof(Point2) ||
 		   type == typeof(Point2?) ||
 		   type == typeof(Point2[]) ||
@@ -776,6 +778,8 @@ public static class ActorSpecs
 				value = node.GetValue<float>();
 			else if (type == typeof(string))
 				value = ReadStringValue(node);
+			else if (type == typeof(string[]))
+				value = ReadStringArray(node);
 			else if (currentValue is IContentReference reference && ReadStringValue(node) is { } name)
 				value = reference.WithName(name);
 			else if (type == typeof(Point2))
@@ -811,6 +815,9 @@ public static class ActorSpecs
 
 	public static Point2? ReadPoint(JsonNode? node)
 		=> JsonUtil.ReadPoint(node);
+
+	public static string[]? ReadStringArray(JsonNode? node)
+		=> node is JsonArray strings ? strings.Select(ReadStringValue).OfType<string>().ToArray() : null;
 
 	public static Point2[]? ReadPointArray(JsonNode? node)
 	{

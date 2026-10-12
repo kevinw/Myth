@@ -1659,7 +1659,7 @@ public sealed partial class GameView
 					light.Height,
 					light.LightColor,
 					light.Cookie,
-					light.CookieAngleDegrees,
+					light.RenderCookieAngleDegrees,
 					light.CookieSpeedDegrees,
 					light.CookieScale,
 					light.RenderCookieStrength,

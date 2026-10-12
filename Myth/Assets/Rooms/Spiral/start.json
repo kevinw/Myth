@@ -132,7 +132,7 @@
       "Type": "Switch",
       "Position": [112, 112],
       "Persistent": true,
-      "TargetActorId": "coil_hatch_d",
+      "TargetActorIds": ["coil_hatch_d"],
       "Points": [[0, 0],[48, 0],[48, 72]
       ],
       "PulseSpeed": 90,

@@ -330,6 +330,13 @@ public partial class Manager
 		return null;
 	}
 
+	[ConsoleCommand("invert")]
+	void InvertRoom(string _)
+	{
+		if (game?.GetFirst<Player>() is not { } player || !game.ToggleBurrowRoomInverse(player.Position, anyRoom: true))
+			throw new InvalidOperationException("No room to invert.");
+	}
+
 	[ConsoleCommand("quit")]
 	void Quit(string _) => RequestQuit();
 

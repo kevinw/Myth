@@ -151,6 +151,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	}
 	public Vector2? LookTarget;
 	public float LookPoseWeight;
+	// Tilts just the head (its sprite, and the eyes) to aim at this, up to HeadLookMaxTurn radians off the
+	// body's facing; with the target behind it, the head eases back to its pose.
+	public Vector2? HeadLookTarget;
+	public float HeadLookMaxTurn;
+	public float HeadLookRate;
+	public float HeadRoll { get; private set; } // radians, clockwise on screen
+	public Vector2 HeadPosition => projectedPose[head];
 	public float? YawOverride;
 	public float YawOverrideWeight;
 
@@ -766,7 +773,22 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			ResetFeet();
 		SortBones();
 		UpdateWires();
+		UpdateHeadLook();
 		UpdateEye();
+	}
+
+	void UpdateHeadLook()
+	{
+		var desired = 0f;
+		if (HeadLookTarget is { } target)
+		{
+			var toward = target - owner.Position - projectedPose[head];
+			var facing = -MathF.Cos(RigYaw()) >= 0 ? 0 : MathF.PI;
+			var turn = MathF.IEEERemainder(MathF.Atan2(toward.Y, toward.X) - facing, MathF.Tau);
+			if (MathF.Abs(turn) <= MathF.PI / 2)
+				desired = Math.Clamp(turn, -HeadLookMaxTurn, HeadLookMaxTurn);
+		}
+		HeadRoll = float.Lerp(HeadRoll, desired, 1 - MathF.Exp(-HeadLookRate * visualDelta));
 	}
 
 	void ApplyTakePoseModifiers()
@@ -789,7 +811,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		var desired = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
-			: new Vector2(-MathF.Cos(RigYaw()), 0);
+			: Vector2.Transform(new Vector2(-MathF.Cos(RigYaw()), 0), Matrix3x2.CreateRotation(HeadRoll));
 		if (Settings.EyeMotion > 0)
 		{
 			var tick = (uint)MathF.Floor((owner.Time.SecondsF + animationPhase * EyeSaccadeInterval) /
@@ -1769,7 +1791,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		var axis = projectedPose[head] - projectedPose[neck];
 		var final = axis.LengthSquared() > 0.0001f ? axis.Angle() + MathF.PI * 0.5f : 0;
-		final += ExtraHeadSpriteRollLerped;
+		final += ExtraHeadSpriteRollLerped + HeadRoll;
 		return final;
 	}
 

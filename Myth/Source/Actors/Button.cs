@@ -15,7 +15,7 @@ public class Button : Actor, IActivationSource
 	public Cardinal Direction = Cardinal.Up;
 	public ButtonMode Mode;
 	public bool Persistent;
-	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
+	[ActorRef(typeof(IActivatable))] public string[] TargetActorIds = [];
 	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	static int HousingDepth => 3;
@@ -107,16 +107,7 @@ public class Button : Actor, IActivationSource
 		return false;
 	}
 
-	void SetTarget(bool active)
-	{
-		if (Game.GetActorById(TargetActorId) is not IActivatable target)
-		{
-			targetActive = false;
-			return;
-		}
-		target.SetActive(this, active);
-		targetActive = active;
-	}
+	void SetTarget(bool active) => targetActive = this.SetTargets(TargetActorIds, active) && active;
 
 	RectInt HousingRect => OrientedRect(-HousingDepth, 0, HousingHalfWidth);
 	RectInt CapRect => OrientedRect(0, pressed ? PressedCapExtension : CapExtension, CapHalfWidth);

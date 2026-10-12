@@ -1938,7 +1938,11 @@ public partial class Game : IDisposable
 					CameraBlockerRects(nextRoom, entry, cameraBlockerBuffer));
 				nextRoomEase = 0.0f;
 				transitionPreparedRenderFrame = null;
+				var carryInversion = invertedNow;
 				LoadRoom(nextRoom);
+				// Walking out of an inverted room walks into an inverted one.
+				if (carryInversion)
+					ToggleRoomInverse(nextRoom, anyRoom: true);
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
 				ApplyMusicArea(nextRoom);
 				ApplyRoomReverb(nextRoom);
@@ -2562,9 +2566,10 @@ public partial class Game : IDisposable
 		FinishRoomActivation(RoomChangeKind.Reload);
 	}
 
-	public void RefreshRoomTiles()
+	public void RefreshRoomTiles(Room? forRoom = null)
 	{
-		if (room == null)
+		forRoom ??= room;
+		if (forRoom == null)
 			return;
 
 		Grid? bg = null;
@@ -2575,6 +2580,8 @@ public partial class Game : IDisposable
 		HiddenCoverGrid? hiddenCover = null;
 		foreach (var actor in Actors)
 		{
+			if (destroying.Contains(actor))
+				continue;
 			if (actor is HiddenCoverGrid hiddenCoverGrid)
 			{
 				hiddenCover = hiddenCoverGrid;
@@ -2604,29 +2611,29 @@ public partial class Game : IDisposable
 		if (bg == null || fgVisual == null || fg == null || fgDual == null)
 			return;
 
-		bg.Resize(room.Size);
-		fgVisual.Resize(room.Size);
-		fg.Resize(room.Size);
+		bg.Resize(forRoom.Size);
+		fgVisual.Resize(forRoom.Size);
+		fg.Resize(forRoom.Size);
 		bgDual?.Clear();
 		fgDual.Clear();
 
-		for (var x = 0; x < room.Size.X; x++)
-			for (var y = 0; y < room.Size.Y; y++)
+		for (var x = 0; x < forRoom.Size.X; x++)
+			for (var y = 0; y < forRoom.Size.Y; y++)
 			{
 				var tile = new Point2(x, y);
-				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
-				if (room.GetEntry(tile) is { } entry)
-					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+				if (forRoom.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, forRoom, fg, fgVisual, bg, bgDual ?? fgDual);
+				if (forRoom.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, forRoom, fg, fgVisual, bg, fgDual);
 			}
 
-		hiddenCover?.Build(room);
+		hiddenCover?.Build(forRoom);
 
 		if (bgDual != null)
-			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
-		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
-		View?.MarkRoomNormalCacheDirty(room);
-		View?.MarkRoomTileFieldCacheDirty(room);
+			BuildDualTiles(forRoom, bgDual, Factory.TileLayer.Background);
+		BuildDualTiles(forRoom, fgDual, Factory.TileLayer.Foreground);
+		View?.MarkRoomNormalCacheDirty(forRoom);
+		View?.MarkRoomTileFieldCacheDirty(forRoom);
 	}
 
 	bool invertedNow;
@@ -2642,7 +2649,7 @@ public partial class Game : IDisposable
 
 	internal bool ToggleBurrowRoomInverse(Vector2 origin, bool anyRoom = false)
 	{
-		if (!ToggleRoomInverse(anyRoom))
+		if (room == null || !ToggleRoomInverse(room, anyRoom))
 			return false;
 
 		RoomInversionOrigin = origin;
@@ -2655,28 +2662,28 @@ public partial class Game : IDisposable
 	}
 
 	internal bool SetEditorRoomInverted(bool inverted)
-		=> IsEditorPreview && invertedNow != inverted && ToggleRoomInverse();
+		=> IsEditorPreview && invertedNow != inverted && room != null && ToggleRoomInverse(room);
 
-	bool ToggleRoomInverse(bool anyRoom = false)
+	bool ToggleRoomInverse(Room target, bool anyRoom = false)
 	{
-		if (room == null || !anyRoom && !room.SupportsBurrowInverse)
+		if (!anyRoom && !target.SupportsBurrowInverse)
 			return false;
 
 		inversionPins.Clear();
 		foreach (var actor in Actors)
-			if (actor is InvertPin pin && pin.Room == room && !destroying.Contains(pin))
+			if (actor is InvertPin pin && pin.Room == target && !destroying.Contains(pin))
 				inversionPins.Add(pin);
 
-		room.ToggleBurrowInverse(!invertedNow, inversionPins);
+		target.ToggleBurrowInverse(!invertedNow, inversionPins);
 		invertedNow = !invertedNow;
-		ActivateParkedActors(room);
+		ActivateParkedActors(target);
 
 		for (var i = 0; i < Actors.Count; i++)
-			if (Actors[i] is IRoomInversionListener listener && Actors[i].Room == room && !destroying.Contains(Actors[i]))
+			if (Actors[i] is IRoomInversionListener listener && Actors[i].Room == target && !destroying.Contains(Actors[i]))
 				listener.RoomInverted();
-		ParkInactiveActors(room);
+		ParkInactiveActors(target);
 
-		RefreshRoomTiles();
+		RefreshRoomTiles(target);
 		return true;
 	}
 

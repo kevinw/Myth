@@ -357,6 +357,12 @@ public partial class Manager
 				return true;
 			}
 		}
+		else if (property.Type == typeof(string[]) && property.ActorRef is { } actorRefs)
+		{
+			if (room != null)
+				return DrawActorRefListProperty(room, actor, property, actorRefs);
+			TextDisabled("(linked per room instance)");
+		}
 		else if (property.Type == typeof(Point2[]))
 		{
 			var points = ActorSpecs.ReadPointArray(property.Value) ?? [];
@@ -1121,25 +1127,88 @@ public partial class Manager
 	// A picked actor that has no id yet gets one, so anything placed is linkable.
 	bool DrawActorRefProperty(string? specId, Room room, JsonObject actor, ActorSpecs.EditableProperty property, ActorRefAttribute actorRef, string value)
 	{
-		var changed = false;
-		var target = Assets.FindActorById(value);
-		var label = target is { } found
-			? $"{ActorSpecs.GetTypeName(found.Actor)} ({ShortActorId(value)})"
-			: string.IsNullOrWhiteSpace(value) ? "(none)" : $"Missing ({ShortActorId(value)})";
-
-		if (!BeginCombo("##Value", label))
+		if (!ActorRefCombo("##Value", room, actor, actorRef.Kind, ActorRefLabel(value), value, allowNone: true, out var picked))
 			return false;
-
-		if (Selectable("(none)", string.IsNullOrWhiteSpace(value)))
+		if (picked == null)
 		{
 			SetActorProperty(specId, room, actor, property, JsonValue.Create(""), "Clear Actor Reference");
-			changed = true;
+			return true;
 		}
+		using (CaptureRoomUndo("Set Actor Reference", room))
+		{
+			ActorSpecs.EnsureActorId(picked);
+			ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(ActorSpecs.GetActorId(picked)));
+			if (property.JsonName == nameof(Actor.AttachedToActorId))
+			{
+				var actorPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+				var targetPosition = ActorSpecs.ReadPoint(picked, "Position") ?? Point2.Zero;
+				ActorSpecs.SetProperty(actor, nameof(Actor.AttachmentOffset), ActorSpecs.ToJsonNode(actorPosition - targetPosition));
+			}
+		}
+		return true;
+	}
 
-		for (var i = 0; i < room.Actors.Count; i++)
+	// [ActorRef] on a string[]: one picker per link, with a remove button, and a picker to add another.
+	// Alt-clicking an actor on the canvas toggles links too (see ToggleActorRefLink).
+	bool DrawActorRefListProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property, ActorRefAttribute actorRef)
+	{
+		var ids = ActorSpecs.ReadStringArray(property.Value) ?? [];
+		for (var i = 0; i < ids.Length; i++)
+		{
+			PushID(i);
+			if (ActorRefCombo("##Link", room, actor, actorRef.Kind, ActorRefLabel(ids[i]), ids[i], allowNone: false, out var picked) && picked != null)
+			{
+				var replaced = (string[])ids.Clone();
+				SetActorRefList(room, actor, property, replaced, picked, at: i);
+				PopID();
+				return true;
+			}
+			SameLine();
+			if (SmallButton("x"))
+			{
+				using (CaptureRoomUndo("Remove Actor Link", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode((string[])[.. ids[..i], .. ids[(i + 1)..]]));
+				PopID();
+				return true;
+			}
+			PopID();
+		}
+		if (ActorRefCombo("##Add", room, actor, actorRef.Kind, ids.Length == 0 ? "(none) -- add a link" : "+ add a link", "", allowNone: false, out var added) && added != null)
+		{
+			SetActorRefList(room, actor, property, [.. ids, ""], added, at: ids.Length);
+			return true;
+		}
+		return false;
+	}
+
+	void SetActorRefList(Room room, JsonObject actor, ActorSpecs.EditableProperty property, string[] ids, JsonObject picked, int at)
+	{
+		using (CaptureRoomUndo("Set Actor Link", room))
+		{
+			ActorSpecs.EnsureActorId(picked);
+			ids[at] = ActorSpecs.GetActorId(picked)!;
+			ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode(ids.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
+		}
+	}
+
+	static string ActorRefLabel(string id)
+		=> Assets.FindActorById(id) is { } found
+			? $"{ActorSpecs.GetTypeName(found.Actor)} ({ShortActorId(id)})"
+			: string.IsNullOrWhiteSpace(id) ? "(none)" : $"Missing ({ShortActorId(id)})";
+
+	// Lists the room's actors that fit the reference's kind. True once one is picked; picked is null
+	// for "(none)".
+	bool ActorRefCombo(string comboId, Room room, JsonObject actor, Type? kind, string label, string value, bool allowNone, out JsonObject? picked)
+	{
+		picked = null;
+		if (!BeginCombo(comboId, label))
+			return false;
+
+		var chose = allowNone && Selectable("(none)", string.IsNullOrWhiteSpace(value));
+		for (var i = 0; i < room.Actors.Count && !chose; i++)
 		{
 			var candidate = room.Actors[i];
-			if (candidate == actor || !MatchesActorRefKind(candidate, actorRef.Kind))
+			if (candidate == actor || !MatchesActorRefKind(candidate, kind))
 				continue;
 
 			var candidateId = ActorSpecs.GetActorId(candidate);
@@ -1148,26 +1217,12 @@ public partial class Manager
 				string.Equals(value, candidateId, StringComparison.OrdinalIgnoreCase);
 			var candidateLabel = string.IsNullOrWhiteSpace(candidateId) ? typeName : $"{typeName} ({ShortActorId(candidateId)})";
 			if (Selectable($"{candidateLabel}##{i}", selected))
-			{
-				using (CaptureRoomUndo("Set Actor Reference", room))
-				{
-					ActorSpecs.EnsureActorId(candidate);
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(ActorSpecs.GetActorId(candidate)));
-					if (property.JsonName == nameof(Actor.AttachedToActorId))
-					{
-						var actorPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
-						var targetPosition = ActorSpecs.ReadPoint(candidate, "Position") ?? Point2.Zero;
-						ActorSpecs.SetProperty(actor, nameof(Actor.AttachmentOffset), ActorSpecs.ToJsonNode(actorPosition - targetPosition));
-					}
-				}
-				changed = true;
-			}
+				(chose, picked) = (true, candidate);
 			if (selected)
 				SetItemDefaultFocus();
 		}
 		EndCombo();
-
-		return changed;
+		return chose;
 	}
 
 	static string ShortActorId(string? id)

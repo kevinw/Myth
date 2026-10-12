@@ -15,6 +15,14 @@ public enum LightCookie
 	*/
 }
 
+// An anchor that turns in part -- a prop's head: lights attached to it swing about Pivot by Rotation (radians,
+// clockwise on screen), and their cone turns with it.
+public interface IAttachmentRotation
+{
+	Vector2 AttachmentPivot { get; }
+	float AttachmentRotation { get; }
+}
+
 [GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light, LivePositionEditable = true)]
 public class Light : Actor, IHitByHitbox
 {
@@ -136,6 +144,19 @@ public class Light : Actor, IHitByHitbox
 	public float RenderIntensity => Intensity * RenderScale * Calc.Lerp(1, BuriedIntensityScale, buried);
 	public float RenderCookieStrength => CookieStrength * (1 - buried);
 	public float RenderCookieCutoff => CookieCutoff * (1 - buried);
+	public float RenderCookieAngleDegrees => CookieAngleDegrees + AttachedRotation * Calc.RadToDeg;
+	float AttachedRotation => AttachmentTarget is IAttachmentRotation turning ? turning.AttachmentRotation : 0;
+
+	internal override Vector2 LocalVisualOffset
+	{
+		get
+		{
+			if (AttachmentTarget is not IAttachmentRotation { AttachmentRotation: not 0 } turning)
+				return Vector2.Zero;
+			var arm = Position - turning.AttachmentPivot;
+			return Vector2.Transform(arm, Matrix3x2.CreateRotation(turning.AttachmentRotation)) - arm;
+		}
+	}
 
 	static float BuriedRadiusScale => 0.3f;
 	static float BuriedIntensityScale => 0.35f;
@@ -148,7 +169,7 @@ public class Light : Actor, IHitByHitbox
 	// the crusher carrying the lamp is always solid around it, the floor it lands on is what buries it.
 	int Clearance()
 	{
-		var axis = Cookie == LightCookie.None ? Vector2.UnitY : Calc.AngleToVector(CookieAngleDegrees * Calc.DegToRad);
+		var axis = Cookie == LightCookie.None ? Vector2.UnitY : Calc.AngleToVector(RenderCookieAngleDegrees * Calc.DegToRad);
 		for (var distance = 0; distance < BuriedClearance; distance++)
 			if (SolidAt((Position + axis * distance).RoundToPoint2()))
 				return distance;

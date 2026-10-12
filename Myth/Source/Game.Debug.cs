@@ -123,6 +123,9 @@ public partial class Game
 	internal readonly ReachSense reach = new(ReachBody.Bud);
 	// Bud heads for the floor under a jumping player, if it's this close below.
 	static int PlayerFloorReach => 64;
+	// Widens the player's rect as Bud's goal, so he stops about 18px off instead of ~7px (bodies just touching).
+	// The goal is any spot overlapping it, so where there's no footing that far out he still comes in closer.
+	static int BudFollowGap => 11;
 
 	void UpdateReachField()
 	{
@@ -131,7 +134,7 @@ public partial class Game
 		if (GymTarget is { } goal)
 			reach.Update(this, room, (goal.Hitbox.Rect + goal.Position).Inflate(1));
 		else if (GetFirst<Player>() is { } player)
-			reach.Update(this, room, player.Hitbox.Rect + player.Position, PlayerFloorReach);
+			reach.Update(this, room, (player.Hitbox.Rect + player.Position).InflateX(BudFollowGap), PlayerFloorReach);
 	}
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 

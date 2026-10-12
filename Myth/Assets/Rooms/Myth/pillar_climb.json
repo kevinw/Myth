@@ -146,7 +146,7 @@
       "Id": "4ce90028cdbd9316",
       "Type": "Button",
       "Position": [106, 23],
-      "TargetActorId": "dc15f257c5697a18",
+      "TargetActorIds": ["dc15f257c5697a18"],
       "Persistent": true,
       "Mode": "PressesOnce"
     },

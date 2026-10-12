@@ -7,7 +7,7 @@ namespace Myth;
 	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
 public class Switch : PointPathActor, IActivationSource
 {
-	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
+	[ActorRef(typeof(IActivatable))] public string[] TargetActorIds = [];
 	public bool Persistent;
 	[I(20, 240)] public float PulseSpeed = 85f;
 	[I(8, 192)] public float PulseLength = 64f;
@@ -79,13 +79,7 @@ public class Switch : PointPathActor, IActivationSource
 		DestroyPulseLight();
 	}
 
-	void ActivateTarget()
-	{
-		if (Game.GetActorById(TargetActorId) is not IActivatable target)
-			return;
-		target.SetActive(this, true);
-		targetActive = true;
-	}
+	void ActivateTarget() => targetActive = this.SetTargets(TargetActorIds, true);
 
 	public override void Destroyed() => DestroyPulseLight();
 

@@ -104,7 +104,7 @@
       "Position": [268, 168],
       "Mode": "PressesOnce",
       "Persistent": true,
-      "TargetActorId": "coil_gate_k"
+      "TargetActorIds": ["coil_gate_k"]
     },
     {
       "Id": "coil_light_k",

@@ -25,7 +25,7 @@ public class BurrowLine : PointPathActor, IActivationSource
 
 	public BurrowDoorPoints BurrowDoors;
 	public BurrowDoorPoints BurrowSwitches;
-	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
+	[ActorRef(typeof(IActivatable))] public string[] TargetActorIds = [];
 	public float SpeedScale = 1f;
 	public bool RenderProcedural = true;
 	[I(0.5f, 12)] public float ProceduralWidth = 3f;
@@ -114,14 +114,13 @@ public class BurrowLine : PointPathActor, IActivationSource
 		if (active == targetActive)
 			return;
 		targetActive = active;
-		if (Game.GetActorById(TargetActorId) is IActivatable target)
-			target.SetActive(this, active);
+		this.SetTargets(TargetActorIds, active);
 	}
 
 	public override void Destroyed()
 	{
-		if (targetActive && Game.GetActorById(TargetActorId) is IActivatable target)
-			target.SetActive(this, false);
+		if (targetActive)
+			this.SetTargets(TargetActorIds, false);
 	}
 
 	void RenderSwitch(Batcher batcher, Vector2 center, float fill)

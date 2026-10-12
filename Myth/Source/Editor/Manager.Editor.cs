@@ -4606,6 +4606,12 @@ public partial class Manager
 				worldMouseBlocked |= RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
 					draw: false, canInteract: !worldMouseBlocked && inner.Contains(Cursor), keyboardBlocked);
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
+			if (!editingRoomGeometry && UpdateActorLinks(editing, selectedRoomActorIndex, hoveredActorIndex, eyedropper,
+				canClick: !worldMouseBlocked && overGame, gridWeight))
+			{
+				eyedropper = false;
+				worldMouseBlocked = true;
+			}
 			// The selected path's points can sit outside the room; hovering one wins over proposing a new room there.
 			var hoveredPathPoint = !worldMouseBlocked && actorSelectActive && !editingRoomGeometry
 				? HitTestPointPathHandle(editing, selectedRoomActorIndex, worldMouse, gridWeight)

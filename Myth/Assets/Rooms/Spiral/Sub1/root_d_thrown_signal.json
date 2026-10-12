@@ -87,7 +87,7 @@
       "Id": "coil_switch_rd",
       "Type": "Switch",
       "Position": [248, 80],
-      "TargetActorId": "coil_gate_rd",
+      "TargetActorIds": ["coil_gate_rd"],
       "Points": [[0, 0],[-64, 36],[-128, 36]
       ]
     },

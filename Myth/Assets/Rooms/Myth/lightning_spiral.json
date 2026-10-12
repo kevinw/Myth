@@ -127,7 +127,7 @@
       "Position": [148, 208],
       "Points": [[0, 0],[0, -10],[10, -10]
       ],
-      "TargetActorId": "spiral_door_0001"
+      "TargetActorIds": ["spiral_door_0001"]
     },
     {
       "Id": "spiral_trap_main",

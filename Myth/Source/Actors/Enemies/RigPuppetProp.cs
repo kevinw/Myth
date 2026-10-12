@@ -1,3 +1,4 @@
+using System.Numerics;
 using Foster.Framework;
 
 namespace Myth;
@@ -10,7 +11,7 @@ public enum RigPuppetPropLayer
 
 [GameActor(Sprite = "player", Tags = ActorTag.Decoration, BoundsX = -42, BoundsY = -48,
 	BoundsW = 84, BoundsH = 58, LivePositionEditable = true)]
-public sealed class RigPuppetProp : RigPuppet
+public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
 {
 	[InspectorGroup("Pose")] public string PoseAnimationName = "Zombie_Idle_Loop";
 	[I(0, 1)] public float PoseProgress;
@@ -27,6 +28,10 @@ public sealed class RigPuppetProp : RigPuppet
 	public bool CastShadow = true;
 	[VisibleWhen(nameof(Layer), RigPuppetPropLayer.Foreground)]
 	public bool Reflect = true;
+	[InspectorGroup("Look")] public bool HeadLooksAtPlayer;
+	[I(16, 320)] public float LookRange = 96;
+	[I(5, 90)] public float LookMaxTurn = 50; // degrees the head tilts off the body's facing
+	[I(0.2f, 10)] public float LookSpeed = 1.5f;
 
 	protected override bool UsesFrozenPose => true;
 	protected override string FrozenPoseAnimationName => PoseAnimationName;
@@ -40,6 +45,10 @@ public sealed class RigPuppetProp : RigPuppet
 	public override bool CastsSpriteShadow => Layer == RigPuppetPropLayer.Foreground && CastShadow;
 	public override bool CastsReflection => Layer == RigPuppetPropLayer.Foreground && Reflect;
 	public override bool LightingDithered => Layer == RigPuppetPropLayer.Background;
+
+	// Attached lights (a lamp for an eye) swing with the head as it looks.
+	Vector2 IAttachmentRotation.AttachmentPivot => Position + visual.HeadPosition;
+	float IAttachmentRotation.AttachmentRotation => visual.HeadRoll;
 
 	public RigPuppetProp()
 	{
@@ -58,6 +67,12 @@ public sealed class RigPuppetProp : RigPuppet
 	public override void Update()
 	{
 		SyncPlacement();
+		var player = HeadLooksAtPlayer ? Game.GetFirst<Player>() : null;
+		visual.HeadLookTarget = player != null && Vector2.DistanceSquared(player.Position, Position) <= LookRange * LookRange
+			? player.Position + new Point2(0, -8)
+			: null;
+		visual.HeadLookMaxTurn = LookMaxTurn * MathF.PI / 180;
+		visual.HeadLookRate = LookSpeed;
 		base.Update();
 	}
 

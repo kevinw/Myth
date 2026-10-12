@@ -156,9 +156,10 @@ public class Raft : Actor, IResizable
 
 	bool IsSeam(int x) => Unit(x + 777) < 0.08f;
 
-	// The editor shows the raft where it'll float once the room starts, not where it was dropped.
+	// Before it has simulated (the editor, a room preview) it shows where it'll float once the room
+	// starts, not where it was dropped.
 	float EditorLift()
-		=> Game.Editing && FloatingOn(out _) is { } surface ? MathF.Round(Target(surface) - Position.Y) : 0;
+		=> (Game.Editing || age == 0) && FloatingOn(out _) is { } surface ? MathF.Round(Target(surface) - Position.Y) : 0;
 
 	public override void Render(Batcher batcher)
 	{

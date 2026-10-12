@@ -148,6 +148,12 @@
       "From": "TutorialText",
       "Position": [152, 165],
       "Text": "hold {MoveDown} when landing to roll"
+    },
+    {
+      "Id": "d7d3b7aef2b423ce",
+      "Type": "Raft",
+      "Position": [240, 144],
+      "Size": [24, 6]
     }
   ]
 }

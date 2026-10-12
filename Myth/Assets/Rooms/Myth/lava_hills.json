@@ -107,7 +107,12 @@
       "PixelsPerMeter": 46.338,
       "PoseAnimationName": "Male_Sitting_Pose",
       "Facing": "-",
-      "ProjectionYaw": 44.308
+      "ProjectionYaw": 44.308,
+      "HeadLooksAtPlayer": true,
+      "EyeSize": 0.918,
+      "BicepSize": 3.769,
+      "ForearmSize": 3.885,
+      "ThighSize": 6.379
     },
     {
       "Id": "63cb4743fbd36ab2",
@@ -120,6 +125,32 @@
       "AttachedToActorId": "50d1eed1fdb520b9",
       "AttachmentOffset": [-8, -68],
       "Intensity": 0.604
+    },
+    {
+      "Id": "03804e9c0f5d9537",
+      "Type": "CurveRibbon",
+      "Position": [385, 39],
+      "Points": [[-19, -40],[5, -8],[13, 48]
+      ],
+      "Tint": "A6A6A6"
+    },
+    {
+      "Id": "5184d8c51bd416ee",
+      "Type": "CurveRibbon",
+      "Position": [363, 32],
+      "Points": [[8, -24],[8, 0],[-8, 16],[0, 32]
+      ],
+      "BranchLength": 13.522,
+      "Width": 8.11,
+      "AttachedToActorId": "03804e9c0f5d9537",
+      "AttachmentOffset": [-22, -7],
+      "Tint": "BBB8B8"
+    },
+    {
+      "Id": "68ab2fd26d2b4dbc",
+      "Type": "InspectPoint",
+      "Position": [680, 120],
+      "Text": "X%D(#$)!*Az"
     }
   ]
 }
