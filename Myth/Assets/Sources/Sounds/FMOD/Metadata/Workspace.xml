@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Workspace" id="{a6b634c3-52b3-4fa9-95fa-03a6f2a8d844}">
 		<property name="builtBanksOutputDirectory">
 			<value>../../../Sounds/FMOD/Build</value>
@@ -15,6 +15,9 @@
 		</relationship>
 		<relationship name="masterParameterPresetFolder">
 			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="masterCurvePresetFolder">
+			<destination>{d785c261-49ee-488f-aae0-c9fa9f43df7f}</destination>
 		</relationship>
 		<relationship name="masterBankFolder">
 			<destination>{124b1c14-38af-4b55-8dad-63a2cb854754}</destination>

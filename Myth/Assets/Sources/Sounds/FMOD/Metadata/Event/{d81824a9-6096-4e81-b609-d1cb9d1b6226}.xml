@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{d81824a9-6096-4e81-b609-d1cb9d1b6226}">
 		<property name="name">
 			<value>text_reveal</value>

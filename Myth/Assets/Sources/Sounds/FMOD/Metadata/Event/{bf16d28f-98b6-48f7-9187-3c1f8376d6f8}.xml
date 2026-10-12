@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{bf16d28f-98b6-48f7-9187-3c1f8376d6f8}">
 		<property name="name">
 			<value>slide</value>

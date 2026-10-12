@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{6f405509-079f-4849-ac39-0a5d9a4678c9}">
 		<property name="name">
 			<value>stop_move</value>

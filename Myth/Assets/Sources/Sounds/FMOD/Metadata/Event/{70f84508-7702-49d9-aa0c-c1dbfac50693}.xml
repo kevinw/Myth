@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{70f84508-7702-49d9-aa0c-c1dbfac50693}">
 		<property name="name">
 			<value>prop_break_temp</value>

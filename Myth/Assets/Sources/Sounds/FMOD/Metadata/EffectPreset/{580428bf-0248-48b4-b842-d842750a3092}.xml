@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="EffectPreset" id="{580428bf-0248-48b4-b842-d842750a3092}">
 		<property name="name">
 			<value>Spatializer</value>

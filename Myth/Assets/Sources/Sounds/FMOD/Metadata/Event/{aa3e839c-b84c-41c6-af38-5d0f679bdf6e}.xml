@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{aa3e839c-b84c-41c6-af38-5d0f679bdf6e}">
 		<property name="name">
 			<value>bubble_bounce</value>

@@ -19,19 +19,23 @@ const trackedAudioContexts = [];
 const AUDIO_LOG = "[FMOD audio]";
 
 const banks = [];
+// Every bank's bytes, kept so a reinitialize() (or a reloadBanks()) can load them again: FMOD 2.04's
+// HTML5 build no longer exposes the emscripten FS we used to preload them into.
+const bankBytes = new Map();
 const eventDescriptions = new Map();
 const instances = new Map();
 
 // bankData (optional): Map of bank path -> Uint8Array for banks the host page has
-// already downloaded; those are written into the FMOD FS directly instead of being
-// re-fetched by emscripten's preloader.
+// already downloaded; anything missing is fetched.
 export async function initialize(bankPaths, bankData) {
 	if (initialized)
 		return;
 
-	await loadFmodScript();
+	const { default: createFMOD } = await import("./fmodstudioP.js");
 
 	const normalizedBankPaths = Array.from(bankPaths ?? []);
+	for (const path of normalizedBankPaths)
+		bankBytes.set(path, bankData?.get?.(path) ?? new Uint8Array(await (await fetch(path)).arrayBuffer()));
 
 	// fmodstudioP.js would otherwise create a shared WebAssembly.Memory with a
 	// 2 GB maximum (32768 pages). iOS Safari eagerly reserves the full maximum of
@@ -48,18 +52,17 @@ export async function initialize(bankPaths, bankData) {
 		window: globalThis.window,
 		INITIAL_MEMORY: initialBytes,
 		wasmMemory: new WebAssembly.Memory({ initial: initialPages, maximum: maxPages, shared: true }),
-		locateFile: (path) => `./FMOD/${path}`,
-		preRun: [() => preloadBanks(module, normalizedBankPaths, bankData)],
+		locateFile: (path) => new URL(path, import.meta.url).href,
 		print: (message) => console.log(`[FMOD] ${message}`),
 		printErr: (message) => console.error(`[FMOD] ${message}`),
 	};
 
 	trackAudioContexts();
-	fmod = await globalThis.FMODModule(module);
+	fmod = await createFMOD(module);
 
 	lastBankPaths = sortBankPaths(normalizedBankPaths);
 	createStudioSystem();
-	loadBanksFromFs(lastBankPaths);
+	loadBanks(lastBankPaths);
 	initialized = true;
 	installAudioResumeHandlers();
 	console.log(`FMOD JS bridge initialized with ${banks.length} loaded banks.`);
@@ -69,19 +72,18 @@ export async function initialize(bankPaths, bankData) {
 // system.initialize() (re)inits the WebAudio output, which mints a fresh
 // AudioContext — the whole point of reinitialize() below. Shared by initialize().
 function createStudioSystem() {
-	const out = {};
-	check(fmod.Studio_System_Create(out), "FMOD Studio system creation failed");
-	system = out.val;
-
-	check(system.getCoreSystem(out), "FMOD core system lookup failed");
-	coreSystem = out.val;
-
-	check(coreSystem.setDSPBufferSize(2048, 2), "FMOD DSP buffer setup failed");
-	const rate = {};
-	if (coreSystem.getDriverInfo(0, null, null, rate, null, null) === fmod.OK)
-		check(coreSystem.setSoftwareFormat(rate.val, fmod.SPEAKERMODE_DEFAULT, 0), "FMOD software format setup failed");
-
-	check(system.initialize(1024, fmod.STUDIO_INIT_NORMAL, fmod.INIT_NORMAL, null), "FMOD Studio system initialization failed");
+	system = call("FMOD Studio system creation failed", () => fmod.Studio_System_Create());
+	coreSystem = call("FMOD core system lookup failed", () => system.getCoreSystem());
+	call("FMOD DSP buffer setup failed", () => coreSystem.setDSPBufferSize(2048, 2));
+	let rate = null;
+	try {
+		rate = coreSystem.getDriverInfo(0).systemrate;
+	} catch {
+		// No driver info yet: keep FMOD's default rate.
+	}
+	if (rate)
+		call("FMOD software format setup failed", () => coreSystem.setSoftwareFormat(rate, fmod.SPEAKERMODE_DEFAULT, 0));
+	call("FMOD Studio system initialization failed", () => system.initialize(1024, fmod.STUDIO_INIT_NORMAL, fmod.INIT_NORMAL, null));
 }
 
 // Tear down and recreate the Studio system to rebuild the audio output device —
@@ -104,12 +106,12 @@ export function reinitialize() {
 		releaseEvent(id);
 	shutdownBanks();
 	eventDescriptions.clear();
-	check(system.release(), "FMOD Studio system release failed");
+	call("FMOD Studio system release failed", () => system.release());
 	system = null;
 	coreSystem = null;
 
 	createStudioSystem();
-	loadBanksFromFs(lastBankPaths);
+	loadBanks(lastBankPaths);
 
 	const newContexts = trackedAudioContexts.length - before;
 	if (LOG_AUDIO) console.log(`${AUDIO_LOG} reinitialize done; new AudioContexts=${newContexts}, banks=${banks.length}`);
@@ -139,7 +141,7 @@ export function reloadBanks(bankPaths) {
 	if (banks.length === nextBankPaths.length && sameBankPaths(lastBankPaths, nextBankPaths))
 		return;
 	lastBankPaths = nextBankPaths;
-	loadBanksFromFs(lastBankPaths);
+	loadBanks(lastBankPaths);
 }
 
 export function resumeFromGesture() {
@@ -147,15 +149,19 @@ export function resumeFromGesture() {
 		enterForeground("start");
 }
 
-// Load banks from the emscripten FS (preloaded at initialize() and persisted with
-// the wasm module, so they survive a reinitialize()). Replaces any loaded banks.
-function loadBanksFromFs(bankPaths) {
+// Load banks from the bytes kept at initialize(), so they survive a reinitialize(). Replaces any loaded banks.
+function loadBanks(bankPaths) {
 	shutdownBanks();
 
 	for (const path of Array.from(bankPaths ?? []).sort(bankLoadCompare)) {
-		const out = {};
-		check(system.loadBankFile(`/${path}`, fmod.STUDIO_LOAD_BANK_NORMAL, out), `Failed to load FMOD bank '${path}'`);
-		banks.push(out.val);
+		const bytes = bankBytes.get(path);
+		if (!bytes)
+			throw new Error(`FMOD bank '${path}' was not downloaded at initialize()`);
+		const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+			? bytes.buffer
+			: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+		banks.push(call(`Failed to load FMOD bank '${path}'`, () =>
+			system.loadBankMemory(buffer, bytes.byteLength, fmod.STUDIO_LOAD_MEMORY, fmod.STUDIO_LOAD_BANK_NORMAL)));
 	}
 
 	eventDescriptions.clear();
@@ -163,37 +169,34 @@ function loadBanksFromFs(bankPaths) {
 
 export function getEventParameterLabels(eventPath, parameterName) {
 	const description = getEventDescription(eventPath);
-	const parameter = {};
-	check(description.getParameterDescriptionByName(parameterName, parameter), `Failed to find FMOD parameter '${parameterName}' on event '${eventPath}'`);
+	const parameter = call(`Failed to find FMOD parameter '${parameterName}' on event '${eventPath}'`,
+		() => description.getParameterDescriptionByName(parameterName));
 
 	const count = Math.max(0, Math.floor((parameter.maximum ?? -1) - (parameter.minimum ?? 0)) + 1);
 	const labels = [];
 	for (let i = 0; i < count; i++) {
-		const label = {};
 		try {
-			check(description.getParameterLabelByName(parameterName, i, label), `Failed to find FMOD parameter label ${i} for '${parameterName}'`);
+			labels.push(description.getParameterLabelByName(parameterName, i) ?? "");
 		} catch {
 			console.warn(`FMOD JS bridge could not query labels for '${parameterName}'; using game defaults.`);
 			return "";
 		}
-		labels.push(label.val ?? "");
 	}
 	return labels.join("\n");
 }
 
 export function createEvent(path) {
 	const description = getEventDescription(path);
-	const out = {};
-	check(description.createInstance(out), `Failed to create FMOD event instance '${path}'`);
+	const instance = call(`Failed to create FMOD event instance '${path}'`, () => description.createInstance());
 	const id = nextInstanceId++;
-	instances.set(id, out.val);
+	instances.set(id, instance);
 	return id;
 }
 
 export function startEvent(id) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.start(), "Failed to start FMOD event instance");
+		call("Failed to start FMOD event instance", () => instance.start());
 }
 
 export function stopEvent(id, immediate) {
@@ -201,52 +204,50 @@ export function stopEvent(id, immediate) {
 	if (!instance)
 		return;
 	const mode = immediate ? fmod.STUDIO_STOP_IMMEDIATE : fmod.STUDIO_STOP_ALLOWFADEOUT;
-	check(instance.stop(mode), "Failed to stop FMOD event instance");
+	call("Failed to stop FMOD event instance", () => instance.stop(mode));
 }
 
 export function setEventPaused(id, paused) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.setPaused(paused), `Failed to ${paused ? "pause" : "resume"} FMOD event instance`);
+		call(`Failed to ${paused ? "pause" : "resume"} FMOD event instance`, () => instance.setPaused(paused));
 }
 
 export function setEventVolume(id, volume) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.setVolume(volume), "Failed to set FMOD event volume");
+		call("Failed to set FMOD event volume", () => instance.setVolume(volume));
 }
 
 export function getTimelinePosition(id) {
 	const instance = getInstance(id);
 	if (!instance)
 		return 0;
-	const out = {};
-	check(instance.getTimelinePosition(out), "Failed to get FMOD event timeline position");
-	return out.val;
+	return call("Failed to get FMOD event timeline position", () => instance.getTimelinePosition());
 }
 
 export function setTimelinePosition(id, position) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.setTimelinePosition(position), "Failed to set FMOD event timeline position");
+		call("Failed to set FMOD event timeline position", () => instance.setTimelinePosition(position));
 }
 
 export function setEventParameter(id, name, value, ignoreSeekSpeed) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.setParameterByName(name, value, ignoreSeekSpeed), `Failed to set FMOD event parameter '${name}'`);
+		call(`Failed to set FMOD event parameter '${name}'`, () => instance.setParameterByName(name, value, ignoreSeekSpeed));
 }
 
 export function setEventParameterLabel(id, name, label, ignoreSeekSpeed) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.setParameterByNameWithLabel(name, label, ignoreSeekSpeed), `Failed to set FMOD event parameter '${name}' to label '${label}'`);
+		call(`Failed to set FMOD event parameter '${name}' to label '${label}'`, () => instance.setParameterByNameWithLabel(name, label, ignoreSeekSpeed));
 }
 
 export function setEvent3DAttributes(id, px, py, pz, vx, vy, vz) {
 	const instance = getInstance(id);
 	if (instance)
-		check(instance.set3DAttributes(attributes3D(px, py, pz, vx, vy, vz)), "Failed to set FMOD event 3D attributes");
+		call("Failed to set FMOD event 3D attributes", () => instance.set3DAttributes(attributes3D(px, py, pz, vx, vy, vz)));
 }
 
 export function releaseEvent(id) {
@@ -254,44 +255,46 @@ export function releaseEvent(id) {
 	if (!instance)
 		return;
 
-	check(instance.release(), "Failed to release FMOD event instance");
+	call("Failed to release FMOD event instance", () => instance.release());
 	instances.delete(id);
 }
 
 export function setParameter(name, value, ignoreSeekSpeed) {
 	ensureInitialized();
-	check(system.setParameterByName(name, value, ignoreSeekSpeed), `Failed to set FMOD global parameter '${name}'`);
+	call(`Failed to set FMOD global parameter '${name}'`, () => system.setParameterByName(name, value, ignoreSeekSpeed));
 }
 
 export function setParameterLabel(name, label, ignoreSeekSpeed) {
 	ensureInitialized();
-	check(system.setParameterByNameWithLabel(name, label, ignoreSeekSpeed), `Failed to set FMOD global parameter '${name}' to label '${label}'`);
+	call(`Failed to set FMOD global parameter '${name}' to label '${label}'`, () => system.setParameterByNameWithLabel(name, label, ignoreSeekSpeed));
 }
 
 export function setListenerAttributes(px, py, pz, vx, vy, vz) {
 	ensureInitialized();
-	check(system.setListenerAttributes(0, attributes3D(px, py, pz, vx, vy, vz), null), "Failed to set FMOD listener attributes");
+	call("Failed to set FMOD listener attributes", () => system.setListenerAttributes(0, attributes3D(px, py, pz, vx, vy, vz)));
 }
 
 export function setBusPaused(path, paused) {
 	ensureInitialized();
-	const out = {};
-	check(system.getBus(path, out), `Failed to get FMOD bus '${path}'`);
-	check(out.val.setPaused(paused), `Failed to ${paused ? "pause" : "resume"} FMOD bus '${path}'`);
+	const bus = call(`Failed to get FMOD bus '${path}'`, () => system.getBus(path));
+	call(`Failed to ${paused ? "pause" : "resume"} FMOD bus '${path}'`, () => bus.setPaused(paused));
 }
 
 export function setVcaVolume(path, volume) {
 	ensureInitialized();
-	const out = {};
-	if (system.getVCA(path, out) !== fmod.OK)
+	let vca;
+	try {
+		vca = system.getVCA(path);
+	} catch {
 		return false;
-	check(out.val.setVolume(volume), `Failed to set FMOD VCA volume '${path}'`);
+	}
+	call(`Failed to set FMOD VCA volume '${path}'`, () => vca.setVolume(volume));
 	return true;
 }
 
 export function update() {
 	if (initialized)
-		check(system.update(), "FMOD Studio system update failed");
+		call("FMOD Studio system update failed", () => system.update());
 }
 
 export function shutdown() {
@@ -301,8 +304,8 @@ export function shutdown() {
 	for (const id of Array.from(instances.keys()))
 		releaseEvent(id);
 	shutdownBanks();
-	check(system.flushCommands(), "FMOD Studio command flush failed");
-	check(system.release(), "FMOD Studio system release failed");
+	call("FMOD Studio command flush failed", () => system.flushCommands());
+	call("FMOD Studio system release failed", () => system.release());
 	system = null;
 	coreSystem = null;
 	initialized = false;
@@ -408,10 +411,14 @@ function mixerCall(method, reason) {
 		console.warn(`${AUDIO_LOG} coreSystem.${method} not available`);
 		return false;
 	}
-	const result = coreSystem[method]();
-	const ok = result === fmod.OK;
-	if (LOG_AUDIO) console.log(`${AUDIO_LOG} ${method} (${reason}) -> ${result}${ok ? " OK" : " FAIL"}`);
-	return ok;
+	try {
+		coreSystem[method]();
+		if (LOG_AUDIO) console.log(`${AUDIO_LOG} ${method} (${reason}) -> OK`);
+		return true;
+	} catch (err) {
+		if (LOG_AUDIO) console.log(`${AUDIO_LOG} ${method} (${reason}) -> FAIL ${err}`);
+		return false;
+	}
 }
 
 function enterBackground(reason) {
@@ -509,53 +516,9 @@ function armGestureResume(reason) {
 	globalThis.addEventListener("touchend", retry, { once: true });
 }
 
-function loadFmodScript() {
-	if (globalThis.FMODModule)
-		return Promise.resolve();
-
-	return new Promise((resolve, reject) => {
-		const script = document.createElement("script");
-		script.src = "./FMOD/fmodstudioP.js";
-		script.async = true;
-		script.onload = () => resolve();
-		script.onerror = () => reject(new Error("Failed to load fmodstudioP.js"));
-		document.head.appendChild(script);
-	});
-}
-
-function preloadBanks(module, bankPaths, bankData) {
-	for (const path of bankPaths) {
-		const parts = path.split("/");
-		const name = parts.pop();
-		const folder = `/${parts.join("/")}`;
-		ensureFmodPath(module, folder);
-		const bytes = bankData?.get?.(path);
-		if (bytes)
-			module.FS_createDataFile(folder, name, bytes, true, false, true);
-		else
-			module.FS_createPreloadedFile(folder, name, path, true, false);
-	}
-}
-
-function ensureFmodPath(module, path) {
-	if (path === "" || path === "/")
-		return;
-
-	let current = "";
-	for (const part of path.split("/").filter(Boolean)) {
-		const parent = current || "/";
-		current += `/${part}`;
-		try {
-			module.FS_createPath(parent, part, true, true);
-		} catch {
-			// Existing paths throw in Emscripten's FS helpers.
-		}
-	}
-}
-
 function shutdownBanks() {
 	for (let i = banks.length - 1; i >= 0; i--)
-		check(banks[i].unload(), "Failed to unload FMOD bank");
+		call("Failed to unload FMOD bank", () => banks[i].unload());
 	banks.length = 0;
 }
 
@@ -564,10 +527,9 @@ function getEventDescription(path) {
 	if (eventDescriptions.has(path))
 		return eventDescriptions.get(path);
 
-	const out = {};
-	check(system.getEvent(path, out), `Failed to find FMOD event '${path}'`);
-	eventDescriptions.set(path, out.val);
-	return out.val;
+	const description = call(`Failed to find FMOD event '${path}'`, () => system.getEvent(path));
+	eventDescriptions.set(path, description);
+	return description;
 }
 
 // Returns null for unknown ids rather than throwing: after reinitialize() the game
@@ -578,23 +540,22 @@ function getInstance(id) {
 }
 
 function attributes3D(px, py, pz, vx, vy, vz) {
-	const attributes = fmod._3D_ATTRIBUTES();
-	setVector(attributes.position, px, py, pz);
-	setVector(attributes.velocity, vx, vy, vz);
-	setVector(attributes.forward, 0, 0, 1);
-	setVector(attributes.up, 0, -1, 0);
-	return attributes;
+	return {
+		position: { x: px, y: py, z: pz },
+		velocity: { x: vx, y: vy, z: vz },
+		forward: { x: 0, y: 0, z: 1 },
+		up: { x: 0, y: -1, z: 0 },
+	};
 }
 
-function setVector(vector, x, y, z) {
-	vector.x = x;
-	vector.y = y;
-	vector.z = z;
-}
-
-function check(result, message) {
-	if (result !== fmod.OK)
-		throw new Error(`${message}: ${fmod.ErrorString(result)}`);
+// FMOD 2.04's HTML5 API throws on failure instead of returning a result code; this
+// keeps our context on the message.
+function call(message, fn) {
+	try {
+		return fn();
+	} catch (err) {
+		throw new Error(`${message}: ${err?.message ?? err}`);
+	}
 }
 
 function ensureInitialized() {

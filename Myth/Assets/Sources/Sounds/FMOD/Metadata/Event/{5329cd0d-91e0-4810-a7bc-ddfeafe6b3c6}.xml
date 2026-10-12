@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{5329cd0d-91e0-4810-a7bc-ddfeafe6b3c6}">
 		<property name="note">
 			<value>don't think the panning is working; find a way to pan left-to-right over time for each parameter type etc</value>
@@ -125,23 +125,15 @@
 		</relationship>
 	</object>
 	<object class="AutomationCurve" id="{2d8d383a-c635-4cee-bf0e-6c464f8a91bf}">
-		<relationship name="parameter">
-			<destination>{e3398b00-325e-4b0a-a764-db7501fe2768}</destination>
-		</relationship>
 		<relationship name="automationPoints">
-			<destination>{2b2cc647-c583-4f0c-b6a1-272bc484da72}</destination>
 			<destination>{b3b9e341-4103-4175-bc58-26b19861db2a}</destination>
+			<destination>{2b2cc647-c583-4f0c-b6a1-272bc484da72}</destination>
 			<destination>{272cf5b3-377e-43a0-a367-32252fbc7dba}</destination>
 			<destination>{47aca2c0-d408-4ad8-a0a1-0b0040a849be}</destination>
 		</relationship>
-	</object>
-	<object class="AutomationPoint" id="{2b2cc647-c583-4f0c-b6a1-272bc484da72}">
-		<property name="position">
-			<value>0</value>
-		</property>
-		<property name="value">
-			<value>100</value>
-		</property>
+		<relationship name="parameter">
+			<destination>{e3398b00-325e-4b0a-a764-db7501fe2768}</destination>
+		</relationship>
 	</object>
 	<object class="AutomationPoint" id="{b3b9e341-4103-4175-bc58-26b19861db2a}">
 		<property name="position">
@@ -149,6 +141,14 @@
 		</property>
 		<property name="value">
 			<value>-100</value>
+		</property>
+	</object>
+	<object class="AutomationPoint" id="{2b2cc647-c583-4f0c-b6a1-272bc484da72}">
+		<property name="position">
+			<value>0</value>
+		</property>
+		<property name="value">
+			<value>100</value>
 		</property>
 	</object>
 	<object class="AutomationPoint" id="{272cf5b3-377e-43a0-a367-32252fbc7dba}">

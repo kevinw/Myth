@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{81f90df7-fa44-409e-8fc5-f9b06ffa022a}">
 		<property name="name">
 			<value>start_move</value>
@@ -39,8 +39,8 @@
 	</object>
 	<object class="MasterTrack" id="{4452b8fd-7483-4352-a14e-22e5a630b5e6}">
 		<relationship name="modules">
-			<destination>{afd795ed-1f39-4feb-b507-a82d590283cc}</destination>
 			<destination>{9067017c-5455-4c85-9c1d-985512dae326}</destination>
+			<destination>{afd795ed-1f39-4feb-b507-a82d590283cc}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
 			<destination>{d14faf3d-d088-414b-9ce1-37663f165acb}</destination>
@@ -76,14 +76,6 @@
 			<destination>{babd9c74-87fc-4daf-9546-6bcba795c37f}</destination>
 		</relationship>
 	</object>
-	<object class="SingleSound" id="{afd795ed-1f39-4feb-b507-a82d590283cc}">
-		<property name="length">
-			<value>0.59845804988662143</value>
-		</property>
-		<relationship name="audioFile">
-			<destination>{47650281-8db8-4d41-8a82-9585233882fb}</destination>
-		</relationship>
-	</object>
 	<object class="SingleSound" id="{9067017c-5455-4c85-9c1d-985512dae326}">
 		<property name="length">
 			<value>1.8975056689342404</value>
@@ -99,6 +91,14 @@
 		</property>
 		<relationship name="audioFile">
 			<destination>{e34cbae8-4b45-4bce-a4ea-510093aacbcc}</destination>
+		</relationship>
+	</object>
+	<object class="SingleSound" id="{afd795ed-1f39-4feb-b507-a82d590283cc}">
+		<property name="length">
+			<value>0.59845804988662143</value>
+		</property>
+		<relationship name="audioFile">
+			<destination>{47650281-8db8-4d41-8a82-9585233882fb}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{e7012511-8ce6-4b9c-bb64-96e33f4d3949}">

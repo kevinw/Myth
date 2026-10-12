@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{0a56f580-585a-43e0-a810-36ba1ef06427}">
 		<property name="name">
 			<value>creak</value>

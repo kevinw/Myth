@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{2ea1cd74-b815-4f24-bdb5-84ee005303ad}">
 		<property name="name">
 			<value>moving_stone</value>
@@ -39,8 +39,8 @@
 	</object>
 	<object class="MasterTrack" id="{8ca63c4c-396b-4a0d-8640-e4201b6307cd}">
 		<relationship name="modules">
-			<destination>{ceab5e87-4d44-41d4-9619-92acb2938602}</destination>
 			<destination>{fb07fd63-f2f6-49e2-94e3-434b0927bee9}</destination>
+			<destination>{ceab5e87-4d44-41d4-9619-92acb2938602}</destination>
 			<destination>{f1a90295-82a9-415e-9b48-19e8047c60b8}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
@@ -83,6 +83,14 @@
 			<destination>{3c854161-0f85-4dc6-a741-7e3c6585983e}</destination>
 		</relationship>
 	</object>
+	<object class="TransitionSourceSound" id="{fb07fd63-f2f6-49e2-94e3-434b0927bee9}">
+		<property name="length">
+			<value>2</value>
+		</property>
+		<relationship name="fadeOutCurve">
+			<destination>{aa6ca307-c833-4fe4-9909-8a186979711f}</destination>
+		</relationship>
+	</object>
 	<object class="SingleSound" id="{ceab5e87-4d44-41d4-9619-92acb2938602}">
 		<property name="length">
 			<value>4.0998412698412698</value>
@@ -95,14 +103,6 @@
 		</property>
 		<relationship name="audioFile">
 			<destination>{211742e2-aae1-4e07-946b-c8dc9925d2b8}</destination>
-		</relationship>
-	</object>
-	<object class="TransitionSourceSound" id="{fb07fd63-f2f6-49e2-94e3-434b0927bee9}">
-		<property name="length">
-			<value>2</value>
-		</property>
-		<relationship name="fadeOutCurve">
-			<destination>{aa6ca307-c833-4fe4-9909-8a186979711f}</destination>
 		</relationship>
 	</object>
 	<object class="TransitionDestinationSound" id="{f1a90295-82a9-415e-9b48-19e8047c60b8}">

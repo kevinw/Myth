@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="SnapshotList" id="{c7f5b5e4-4ff9-48f1-b75a-12f3715a2eea}">
 		<relationship name="items">
 			<destination>{f0d19c39-949b-4775-8470-a6388f6c1996}</destination>

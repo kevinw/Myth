@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{8b5196fd-d1b1-4f75-8913-035658b2f4ac}">
 		<property name="name">
 			<value>footstep</value>

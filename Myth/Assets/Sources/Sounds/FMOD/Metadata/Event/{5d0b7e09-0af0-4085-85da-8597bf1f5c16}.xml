@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{5d0b7e09-0af0-4085-85da-8597bf1f5c16}">
 		<property name="name">
 			<value>teleport_from</value>

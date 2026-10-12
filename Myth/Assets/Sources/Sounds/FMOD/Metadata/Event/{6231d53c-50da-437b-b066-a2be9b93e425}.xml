@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{6231d53c-50da-437b-b066-a2be9b93e425}">
 		<property name="name">
 			<value>warp_move</value>

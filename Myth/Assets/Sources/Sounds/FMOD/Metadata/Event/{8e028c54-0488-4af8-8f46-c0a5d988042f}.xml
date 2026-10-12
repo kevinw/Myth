@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{8e028c54-0488-4af8-8f46-c0a5d988042f}">
 		<property name="name">
 			<value>knockback</value>
@@ -96,8 +96,8 @@
 	</object>
 	<object class="Timeline" id="{9a530fde-0d38-4c5b-86b5-1a602938fb96}">
 		<relationship name="modules">
-			<destination>{fdd7f815-75f6-4639-a559-d8d7f5f2d584}</destination>
 			<destination>{4cbe4e35-1f7c-4fdc-9f8c-9dbfcf60148f}</destination>
+			<destination>{fdd7f815-75f6-4639-a559-d8d7f5f2d584}</destination>
 			<destination>{f3c50a5b-b933-4a88-9999-c723ee782ba3}</destination>
 			<destination>{1b5e93e6-d427-418f-9598-bdd53f6f9ed0}</destination>
 			<destination>{c8c56b00-cb71-41a5-9db1-dc73fcae98a5}</destination>

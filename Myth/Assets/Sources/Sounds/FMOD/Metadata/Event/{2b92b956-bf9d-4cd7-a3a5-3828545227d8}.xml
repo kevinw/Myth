@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{2b92b956-bf9d-4cd7-a3a5-3828545227d8}">
 		<property name="name">
 			<value>unfurl</value>

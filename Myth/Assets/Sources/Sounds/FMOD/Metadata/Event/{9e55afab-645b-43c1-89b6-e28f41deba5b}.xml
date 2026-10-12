@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{9e55afab-645b-43c1-89b6-e28f41deba5b}">
 		<property name="name">
 			<value>pool</value>
@@ -45,8 +45,8 @@
 			<destination>{a7495e6f-8dd6-4501-bbef-3ff8c53bc609}</destination>
 		</relationship>
 		<relationship name="modules">
-			<destination>{deef4369-9586-445d-9cab-3c829fbd8a8b}</destination>
 			<destination>{ebf2a657-604d-4716-b92b-412387b00ae0}</destination>
+			<destination>{deef4369-9586-445d-9cab-3c829fbd8a8b}</destination>
 			<destination>{6ba55595-466a-4e92-bae9-0a45390e510a}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
@@ -106,20 +106,20 @@
 			<destination>{51714181-57db-41c2-a12a-464e953c5f9a}</destination>
 		</relationship>
 	</object>
-	<object class="SingleSound" id="{deef4369-9586-445d-9cab-3c829fbd8a8b}">
-		<property name="length">
-			<value>5.0135600907029492</value>
-		</property>
-		<relationship name="audioFile">
-			<destination>{7b06b3b2-5da7-4730-8905-0bfda616dee4}</destination>
-		</relationship>
-	</object>
 	<object class="TransitionSourceSound" id="{ebf2a657-604d-4716-b92b-412387b00ae0}">
 		<property name="length">
 			<value>2</value>
 		</property>
 		<relationship name="fadeOutCurve">
 			<destination>{69a474c6-74c0-46d5-af31-7010aa723889}</destination>
+		</relationship>
+	</object>
+	<object class="SingleSound" id="{deef4369-9586-445d-9cab-3c829fbd8a8b}">
+		<property name="length">
+			<value>5.0135600907029492</value>
+		</property>
+		<relationship name="audioFile">
+			<destination>{7b06b3b2-5da7-4730-8905-0bfda616dee4}</destination>
 		</relationship>
 	</object>
 	<object class="TransitionDestinationSound" id="{6ba55595-466a-4e92-bae9-0a45390e510a}">
@@ -274,12 +274,12 @@
 		</relationship>
 	</object>
 	<object class="AutomationCurve" id="{60fa593f-0be8-4aec-8fa1-b94457b9cb17}">
-		<relationship name="parameter">
-			<destination>{8b57cc25-3953-46c3-bb93-480a310c67f3}</destination>
-		</relationship>
 		<relationship name="automationPoints">
 			<destination>{b046bfb7-a920-4fce-bc72-7c9212ca977b}</destination>
 			<destination>{c8432191-194a-44fa-9556-7095129c6d78}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{8b57cc25-3953-46c3-bb93-480a310c67f3}</destination>
 		</relationship>
 	</object>
 	<object class="AutomationPoint" id="{b046bfb7-a920-4fce-bc72-7c9212ca977b}">

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{5be57dfa-52a5-4fc5-923b-9df97d25e940}">
 		<property name="name">
 			<value>pickup</value>

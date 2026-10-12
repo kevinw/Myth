@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{3a9c48e2-8a94-465b-8389-9ebcec09c62b}">
 		<property name="name">
 			<value>background_music</value>
@@ -131,12 +131,12 @@
 	</object>
 	<object class="ParameterProxy" id="{5c057662-e84b-4954-92f2-21f27f606658}">
 		<relationship name="modules">
-			<destination>{e48811bb-8170-4d81-8bf7-aba4d67363c9}</destination>
-			<destination>{1dc160c8-e725-498e-ba60-ee97e83cf0ce}</destination>
-			<destination>{ce9dbddf-3877-4732-a762-8a866670426f}</destination>
 			<destination>{1002f8e8-004d-4695-aebf-d41f6069f8df}</destination>
+			<destination>{e48811bb-8170-4d81-8bf7-aba4d67363c9}</destination>
+			<destination>{ce9dbddf-3877-4732-a762-8a866670426f}</destination>
 			<destination>{fb0eb337-8750-4954-961e-d7a53854b703}</destination>
 			<destination>{e2faf156-1dde-44c8-aa35-0f89cdb69336}</destination>
+			<destination>{1dc160c8-e725-498e-ba60-ee97e83cf0ce}</destination>
 		</relationship>
 		<relationship name="preset">
 			<destination>{11d06582-d92b-45a9-bfbb-374c91189aa0}</destination>
@@ -420,21 +420,21 @@
 		</relationship>
 	</object>
 	<object class="AutomationCurve" id="{b72f7080-fd9e-4272-a758-0a8a575be971}">
-		<relationship name="parameter">
-			<destination>{edeb288d-6756-4382-8fd2-76ced8b16288}</destination>
-		</relationship>
 		<relationship name="automationPoints">
 			<destination>{f1a0b90e-1698-4000-afc3-a34fdbd45e61}</destination>
 			<destination>{ca0c0921-6363-4540-90e1-659a64b24a70}</destination>
 		</relationship>
-	</object>
-	<object class="AutomationCurve" id="{e743ad8d-fbbd-48ea-99c1-ee8d2d3898c1}">
 		<relationship name="parameter">
 			<destination>{edeb288d-6756-4382-8fd2-76ced8b16288}</destination>
 		</relationship>
+	</object>
+	<object class="AutomationCurve" id="{e743ad8d-fbbd-48ea-99c1-ee8d2d3898c1}">
 		<relationship name="automationPoints">
 			<destination>{1a7bbc12-46a8-4ae7-82bd-f0b25abb0b96}</destination>
 			<destination>{8fe11f14-88b9-4585-8b4a-db14c50fc0cb}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{edeb288d-6756-4382-8fd2-76ced8b16288}</destination>
 		</relationship>
 	</object>
 	<object class="AutomationPoint" id="{f1a0b90e-1698-4000-afc3-a34fdbd45e61}">

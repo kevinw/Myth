@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{64f5f5a4-d6ef-46f8-a01c-2d33bb59bd64}">
 		<property name="name">
 			<value>invert</value>
@@ -81,9 +81,9 @@
 	</object>
 	<object class="ParameterProxy" id="{1345def6-3c8a-4312-82b1-4d46b1fc79e3}">
 		<relationship name="modules">
+			<destination>{ffa8e8ec-366e-4abc-a9a5-3532c96f44c2}</destination>
 			<destination>{c0664aba-55f7-4f81-8055-1129c914528b}</destination>
 			<destination>{c70a272e-f135-48f1-a3c3-8c7c29947a5c}</destination>
-			<destination>{ffa8e8ec-366e-4abc-a9a5-3532c96f44c2}</destination>
 			<destination>{545ab321-cb84-4493-a65d-f7d6b7ccfb11}</destination>
 		</relationship>
 		<relationship name="preset">

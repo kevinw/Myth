@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{a4908fe2-0856-411d-a7de-9068f565600d}">
 		<property name="name">
 			<value>land</value>
@@ -81,10 +81,10 @@
 	</object>
 	<object class="ParameterProxy" id="{bfef1875-d2e6-4950-a6fb-b17367173c56}">
 		<relationship name="modules">
-			<destination>{efeb63fd-e515-49a3-bffd-f7c755df552a}</destination>
 			<destination>{d7ce8638-87fd-4387-9f45-b83d07d5968d}</destination>
-			<destination>{19d7d4c7-7636-40f2-a4cf-d7caf8bad354}</destination>
 			<destination>{75665fb5-64cd-4a14-9204-eedcda93db65}</destination>
+			<destination>{efeb63fd-e515-49a3-bffd-f7c755df552a}</destination>
+			<destination>{19d7d4c7-7636-40f2-a4cf-d7caf8bad354}</destination>
 		</relationship>
 		<relationship name="preset">
 			<destination>{e775b5c5-6ed5-4c5a-9813-8fe5263a5f0f}</destination>

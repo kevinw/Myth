@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{6cfadcfd-446d-46d9-a751-152ed2dc25fe}">
 		<property name="name">
 			<value>buzz</value>
@@ -75,8 +75,8 @@
 			<destination>{0b356e57-6417-4cf3-86ff-f3e42020768a}</destination>
 		</relationship>
 		<relationship name="markers">
-			<destination>{d4382082-4511-47e1-8166-5cd6e48bb00b}</destination>
 			<destination>{bc2eec6c-6eec-49ae-b393-a4e5eaf0d7d4}</destination>
+			<destination>{d4382082-4511-47e1-8166-5cd6e48bb00b}</destination>
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{52724ffd-dffa-46d3-b200-85fb95f5d91e}">
@@ -131,26 +131,6 @@
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{7cf25c47-9aca-468e-a89d-1378fc8d2592}" />
-	<object class="LoopRegion" id="{d4382082-4511-47e1-8166-5cd6e48bb00b}">
-		<property name="position">
-			<value>0.125</value>
-		</property>
-		<property name="length">
-			<value>0.31602966343411293</value>
-		</property>
-		<property name="name">
-			<value>Region A</value>
-		</property>
-		<property name="looping">
-			<value>0</value>
-		</property>
-		<relationship name="timeline">
-			<destination>{30766e00-efe8-4de5-96ad-cbc80a85d603}</destination>
-		</relationship>
-		<relationship name="markerTrack">
-			<destination>{9cb8144e-e1c3-48c0-8f21-457d392da454}</destination>
-		</relationship>
-	</object>
 	<object class="TransitionRegion" id="{bc2eec6c-6eec-49ae-b393-a4e5eaf0d7d4}">
 		<property name="position">
 			<value>1</value>
@@ -169,6 +149,26 @@
 		</relationship>
 		<relationship name="destination">
 			<destination>{d4382082-4511-47e1-8166-5cd6e48bb00b}</destination>
+		</relationship>
+	</object>
+	<object class="LoopRegion" id="{d4382082-4511-47e1-8166-5cd6e48bb00b}">
+		<property name="position">
+			<value>0.125</value>
+		</property>
+		<property name="length">
+			<value>0.31602966343411293</value>
+		</property>
+		<property name="name">
+			<value>Region A</value>
+		</property>
+		<property name="looping">
+			<value>0</value>
+		</property>
+		<relationship name="timeline">
+			<destination>{30766e00-efe8-4de5-96ad-cbc80a85d603}</destination>
+		</relationship>
+		<relationship name="markerTrack">
+			<destination>{9cb8144e-e1c3-48c0-8f21-457d392da454}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{1a863fc7-ec2f-494b-98d4-5748e770b549}">
@@ -221,12 +221,12 @@
 	<object class="MixerBusFader" id="{76a99237-55d6-4a07-9378-a20d86f73411}" />
 	<object class="SpatialiserEffect" id="{aadec25c-5976-4b4c-bd43-2db5c6272283}" />
 	<object class="AutomationCurve" id="{aafa56c2-27f0-4726-91e1-c05f0b5706d4}">
+		<relationship name="automationPoints">
+			<destination>{0f971ff7-c3e7-4315-8cba-bec9ba9a78a6}</destination>
+			<destination>{70cadaec-2ff1-494e-8cc1-9087033ee7a9}</destination>
+		</relationship>
 		<relationship name="parameter">
 			<destination>{5787fd3a-b5e3-4cef-8aeb-ccc35ec40cd0}</destination>
-		</relationship>
-		<relationship name="automationPoints">
-			<destination>{70cadaec-2ff1-494e-8cc1-9087033ee7a9}</destination>
-			<destination>{0f971ff7-c3e7-4315-8cba-bec9ba9a78a6}</destination>
 		</relationship>
 	</object>
 	<object class="AutomationPoint" id="{9b208295-d1a0-49af-8ca7-4e783b229805}">
@@ -267,20 +267,20 @@
 			<value>1</value>
 		</property>
 	</object>
-	<object class="AutomationPoint" id="{70cadaec-2ff1-494e-8cc1-9087033ee7a9}">
-		<property name="position">
-			<value>0.015536723163841807</value>
-		</property>
-		<property name="value">
-			<value>-3.5</value>
-		</property>
-	</object>
 	<object class="AutomationPoint" id="{0f971ff7-c3e7-4315-8cba-bec9ba9a78a6}">
 		<property name="position">
 			<value>1</value>
 		</property>
 		<property name="value">
 			<value>3</value>
+		</property>
+	</object>
+	<object class="AutomationPoint" id="{70cadaec-2ff1-494e-8cc1-9087033ee7a9}">
+		<property name="position">
+			<value>0.015536723163841807</value>
+		</property>
+		<property name="value">
+			<value>-3.5</value>
 		</property>
 	</object>
 </objects>

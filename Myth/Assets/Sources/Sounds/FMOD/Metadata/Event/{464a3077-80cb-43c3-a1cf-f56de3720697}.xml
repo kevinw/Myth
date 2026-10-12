@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{464a3077-80cb-43c3-a1cf-f56de3720697}">
 		<property name="name">
 			<value>lightning_trap</value>
@@ -69,8 +69,8 @@
 	<object class="MarkerTrack" id="{5da0eda3-804d-4bc9-aa08-0af1fbebe5a1}" />
 	<object class="Timeline" id="{030a3bd0-4b2a-4b9f-b67d-51ea7be8efcf}">
 		<relationship name="modules">
-			<destination>{ed0a761a-d18d-442a-914c-a8fd537c0f7b}</destination>
 			<destination>{7319df3b-8559-4b20-9f35-7e0ea6048606}</destination>
+			<destination>{ed0a761a-d18d-442a-914c-a8fd537c0f7b}</destination>
 		</relationship>
 		<relationship name="markers">
 			<destination>{c7068fe5-6dd4-47b0-8272-127700b87351}</destination>
@@ -196,8 +196,8 @@
 			<value>volume</value>
 		</property>
 		<relationship name="automationCurves">
-			<destination>{7f847b83-a6da-4a9b-b442-0d8a720e297c}</destination>
 			<destination>{2e5a2265-cb86-4da7-aaf8-0625856617ce}</destination>
+			<destination>{7f847b83-a6da-4a9b-b442-0d8a720e297c}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{c262610c-e8e1-4894-9843-05d8dceea7e8}">
@@ -253,18 +253,18 @@
 			<destination>{985dff04-7356-4d08-a488-dc115c89a2c4}</destination>
 		</relationship>
 	</object>
-	<object class="AutomationCurve" id="{7f847b83-a6da-4a9b-b442-0d8a720e297c}">
-		<relationship name="parameter">
-			<destination>{030a3bd0-4b2a-4b9f-b67d-51ea7be8efcf}</destination>
-		</relationship>
-	</object>
 	<object class="AutomationCurve" id="{2e5a2265-cb86-4da7-aaf8-0625856617ce}">
-		<relationship name="parameter">
-			<destination>{c38e6986-b64d-4413-a1ab-08df4c98d0a3}</destination>
-		</relationship>
 		<relationship name="automationPoints">
 			<destination>{06ae0a02-1b4c-4aae-822b-8684fef6c4d8}</destination>
 			<destination>{eaae9ba0-9b04-48cf-b22a-dc50d807a43a}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{c38e6986-b64d-4413-a1ab-08df4c98d0a3}</destination>
+		</relationship>
+	</object>
+	<object class="AutomationCurve" id="{7f847b83-a6da-4a9b-b442-0d8a720e297c}">
+		<relationship name="parameter">
+			<destination>{030a3bd0-4b2a-4b9f-b67d-51ea7be8efcf}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusFader" id="{b02e15c0-7354-4a10-8a63-b703f2efacb0}" />

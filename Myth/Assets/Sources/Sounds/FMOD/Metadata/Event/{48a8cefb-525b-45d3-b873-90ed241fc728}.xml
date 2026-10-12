@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{48a8cefb-525b-45d3-b873-90ed241fc728}">
 		<property name="name">
 			<value>underwater_deep</value>
@@ -65,8 +65,8 @@
 			<destination>{770e108d-5646-4039-a4a2-bebe16c1219d}</destination>
 		</relationship>
 		<relationship name="markers">
-			<destination>{5d6345e5-9992-4946-aad8-76de7fa8a6f0}</destination>
 			<destination>{ba1e402f-f00e-4329-ad0f-f8347c6d9440}</destination>
+			<destination>{5d6345e5-9992-4946-aad8-76de7fa8a6f0}</destination>
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{4ff2cb57-1499-435e-b1ee-1d3598d22864}">
@@ -119,26 +119,6 @@
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{489dedcf-2859-49bd-8982-1f6fcbb24466}" />
-	<object class="LoopRegion" id="{5d6345e5-9992-4946-aad8-76de7fa8a6f0}">
-		<property name="position">
-			<value>0.26041072447233315</value>
-		</property>
-		<property name="length">
-			<value>2</value>
-		</property>
-		<property name="name">
-			<value>Region A</value>
-		</property>
-		<property name="looping">
-			<value>0</value>
-		</property>
-		<relationship name="timeline">
-			<destination>{087dc646-9b7e-4f3d-9fd7-c90df3aa66b3}</destination>
-		</relationship>
-		<relationship name="markerTrack">
-			<destination>{5a5af1d1-a203-47f4-980d-99ea2b4f4642}</destination>
-		</relationship>
-	</object>
 	<object class="TransitionRegion" id="{ba1e402f-f00e-4329-ad0f-f8347c6d9440}">
 		<property name="position">
 			<value>8</value>
@@ -157,6 +137,26 @@
 		</relationship>
 		<relationship name="destination">
 			<destination>{5d6345e5-9992-4946-aad8-76de7fa8a6f0}</destination>
+		</relationship>
+	</object>
+	<object class="LoopRegion" id="{5d6345e5-9992-4946-aad8-76de7fa8a6f0}">
+		<property name="position">
+			<value>0.26041072447233315</value>
+		</property>
+		<property name="length">
+			<value>2</value>
+		</property>
+		<property name="name">
+			<value>Region A</value>
+		</property>
+		<property name="looping">
+			<value>0</value>
+		</property>
+		<relationship name="timeline">
+			<destination>{087dc646-9b7e-4f3d-9fd7-c90df3aa66b3}</destination>
+		</relationship>
+		<relationship name="markerTrack">
+			<destination>{5a5af1d1-a203-47f4-980d-99ea2b4f4642}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{912dbd53-9e95-448d-8211-d4eda57ea22d}">

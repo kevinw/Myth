@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="Event" id="{bf79345a-2f7b-4300-b423-6347452133b9}">
 		<property name="name">
 			<value>sword_crouched</value>

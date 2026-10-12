@@ -4,7 +4,7 @@
 /* Copyright (c), Firelight Technologies Pty, Ltd. 2004-2026.                               */
 /*                                                                                          */
 /* For more detail visit:                                                                   */
-/* https://fmod.com/docs/2.03/api/studio-api.html                                           */
+/* https://fmod.com/docs/2.04/api/studio-api.html                                           */
 /* ======================================================================================== */
 
 using System;
@@ -16,7 +16,7 @@ namespace FMOD.Studio
 {
     public partial class STUDIO_VERSION
     {
-#if !UNITY_2021_3_OR_NEWER
+#if !UNITY_2022_3_OR_NEWER
 #if IOS
         public const string dll = "__Internal";
 #elif BROWSER_FMOD_PTHREAD
@@ -78,6 +78,15 @@ namespace FMOD.Studio
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct ASSET_MARKER_PROPERTIES
+    {
+        public StringWrapper name;
+        public IntPtr sound;
+        public int position;
+        public int index;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct ADVANCEDSETTINGS
     {
         public int cbsize;
@@ -132,6 +141,7 @@ namespace FMOD.Studio
         BANK_UNLOAD = 0x00000004,
         LIVEUPDATE_CONNECTED = 0x00000008,
         LIVEUPDATE_DISCONNECTED = 0x00000010,
+        GET_SOUND_INFO = 0x00000020,
         ALL = 0xFFFFFFFF,
     }
 
@@ -149,6 +159,7 @@ namespace FMOD.Studio
         AUTOMATIC_SPEED,
         AUTOMATIC_SPEED_ABSOLUTE,
         AUTOMATIC_DISTANCE_NORMALIZED,
+        AUTOMATIC_AUDIO_TABLE_KEY_COUNT,
         MAX
     }
 
@@ -162,6 +173,7 @@ namespace FMOD.Studio
         LABELED       = 0x00000010,
     }
 
+    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     public struct PARAMETER_ID
     {
@@ -201,6 +213,7 @@ namespace FMOD.Studio
         public MODE mode;
         public CREATESOUNDEXINFO exinfo;
         public int subsoundindex;
+        public ulong keyhash;
 
         public string name
         {
@@ -335,7 +348,7 @@ namespace FMOD.Studio
         VIRTUAL_TO_REAL          = 0x00010000,
         START_EVENT_COMMAND      = 0x00020000,
         NESTED_TIMELINE_BEAT     = 0x00040000,
-
+        ASSET_MARKER             = 0x00080000,
         ALL                      = 0xFFFFFFFF,
     }
 
@@ -389,9 +402,19 @@ namespace FMOD.Studio
             }
         }
 
+        public static RESULT hashAudioTableKey(string key, out ulong hash)
+        {
+            using (StringHelper.ThreadSafeEncoding encoder = StringHelper.GetFreeHelper())
+            {
+                return FMOD_Studio_HashAudioTableKey(encoder.byteFromStringUTF8(key), out hash);
+            }
+        }
+
         #region importfunctions
         [DllImport(STUDIO_VERSION.dll)]
         private static extern RESULT FMOD_Studio_ParseID(byte[] idString, out GUID id);
+        [DllImport(STUDIO_VERSION.dll)]
+        private static extern RESULT FMOD_Studio_HashAudioTableKey(byte[] key, out ulong hash);
         #endregion
     }
 
@@ -1117,9 +1140,9 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_EventDescription_GetLength(this.handle, out length);
         }
-        public RESULT getMinMaxDistance(out float min, out float max)
+        public RESULT getMinMaxDistance(out float min, out float max, bool includeOverrides = false)
         {
-            return FMOD_Studio_EventDescription_GetMinMaxDistance(this.handle, out min, out max);
+            return FMOD_Studio_EventDescription_GetMinMaxDistance(this.handle, out min, out max, includeOverrides);
         }
         public RESULT getSoundSize(out float size)
         {
@@ -1259,7 +1282,7 @@ namespace FMOD.Studio
         [DllImport(STUDIO_VERSION.dll)]
         private static extern RESULT FMOD_Studio_EventDescription_GetLength             (IntPtr eventdescription, out int length);
         [DllImport(STUDIO_VERSION.dll)]
-        private static extern RESULT FMOD_Studio_EventDescription_GetMinMaxDistance     (IntPtr eventdescription, out float min, out float max);
+        private static extern RESULT FMOD_Studio_EventDescription_GetMinMaxDistance     (IntPtr eventdescription, out float min, out float max, bool includeOverrides);
         [DllImport(STUDIO_VERSION.dll)]
         private static extern RESULT FMOD_Studio_EventDescription_GetSoundSize          (IntPtr eventdescription, out float size);
         [DllImport(STUDIO_VERSION.dll)]
@@ -1488,6 +1511,17 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_EventInstance_SetUserData(this.handle, userdata);
         }
+        public RESULT addAudioTableKey(string key)
+        {
+            using (StringHelper.ThreadSafeEncoding encoder = StringHelper.GetFreeHelper())
+            {
+                return FMOD_Studio_EventInstance_AddAudioTableKey(this.handle, encoder.byteFromStringUTF8(key));
+            }
+        }
+        public RESULT clearAudioTableKeys()
+        {
+            return FMOD_Studio_EventInstance_ClearAudioTableKeys(this.handle);
+        }
         public RESULT getCPUUsage(out uint exclusive, out uint inclusive)
         {
             return FMOD_Studio_EventInstance_GetCPUUsage(this.handle, out exclusive, out inclusive);
@@ -1575,6 +1609,10 @@ namespace FMOD.Studio
         private static extern RESULT FMOD_Studio_EventInstance_GetUserData                 (IntPtr _event, out IntPtr userdata);
         [DllImport (STUDIO_VERSION.dll)]
         private static extern RESULT FMOD_Studio_EventInstance_SetUserData                 (IntPtr _event, IntPtr userdata);
+        [DllImport (STUDIO_VERSION.dll)]
+        private static extern RESULT FMOD_Studio_EventInstance_AddAudioTableKey            (IntPtr _event, byte[] key);
+        [DllImport (STUDIO_VERSION.dll)]
+        private static extern RESULT FMOD_Studio_EventInstance_ClearAudioTableKeys         (IntPtr _event);
         [DllImport (STUDIO_VERSION.dll)]
         private static extern RESULT FMOD_Studio_EventInstance_GetCPUUsage                 (IntPtr _event, out uint exclusive, out uint inclusive);
         [DllImport(STUDIO_VERSION.dll)]

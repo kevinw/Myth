@@ -4,7 +4,7 @@
 /* Copyright (c), Firelight Technologies Pty, Ltd. 2004-2026.                               */
 /*                                                                                          */
 /* For more detail visit:                                                                   */
-/* https://fmod.com/docs/2.03/api/core-api.html                                             */
+/* https://fmod.com/docs/2.04/api/core-api.html                                             */
 /* ======================================================================================== */
 
 using System;
@@ -20,7 +20,7 @@ namespace FMOD
     */
     public partial class VERSION
     {
-        public const int number = 0x00020313;
+        public const int number = 0x00020400;
 
         /*
             Define FMOD_DEBUG or FMOD_LOGGING to select appropriate libraries
@@ -33,7 +33,7 @@ namespace FMOD
         public const string suffix = "";
 #endif
 
-#if !UNITY_2021_3_OR_NEWER
+#if !UNITY_2022_3_OR_NEWER
 #if IOS
         public const string dll = "__Internal";
 #elif BROWSER_FMOD_PTHREAD
@@ -46,7 +46,7 @@ namespace FMOD
 #endif
     }
 
-    public class CONSTANTS
+    public partial class CONSTANTS
     {
         public const int MAX_CHANNEL_WIDTH = 32;
         public const int MAX_LISTENERS = 8;
@@ -214,6 +214,7 @@ namespace FMOD
         WINSONIC,
         AAUDIO,
         AUDIOWORKLET,
+        AUDIOWORKLETP,
         PHASE,
         OHAUDIO,
 
@@ -365,7 +366,6 @@ namespace FMOD
     {
         NORMAL                     = 0x00000000,
         STREAM_FROM_UPDATE         = 0x00000001,
-        MIX_FROM_UPDATE            = 0x00000002,
         _3D_RIGHTHANDED            = 0x00000004,
         CLIP_OUTPUT                = 0x00000008,
         CHANNEL_LOWPASS            = 0x00000100,
@@ -402,7 +402,6 @@ namespace FMOD
         AUDIOQUEUE,
         AT9,
         VORBIS,
-        MEDIA_FOUNDATION,
         MEDIACODEC,
         FADPCM,
         OPUS,
@@ -720,6 +719,7 @@ namespace FMOD
         public uint                        minmidigranularity;
         public int                         nonblockthreadid;
         public IntPtr                      fsbguid;
+        public DSP_RESAMPLER               resamplermethod;
 
         public SOUND_PCMREAD_CALLBACK pcmreadcallback
         {
@@ -3353,17 +3353,17 @@ namespace FMOD
         {
             return FMOD5_DSP_GetWetDryMix(this.handle, out prewet, out postwet, out dry);
         }
-        public RESULT setChannelFormat(CHANNELMASK channelmask, int numchannels, SPEAKERMODE source_speakermode)
+        public RESULT setInputChannelFormat(int inchannels, SPEAKERMODE inmode)
         {
-            return FMOD5_DSP_SetChannelFormat(this.handle, channelmask, numchannels, source_speakermode);
+            return FMOD5_DSP_SetInputChannelFormat(this.handle, inchannels, inmode);
         }
-        public RESULT getChannelFormat(out CHANNELMASK channelmask, out int numchannels, out SPEAKERMODE source_speakermode)
+        public RESULT getInputChannelFormat(out int inchannels, out SPEAKERMODE inmode)
         {
-            return FMOD5_DSP_GetChannelFormat(this.handle, out channelmask, out numchannels, out source_speakermode);
+            return FMOD5_DSP_GetInputChannelFormat(this.handle, out inchannels, out inmode);
         }
-        public RESULT getOutputChannelFormat(CHANNELMASK inmask, int inchannels, SPEAKERMODE inspeakermode, out CHANNELMASK outmask, out int outchannels, out SPEAKERMODE outspeakermode)
+        public RESULT getOutputChannelFormat(int inchannels, SPEAKERMODE inmode, out int outchannels, out SPEAKERMODE outmode)
         {
-            return FMOD5_DSP_GetOutputChannelFormat(this.handle, inmask, inchannels, inspeakermode, out outmask, out outchannels, out outspeakermode);
+            return FMOD5_DSP_GetOutputChannelFormat(this.handle, inchannels, inmode, out outchannels, out outmode);
         }
         public RESULT reset()
         {
@@ -3422,17 +3422,13 @@ namespace FMOD
         {
             return FMOD5_DSP_GetDataParameterIndex(this.handle, datatype, out index);
         }
-        public RESULT showConfigDialog(IntPtr hwnd, bool show)
-        {
-            return FMOD5_DSP_ShowConfigDialog(this.handle, hwnd, show);
-        }
 
         //  DSP attributes.
-        public RESULT getInfo(out string name, out uint version, out int channels, out int configwidth, out int configheight)
+        public RESULT getInfo(out string name, out uint version, out int channels, out DSP_MODE mode)
         {
             IntPtr nameMem = Marshal.AllocHGlobal(32);
 
-            RESULT result = FMOD5_DSP_GetInfo(this.handle, nameMem, out version, out channels, out configwidth, out configheight);
+            RESULT result = FMOD5_DSP_GetInfo(this.handle, nameMem, out version, out channels, out mode);
             using (StringHelper.ThreadSafeEncoding encoder = StringHelper.GetFreeHelper())
             {
                 name = encoder.stringFromNative(nameMem);
@@ -3440,9 +3436,9 @@ namespace FMOD
             Marshal.FreeHGlobal(nameMem);
             return result;
         }
-        public RESULT getInfo(out uint version, out int channels, out int configwidth, out int configheight)
+        public RESULT getInfo(out uint version, out int channels, out DSP_MODE mode)
         {
-            return FMOD5_DSP_GetInfo(this.handle, IntPtr.Zero, out version, out channels, out configwidth, out configheight); ;
+            return FMOD5_DSP_GetInfo(this.handle, IntPtr.Zero, out version, out channels, out mode);
         }
         public RESULT getType(out DSP_TYPE type)
         {
@@ -3527,11 +3523,11 @@ namespace FMOD
         [DllImport(VERSION.dll)]
         private static extern RESULT FMOD5_DSP_GetWetDryMix              (IntPtr dsp, out float prewet, out float postwet, out float dry);
         [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_DSP_SetChannelFormat          (IntPtr dsp, CHANNELMASK channelmask, int numchannels, SPEAKERMODE source_speakermode);
+        private static extern RESULT FMOD5_DSP_SetInputChannelFormat     (IntPtr dsp, int inchannels, SPEAKERMODE inmode);
         [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_DSP_GetChannelFormat          (IntPtr dsp, out CHANNELMASK channelmask, out int numchannels, out SPEAKERMODE source_speakermode);
+        private static extern RESULT FMOD5_DSP_GetInputChannelFormat     (IntPtr dsp, out int inchannels, out SPEAKERMODE inmode);
         [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_DSP_GetOutputChannelFormat    (IntPtr dsp, CHANNELMASK inmask, int inchannels, SPEAKERMODE inspeakermode, out CHANNELMASK outmask, out int outchannels, out SPEAKERMODE outspeakermode);
+        private static extern RESULT FMOD5_DSP_GetOutputChannelFormat    (IntPtr dsp, int inchannels, SPEAKERMODE inmode, out int outchannels, out SPEAKERMODE outmode);
         [DllImport(VERSION.dll)]
         private static extern RESULT FMOD5_DSP_Reset                     (IntPtr dsp);
         [DllImport(VERSION.dll)]
@@ -3559,9 +3555,7 @@ namespace FMOD
         [DllImport(VERSION.dll)]
         private static extern RESULT FMOD5_DSP_GetDataParameterIndex     (IntPtr dsp, int datatype, out int index);
         [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_DSP_ShowConfigDialog          (IntPtr dsp, IntPtr hwnd, bool show);
-        [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_DSP_GetInfo                   (IntPtr dsp, IntPtr name, out uint version, out int channels, out int configwidth, out int configheight);
+        private static extern RESULT FMOD5_DSP_GetInfo                   (IntPtr dsp, IntPtr name, out uint version, out int channels, out DSP_MODE mode);
         [DllImport(VERSION.dll)]
         private static extern RESULT FMOD5_DSP_GetType                   (IntPtr dsp, out DSP_TYPE type);
         [DllImport(VERSION.dll)]

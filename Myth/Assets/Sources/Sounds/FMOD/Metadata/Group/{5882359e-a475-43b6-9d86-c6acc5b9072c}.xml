@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<objects serializationModel="Studio.02.03.00">
+<objects serializationModel="Studio.02.04.00">
 	<object class="MixerGroup" id="{5882359e-a475-43b6-9d86-c6acc5b9072c}">
 		<property name="name">
 			<value>Gameplay</value>
