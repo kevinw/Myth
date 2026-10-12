@@ -150,7 +150,7 @@ public partial class Game
 		GetFirst<Bud>()?.Stop();
 		easedPlayerCameraTarget = player.Position;
 		cameraLookAhead = Vector2.Zero;
-		burrowCameraLead = 0;
+		burrowCameraLead = burrowCameraLeadTarget = 0;
 		SnapCameraToGameplayTarget();
 		ApplySavePointWarpPose(0, exiting: false);
 		ditherGlitchPosition = player.Position;

@@ -91,7 +91,7 @@ public partial class Manager
 	static string TileNote(char c) => decorTileNotes.TryGetValue(TileName(c), out var note) ? $"{TileName(c)} ({note})" : TileName(c);
 	static string ActorNote(string label) => decorActorNotes.TryGetValue(label, out var note) ? $"{label} ({note})" : label;
 
-	// `decorate` opens the window; `decorate ask|baseline|reapply|restore` presses its buttons, for scripting.
+	// `decorate` opens the window; `decorate ask|baseline|claude|reapply|restore` presses its buttons, for scripting.
 	[ConsoleCommand("decorate")]
 	void DecorateRoom(string action)
 	{
@@ -104,6 +104,7 @@ public partial class Manager
 			case "baseline": StartDecorAsk(baseline: true); break;
 			case "reapply": ReapplyDecoration(); break;
 			case "restore": RestoreDecorSnapshot(); break;
+			case "claude": StartClaudeAsk(); break;
 		}
 	}
 
@@ -123,6 +124,7 @@ public partial class Manager
 		decorCorpus = MineDecorCorpus(room);
 		decorTarget = AnalyzeDecorTarget(room, decorCorpus.Palettes);
 		decorAnswers = null;
+		PrepareClaudeDecoration(room, decorCorpus);
 		decorStatus = $"{decorTarget.Regions.Count} regions, {decorTarget.Runs.Count} edges. Ask to start.";
 	}
 
@@ -130,7 +132,9 @@ public partial class Manager
 	{
 		if (decorCorpus == null || decorTarget == null || decorAsking != null)
 			return;
-		var apiKey = baseline ? "" : ReadTypeSafeKey();
+		if ((baseline ? "" : TryReadKey(ReadTypeSafeKey)) is not { } apiKey)
+			return;
+		decorDecider = DecorDecider.TypeSafe;
 		var (corpus, target, look, mix) = (decorCorpus, decorTarget, decorSettings.Look, decorSettings.MixLooks);
 		decorStatus = baseline ? "Taking the most common answers..." : "Asking TypeSafe...";
 		decorAsking = Task.Run(() => AskDecoration(corpus, target, apiKey, baseline, look, mix));
@@ -139,6 +143,7 @@ public partial class Manager
 	// Called every editor frame: picks up finished answers, re-places after a slider settles, draws the window.
 	void UpdateRoomDecoration()
 	{
+		UpdateClaudeDecoration();
 		if (decorAsking is { IsCompleted: true } task)
 		{
 			decorAsking = null;
@@ -176,7 +181,7 @@ public partial class Manager
 				StartDecorAsk(baseline: true);
 			ImGui.EndDisabled();
 			ImGui.SameLine();
-			ImGui.BeginDisabled(decorAnswers == null);
+			ImGui.BeginDisabled(decorAnswers == null && decorClaudePlan == null);
 			if (ImGui.Button("Reapply"))
 				ReapplyDecoration();
 			ImGui.EndDisabled();
@@ -186,7 +191,16 @@ public partial class Manager
 			if (ImGui.Button("Use current room as base"))
 				RebaseDecoration(decorRoom);
 
-			ImGui.SeparatorText("Look (takes effect on Ask)");
+			ImGui.SeparatorText("Claude (looks at renders, plans the whole room)");
+			ImGui.InputTextMultiline("Art direction", ref decorDirection, 2000, new Vector2(0, ImGui.GetTextLineHeight() * 3));
+			ImGui.SliderInt("Critique rounds", ref decorRounds, 0, 3);
+			ImGui.BeginDisabled(decorClaudeTask != null);
+			if (ImGui.Button("Ask Claude"))
+				StartClaudeAsk();
+			ImGui.EndDisabled();
+			ImGui.TextDisabled("Light spacing and material below apply to Claude's plan too.");
+
+			ImGui.SeparatorText("TypeSafe look (takes effect on Ask)");
 			if (decorAnswers is { } answers)
 				LookCombo(answers);
 			ImGui.SliderInt("Mix looks", ref s.MixLooks, 1, 3);
@@ -255,9 +269,16 @@ public partial class Manager
 
 	void ReapplyDecoration()
 	{
-		if (decorRoom is not { } room || decorAnswers is not { } answers || decorTarget is not { } target)
+		if (decorRoom is not { } room || decorTarget is not { } target)
 			return;
-		var plan = PlaceDecoration(answers, target, decorSettings);
+		DecorPlan plan;
+		string report;
+		if (decorDecider == DecorDecider.Claude && decorClaudePlan is { } claudePlan && decorVocabulary is { } vocab)
+			(plan, report) = (PlaceClaudePlan(claudePlan, target, vocab, decorSettings), decorClaudeReport.ToString());
+		else if (decorAnswers is { } answers)
+			(plan, report) = (PlaceDecoration(answers, target, decorSettings), answers.Report);
+		else
+			return;
 		using (CaptureRoomUndo("Decorate Room", room))
 		{
 			room.LoadJsonState(decorSnapshot);
@@ -271,7 +292,7 @@ public partial class Manager
 
 		var reportPath = Path.Combine(Path.GetDirectoryName(FindSourceFile(".env") ?? FindSourceFile("Myth.csproj") ?? ".")!, "obj", $"decorate-{room.Id}.txt");
 		Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
-		File.WriteAllText(reportPath, answers.Report);
+		File.WriteAllText(reportPath, report);
 	}
 
 	static string ReadTypeSafeKey()

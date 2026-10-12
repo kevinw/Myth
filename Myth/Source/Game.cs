@@ -294,9 +294,9 @@ public partial class Game : IDisposable
 	static float CameraLookAheadEdgeInset => 0.15f;
 	static float CameraLookAheadEaseRate => 8f;
 	static float BurrowCameraLeadDistance => 40f;
-	static float BurrowCameraLeadEaseRate => 1.5f;
-	static float BurrowCameraLeadReturnRate => 6f;
-	float burrowCameraLead;
+	static float BurrowCameraLeadEaseRate => 3f;
+	static float BurrowCameraLeadReturnRate => 12f;
+	float burrowCameraLead, burrowCameraLeadTarget;
 	static float PlayerDragCameraEaseRate => 2.5539999f.T();
 	const float CameraEaseTriggerEpsilon = 2f;
 	// The world is drawn at this scale into the fixed Width x Height frame, so the camera frames
@@ -893,7 +893,7 @@ public partial class Game : IDisposable
 			previousCameraTarget = null;
 			cameraError = Vector2.Zero;
 			cameraLookAhead = Vector2.Zero;
-			burrowCameraLead = 0;
+			burrowCameraLead = burrowCameraLeadTarget = 0;
 			return;
 		}
 
@@ -905,7 +905,7 @@ public partial class Game : IDisposable
 			previousCameraTarget = null;
 			cameraError = Vector2.Zero;
 			cameraLookAhead = Vector2.Zero;
-			burrowCameraLead = 0;
+			burrowCameraLead = burrowCameraLeadTarget = 0;
 			return;
 		}
 
@@ -971,7 +971,7 @@ public partial class Game : IDisposable
 		easedPlayerCameraTarget = player.Position;
 		cameraError = Vector2.Zero;
 		cameraLookAhead = Vector2.Zero;
-		burrowCameraLead = 0;
+		burrowCameraLead = burrowCameraLeadTarget = 0;
 
 		var target = GetGameplayCameraTarget();
 		var amount = 1 - MathF.Exp(-Time.Delta * PlayerDragCameraEaseRate);
@@ -1061,8 +1061,8 @@ public partial class Game : IDisposable
 		return null;
 	}
 
-	// Low-passed so alternating flat/vertical segments (a staircase of corners) average into a
-	// steady lead instead of snapping at every turn.
+	// Low-passed twice so alternating flat/vertical segments (a staircase of corners) average into a
+	// steady lead that also moves at a continuous speed through every turn.
 	Vector2 CameraOffset => cameraLookAhead + Vector2.UnitY * burrowCameraLead;
 
 	void UpdateBurrowCameraLead()
@@ -1070,7 +1070,11 @@ public partial class Game : IDisposable
 		var (target, rate) = GetFirst<Player>() is { State: Player.States.Burrow } player
 			? (player.BurrowTravelHeading.Y * player.BurrowSpeed / Pawn.BurrowMaxSpeed * BurrowCameraLeadDistance, BurrowCameraLeadEaseRate)
 			: (0, BurrowCameraLeadReturnRate);
-		burrowCameraLead = Calc.Lerp(burrowCameraLead, target, 1 - MathF.Exp(-Time.Delta * rate));
+		var amount = 1 - MathF.Exp(-Time.Delta * rate);
+		burrowCameraLeadTarget = Calc.Lerp(burrowCameraLeadTarget, target, amount);
+		burrowCameraLead = Calc.Lerp(burrowCameraLead, burrowCameraLeadTarget, amount);
+		if (MathF.Abs(burrowCameraLead - target) < 0.01f && MathF.Abs(burrowCameraLeadTarget - target) < 0.01f)
+			burrowCameraLead = burrowCameraLeadTarget = target;
 	}
 
 	Vector2 easedPlayerCameraTarget; // TODO: use nullable and clear on room switch or load
