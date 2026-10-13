@@ -552,7 +552,7 @@ public abstract partial class Pawn
 		UpdateBurrowRumble();
 		UpdateBurrowBomb();
 		EmitBurrowSparks();
-		if (!PerfToggles.HeadSlide) Play("burrow");
+		if (!PerfToggles.HeadSlide) PlayPawnAnimation("burrow");
 
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);

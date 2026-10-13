@@ -9,7 +9,7 @@ import bpy
 from mathutils import Matrix
 
 
-BONE_MAP = {
+MIXAMO_BONE_MAP = {
     "pelvis": "Hips",
     "spine_01": "Spine",
     "spine_02": "Spine1",
@@ -38,12 +38,42 @@ BONE_MAP = {
     "ball_leaf_r": "RightToe_End",
 }
 
+# Quaternius UAL1 (ozz-animation/media/fbx/quaternius/ual.fbx) ships a Rigify DEF- skeleton.
+RIGIFY_BONE_MAP = {
+    "pelvis": "DEF-hips",
+    "spine_01": "DEF-spine.001",
+    "spine_02": "DEF-spine.002",
+    "spine_03": "DEF-spine.003",
+    "neck_01": "DEF-neck",
+    "Head": "DEF-head",
+    "clavicle_l": "DEF-shoulder.L",
+    "upperarm_l": "DEF-upper_arm.L",
+    "lowerarm_l": "DEF-forearm.L",
+    "hand_l": "DEF-hand.L",
+    "middle_01_l": "DEF-f_middle.01.L",
+    "clavicle_r": "DEF-shoulder.R",
+    "upperarm_r": "DEF-upper_arm.R",
+    "lowerarm_r": "DEF-forearm.R",
+    "hand_r": "DEF-hand.R",
+    "middle_01_r": "DEF-f_middle.01.R",
+    "thigh_l": "DEF-thigh.L",
+    "calf_l": "DEF-shin.L",
+    "foot_l": "DEF-foot.L",
+    "ball_l": "DEF-toe.L",
+    "thigh_r": "DEF-thigh.R",
+    "calf_r": "DEF-shin.R",
+    "foot_r": "DEF-foot.R",
+    "ball_r": "DEF-toe.R",
+}
+
 
 def arguments():
     parser = argparse.ArgumentParser(
-        description="Retarget standard Mixamo FBX animations onto Myth's UAL2 skeleton"
+        description="Retarget standard Mixamo (or Rigify UAL1) FBX animations onto Myth's UAL2 skeleton"
     )
     parser.add_argument("source_fbx", nargs="+")
+    # Export these actions from each multi-clip FBX instead of its active one; the clip is named after the action.
+    parser.add_argument("--action", action="append", default=[])
     parser.add_argument("--target", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--profiles", required=True)
@@ -58,12 +88,24 @@ def clip_name(path):
     return re.sub(r"[^A-Za-z0-9]+", "_", os.path.splitext(os.path.basename(path))[0]).strip("_")
 
 
+# Yaw that turns the source character to face the way the target does, measured left thigh to right thigh.
+# UAL1's armature is rotated 180 degrees, so a world-space delta applied as-is mirrors every swing.
+def facing_alignment(source, source_bones, bone_map, target):
+    def side(armature, left, right):
+        vector = armature.matrix_world @ armature.data.bones[right].head_local - \
+            armature.matrix_world @ armature.data.bones[left].head_local
+        vector.z = 0
+        return vector.normalized()
+    return side(source, source_bones[bone_map["thigh_l"]], source_bones[bone_map["thigh_r"]]) \
+        .rotation_difference(side(target, "thigh_l", "thigh_r"))
+
+
 def ground_height(armature):
     return min(armature.pose.bones[name].head.z for name in ("ball_leaf_l", "ball_leaf_r"))
 
 
-def retarget(source_path, target_path, output_dir, profile, ground_reference_clip):
-    name = clip_name(source_path)
+def retarget(source_path, action_name, target_path, output_dir, profile, ground_reference_clip):
+    name = clip_name(action_name or source_path)
     if not name:
         raise RuntimeError(f"Cannot derive a clip name from {source_path}")
 
@@ -86,11 +128,19 @@ def retarget(source_path, target_path, output_dir, profile, ground_reference_cli
 
     bpy.ops.import_scene.fbx(filepath=source_path)
     source = next(obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj != target)
-    source_action = source.animation_data.action if source.animation_data else None
+    if action_name:
+        source_action = next((a for a in bpy.data.actions if a.name.rsplit("|", 1)[-1] == action_name), None)
+        if source_action is None:
+            raise RuntimeError(f"No action '{action_name}' in {source_path}")
+        source.animation_data_create()
+        source.animation_data.action = source_action
+    else:
+        source_action = source.animation_data.action if source.animation_data else None
     if source_action is None:
         raise RuntimeError(f"No animation found in {source_path}")
 
     source_bones = {bone.name.rsplit(":", 1)[-1]: bone.name for bone in source.data.bones}
+    BONE_MAP = RIGIFY_BONE_MAP if "DEF-hips" in source_bones else MIXAMO_BONE_MAP
     missing = [
         f"{target_name} <- {source_name}"
         for target_name, source_name in BONE_MAP.items()
@@ -114,11 +164,12 @@ def retarget(source_path, target_path, output_dir, profile, ground_reference_cli
         name: rotation(target.matrix_world @ target.data.bones[name].matrix_local)
         for name in BONE_MAP
     }
-    scene.frame_set(first_frame)
-    source_pelvis_origin = source.matrix_world @ source.pose.bones[source_bones["Hips"]].head
+    # Rest pose, not the first frame: a clip that starts crouched would otherwise scale all hip motion.
+    source_pelvis_origin = source.matrix_world @ source.data.bones[source_bones[BONE_MAP["pelvis"]]].head_local
     target_pelvis_origin = target.data.bones["pelvis"].head_local.copy()
     translation_scale = target_pelvis_origin.z / source_pelvis_origin.z
     target_world_rotation_inverse = rotation(target.matrix_world).inverted()
+    alignment = facing_alignment(source, source_bones, BONE_MAP, target)
 
     target.animation_data_create()
     action = bpy.data.actions.new(name)
@@ -138,13 +189,13 @@ def retarget(source_path, target_path, output_dir, profile, ground_reference_cli
         for target_name, source_base_name in BONE_MAP.items():
             source_name = source_bones[source_base_name]
             source_pose = rotation(source.matrix_world @ source.pose.bones[source_name].matrix)
-            delta = source_pose @ source_rest[source_base_name].inverted()
+            delta = alignment @ source_pose @ source_rest[source_base_name].inverted() @ alignment.inverted()
             desired = target_world_rotation_inverse @ delta @ target_rest[target_name]
             pose_bone = target.pose.bones[target_name]
             head = pose_bone.head.copy()
             if target_name == "pelvis":
                 source_head = source.matrix_world @ source.pose.bones[source_name].head
-                head = target_pelvis_origin + (source_head - source_pelvis_origin) * translation_scale
+                head = target_pelvis_origin + alignment @ (source_head - source_pelvis_origin) * translation_scale
             pose_bone.matrix = Matrix.Translation(head) @ desired.to_matrix().to_4x4()
             bpy.context.view_layer.update()
 
@@ -217,6 +268,6 @@ with open(args.profiles, "r", encoding="utf-8") as file:
 ground_reference_clip = profiles["GroundReferenceClip"]
 clip_profiles = profiles.get("Clips", {})
 for source_fbx in args.source_fbx:
-    name = clip_name(source_fbx)
-    retarget(os.path.abspath(source_fbx), target_path, output_dir,
-             clip_profiles.get(name, {}), ground_reference_clip)
+    for action_name in args.action or [None]:
+        retarget(os.path.abspath(source_fbx), action_name, target_path, output_dir,
+                 clip_profiles.get(clip_name(action_name or source_fbx), {}), ground_reference_clip)

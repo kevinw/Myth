@@ -628,6 +628,8 @@ public static class ActorSpecs
 
 		var members = new List<SerializableMember>();
 		AddSerializableMembers(members, type);
+		if (members.GroupBy(it => it.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(it => it.Count() > 1) is { } duplicate)
+			throw new InvalidOperationException($"{type.Name} exposes '{duplicate.Key}' more than once.");
 		return serializableMembers[type] = [.. members];
 	}
 
@@ -702,8 +704,6 @@ public static class ActorSpecs
 	static void AddSettingsMember(List<SerializableMember> destination, MemberInfo settingsMember, MemberInfo member,
 		ActorSettingsAttribute settings, string? group)
 	{
-		if (destination.Exists(it => string.Equals(it.Name, member.Name, StringComparison.OrdinalIgnoreCase)))
-			throw new InvalidOperationException($"Actor setting '{member.Name}' is exposed more than once.");
 		destination.Add(new(member, settingsMember, SettingsDisplayName(member.Name, settings.TrimPrefix), group));
 	}
 

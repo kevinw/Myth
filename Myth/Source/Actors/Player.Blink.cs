@@ -17,7 +17,7 @@ public partial class Player
 	private void BlinkStrikeState()
 	{
 		ducking = false;
-		Play(GetAttackAnimation(), false);
+		PlayPawnAnimation(GetAttackAnimation(), false);
 		Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
 
 		if (blinkStrikeTarget != null && !Game.Actors.Contains(blinkStrikeTarget))

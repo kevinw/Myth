@@ -39,6 +39,8 @@ public partial class Manager
 	string? liveSelectedActorId;
 	string? liveHoveredActorId;
 	string? liveInspectedActorId;
+	// A spawned actor (Player, Bud) with no authored spec: inspected by reference, edits stay live-only.
+	Actor? liveInspectedSpawned;
 	bool liveActorInspectorOpen;
 	Actor? livePropertyTarget;
 	readonly Dictionary<string, JsonNode?> liveInspectorOriginalValues = [];
@@ -134,11 +136,28 @@ public partial class Manager
 		if (!Input.Mouse.LeftPressed)
 			return false;
 
-		// The player gets its own direct-grab path even when standing over an editable actor.
-		if (liveGame.GetFirst<Player>() is { } player && player.GetVisualBounds().Contains(worldMouse))
+		// Spawned pawns have no authored spec, so double-click inspects them live. The player also keeps
+		// its own direct-grab path even when standing over an editable actor.
+		Pawn? pawn = liveGame.GetFirst<Player>() is { } player && player.GetVisualBounds().Contains(worldMouse) ? player
+			: liveGame.GetFirst<Bud>() is { } bud && bud.GetVisualBounds().Contains(worldMouse) ? bud : null;
+		if (pawn != null)
 		{
 			liveHoveredActorId = null;
-			return false;
+			var pawnClickTime = Input.Mouse.PressedTimestamp(MouseButtons.Left);
+			var pawnClickId = pawn.GetType().Name;
+			var pawnDoubleClick = pawnClickId == liveActorLastClickId &&
+				(pawnClickTime - liveActorLastClickTime).TotalSeconds <= LiveActorDoubleClickSeconds &&
+				Vector2.DistanceSquared(Cursor, liveActorLastClickCursor) <= LiveActorDoubleClickRadius * LiveActorDoubleClickRadius;
+			liveActorLastClickId = pawnDoubleClick ? null : pawnClickId;
+			liveActorLastClickTime = pawnClickTime;
+			liveActorLastClickCursor = Cursor;
+			if (pawnDoubleClick)
+			{
+				OpenLiveActorInspector(pawn);
+				return true;
+			}
+			if (pawn is Player)
+				return false;
 		}
 
 		var inspected = HitTestLiveActor(liveGame, runtimeRoom, worldMouse, positionEditableOnly: false);
@@ -307,6 +326,7 @@ public partial class Manager
 		liveSelectedActorId = null;
 		liveHoveredActorId = null;
 		liveInspectedActorId = null;
+		liveInspectedSpawned = null;
 		liveActorInspectorOpen = false;
 		livePropertyTarget = null;
 		liveInspectorOriginalValues.Clear();
@@ -319,6 +339,16 @@ public partial class Manager
 
 	void OpenLiveActorInspector(Actor actor)
 	{
+		if (actor.ActorId == null)
+		{
+			StashInspectedLiveEdits();
+			liveInspectedActorId = null;
+			liveInspectedSpawned = actor;
+			CaptureLiveInspectorValues(actor);
+			liveActorInspectorOpen = true;
+			return;
+		}
+		liveInspectedSpawned = null;
 		if (liveInspectedActorId != actor.ActorId)
 		{
 			// Keep the previous actor's unsaved edits (live on the runtime and in the ledger) instead

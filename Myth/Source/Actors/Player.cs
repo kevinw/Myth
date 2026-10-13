@@ -51,6 +51,7 @@ public abstract partial class Pawn : Actor
 		ReleaseBurrowParticles();
 		StopAndReleaseSound(ref wallSlideSound, true);
 		StopAndReleaseSound(ref burrowSound, true);
+		rigVisual?.Dispose();
 	}
 
 	void OnRoomChanged(RoomChange change) {
@@ -506,6 +507,7 @@ public abstract partial class Pawn : Actor
 		AfterMovementUpdate(previousVelocity);
 		UpdateOutOfBreath();
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
+		UpdateRig();
 	}
 
 	// A surface that deforms under us -- a root growing or shrinking -- moves a pixel or two a frame.
@@ -835,22 +837,22 @@ public abstract partial class Pawn : Actor
 		if (grounded)
 		{
 			if (ducking)
-				Play(animateGroundLocomotion ? "crawl" : "duck");
+				PlayPawnAnimation(animateGroundLocomotion ? "crawl" : "duck");
 			else if (!animateGroundLocomotion)
 			{
 				if (input.MoveY < 0)
 				{
-					Play("look_up");
+					PlayPawnAnimation("look_up");
 				}
 				else
 				{
-					Play("idle");
+					PlayPawnAnimation("idle");
 				}
 			}
 			else if (Velocity.X > 0 && moveX < 0 || Velocity.X < 0 && moveX > 0)
 			{
 				facing *= -1;
-				Play("skid", looping: false);
+				PlayPawnAnimation("skid", looping: false);
 				if (PlayerSpecificAudioEvents)
 					AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
@@ -872,12 +874,12 @@ public abstract partial class Pawn : Actor
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
-						Play("skid", looping: false);
+						PlayPawnAnimation("skid", looping: false);
 					else
-						Play("run_start");
+						PlayPawnAnimation("run_start");
 				}
 				else
-					Play(MathF.Abs(movementInput) < 1 ? "walk" : "run");
+					PlayPawnAnimation(MathF.Abs(movementInput) < 1 ? "walk" : "run");
 			}
 		}
 		else
@@ -886,7 +888,7 @@ public abstract partial class Pawn : Actor
 			if (!inLiquid && IsWallHugging(wallJumpDir))
 			{
 				Facing = -(Signs)wallJumpDir;
-				Play("wall_slide");
+				PlayPawnAnimation("wall_slide");
 				wallSliding = true;
 			}
 			else if (JumpUpSquish > 0 && !grounded)
@@ -1037,7 +1039,7 @@ public abstract partial class Pawn : Actor
 
 		if (jumpAnim != null)
 		{
-			Play(jumpAnim, looping: jumpAnimLooping);
+			PlayPawnAnimation(jumpAnim, looping: jumpAnimLooping);
 		}
 
 		if (input.DashPressed && TryStartDash(moveX))
@@ -1101,7 +1103,7 @@ public abstract partial class Pawn : Actor
 
 		ducking = true;
 		Squish = new(1.65f, 0.62f);
-		Play("roll");
+		PlayPawnAnimation("roll");
 		State = States.Roll;
 		airborneRollDistance = 0;
 		OnRollStarted();
@@ -1121,7 +1123,7 @@ public abstract partial class Pawn : Actor
 	protected void RollState()
 	{
 		ducking = true;
-		Play("roll");
+		PlayPawnAnimation("roll");
 
 		UpdateRollAudioPosition();
 		var airborneRolling = false;
@@ -1274,7 +1276,7 @@ public abstract partial class Pawn : Actor
 			ducking = false;
 			jumpTimer = 0;
 			State = States.Climb;
-			Play("climb_idle");
+			PlayPawnAnimation("climb_idle");
 			return true;
 		}
 		return false;
@@ -1374,11 +1376,11 @@ public abstract partial class Pawn : Actor
 		Move(target - Position);
 
 		if (chain.Pinned && input.MoveY > 0) {
-			Play("climb_down");
+			PlayPawnAnimation("climb_down");
 		} else if (chain.Pinned && input.MoveY < 0) {
-			Play("climb");
+			PlayPawnAnimation("climb");
 		} else {
-			Play(ropeIsFalling ? "climb_fall" : "climb_idle");
+			PlayPawnAnimation(ropeIsFalling ? "climb_fall" : "climb_idle");
 		}
 	}
 
@@ -1456,7 +1458,7 @@ public abstract partial class Pawn : Actor
 			jumpTimer = 0;
 			Velocity.X = dashDirection * 200f;
 			Velocity.Y = 0;
-			Play("jump");
+			PlayPawnAnimation("jump");
 		}
 		if (!DashEngagesRunOnly && PlayerSpecificAudioEvents)
 			AudioEvent("player/dash_start");
@@ -1759,6 +1761,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static float HatMaxVelocityDelta => 250f;
 
 	[I(1, MaxHealth)] public int Health = MaxHealth;
+	[InspectorGroup("Rig")] public bool RigDraw;
+	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = DefaultRig();
+	protected override HumanoidRigSettings? DrawRig => RigDraw ? Rig : null;
 	float deathTimer;
 	public Controls Controls => Game.Controls;
 
@@ -1796,9 +1801,10 @@ public partial class Player : Pawn, INeuralTextureAgent
 		Depth = Depths.Player;
 		IFrameTime = InvincibleDuration;
 		grounded = true;
-		Play("sword");
+		PlayPawnAnimation("sword");
 		State = States.Normal;
 		PlayerSpecificAudioEvents = true;
+		RigDraw = true;
 	}
 
 	public override void Added()
@@ -2139,7 +2145,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 				attackBlocked = false;
 				blinkStrikeResolved = false;
 				State = States.BlinkStrike;
-				Play(GetAttackAnimation(), false);
+				PlayPawnAnimation(GetAttackAnimation(), false);
 				return true;
 			}
 		}
@@ -2325,7 +2331,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		var moveX = GetHorizontalMovementInput(out var movementInput);
 		UpdateHorizontalMovement(moveX, movementInput);
 
-		Play(GetAttackAnimation(), false);
+		PlayPawnAnimation(GetAttackAnimation(), false);
 
 		var hitbox = GetAttackHitbox(duckAttack);
 		if (state.Time < 0.2f && !attackBlocked)
@@ -2394,11 +2400,11 @@ public partial class Player : Pawn, INeuralTextureAgent
 			if (duckAttack)
 			{
 				duckAttack = false;
-				Play("duck");
+				PlayPawnAnimation("duck");
 			}
 			else
 			{
-				Play("idle");
+				PlayPawnAnimation("idle");
 			}
 			State = States.Normal;
 		}
@@ -2478,7 +2484,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 			Game.Destroy(attackSwipe);
 		}
 		attackSwipe = null;
-		Play(GetAttackAnimation(), false);
+		PlayPawnAnimation(GetAttackAnimation(), false);
 		AudioEvent("player/sword_block");
 		Rumble(AttackBlockRumble);
 	}
@@ -2598,7 +2604,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (healthDelta < 0 && Health > 0)
 			Game.NotifyPlayerHurt(fromActor, Position);
 
-		Play("hurt");
+		PlayPawnAnimation("hurt");
 
 		// Apply a hurt velocity
 		int signDirection = -Facing;
@@ -2736,11 +2742,19 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	void RenderHat(Batcher batcher, Subtexture subtexture, Color color)
 	{
-		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 || CurrentSpriteFrame is not { } playerFrame ||
-			Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
+		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0)
 			return;
 
 		var hatSpriteOrigin = hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter);
+		if (RigHatPosition is { } rigHat)
+		{
+			batcher.Image(subtexture, rigHat + (PerfToggles.HatPhysics ? hatOffset : Vector2.Zero), hatSpriteOrigin,
+				new Vector2((int)Facing, 1), RigHeadRoll + (PerfToggles.HatPhysics ? hatAngle : 0), color);
+			return;
+		}
+		if (CurrentSpriteFrame is not { } playerFrame || Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
+			return;
+
 		var socketPosition = socket.Position + new Vector2(1f, 2f);
 		var playerScale = new Vector2((int)Facing * Squish.X, Squish.Y);
 		var skewTransform = SpriteSkewMatrix(playerFrame);

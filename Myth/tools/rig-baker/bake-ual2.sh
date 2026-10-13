@@ -8,6 +8,7 @@ authored_blend="$myth_dir/Assets/Sources/Models/UAL2_Standard.blend"
 authored_actions=(Eye_Laser_Attack)
 performance_glb="$script_dir/Pose2Sim_Performance_Rokoko_MatchedPose.glb"
 mixamo_dir="$script_dir/mixamo"
+ual1_dir="$script_dir/ual1"
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/myth-rig-baker.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
 
@@ -42,7 +43,7 @@ if [[ -f "$performance_glb" ]]; then
 			--file="$performance_glb" --config_file="$script_dir/ual2-animation.json" --endian=little
 	)
 fi
-if [[ -d "$mixamo_dir" ]]; then
+if [[ -d "$mixamo_dir" || -d "$ual1_dir" ]]; then
 	while IFS= read -r -d '' mixamo_glb; do
 		name="$(basename "$mixamo_glb" .glb)"
 		mkdir -p "$build_dir/ozz/$name"
@@ -51,7 +52,7 @@ if [[ -d "$mixamo_dir" ]]; then
 			"$build_dir/build/ozz/src/animation/offline/gltf/gltf2ozz" \
 				--file="$mixamo_glb" --config_file="$script_dir/ual2-animation.json" --endian=little
 		)
-	done < <(find "$mixamo_dir" -name '*.glb' -print0 | sort -z)
+	done < <(find "$mixamo_dir" "$ual1_dir" -name '*.glb' -print0 2>/dev/null | sort -z)
 fi
 
 animations=()

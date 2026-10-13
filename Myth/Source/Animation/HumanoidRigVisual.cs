@@ -288,6 +288,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float FootPlantDistance => 5f;
 	static float FootstepHeightThreshold => 0.5f;
 	static float FootIKSpeed => 40f;
+	// Foot constants are tuned in pixels at 25 px/m; smaller rigs shrink them so tiny legs keep the same knee bend.
+	float FootScale => MathF.Min(1, Settings.PixelsPerMeter / 25);
+	Vector2 FootSink => new(0, 2.5f * FootScale);
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
@@ -480,7 +483,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var projection = new RuffProjection(pivot, -pivot.Z * cameraCos + pivot.X * cameraSin,
 			PresentationMirror(),
 			MathF.Cos(yaw), MathF.Sin(yaw), cameraCos, cameraSin, Settings.PixelsPerMeter,
-			new Vector2(0, 2.5f) + Offset, Vector2.Zero);
+			FootSink + Offset, Vector2.Zero);
 		var neck3D = ragdollPose[neck];
 		var projectedNeck = projection.Project(neck3D, out _);
 		projection = projection with { Correction = projectedPose[neck] - projectedNeck };
@@ -1079,7 +1082,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			var turned = new Vector3(offset.X * jointTurnCos + offset.Z * jointTurnSin, offset.Y,
 				-offset.X * jointTurnSin + offset.Z * jointTurnCos);
 			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) *
-				Settings.PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
+				Settings.PixelsPerMeter + FootSink + Offset;
 			jointDepth[i] = CameraOpenDepth(joint, pivot, jointTurnCos, jointTurnSin, cos, sin);
 		}
 		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? Side.Left : Side.Right;
@@ -1263,18 +1266,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (grounded || seekGround)
 		{
 			var probeOrigin = seekGround ? new Vector2(animatedToe.X, owner.Position.Y) : animatedToe;
-			var probeCenter = (probeOrigin - Vector2.UnitY * FootProbeAbove).RoundToPoint2();
+			var probeCenter = (probeOrigin - Vector2.UnitY * FootProbeAbove * FootScale).RoundToPoint2();
 			var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
-			if (owner.Game.TryFindSurface(owner, probe, Vector2.UnitY, FootProbeDistance, out var hit) &&
+			if (owner.Game.TryFindSurface(owner, probe, Vector2.UnitY, FootProbeDistance * FootScale, out var hit) &&
 				hit.Normal.Y < -0.5f &&
-				(seekGround || MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance))
+				(seekGround || MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance * FootScale))
 			{
 				targetOffset = hit.Point.Y - animatedToe.Y;
 				plant.Planted = true;
 			}
 		}
 
-		plant.OffsetY = Calc.Approach(plant.OffsetY, targetOffset, FootIKSpeed * visualDelta);
+		plant.OffsetY = Calc.Approach(plant.OffsetY, targetOffset, FootIKSpeed * FootScale * visualDelta);
 		if (MathF.Abs(plant.OffsetY) > 0.001f)
 		{
 			var oldToe = projectedPose[leg.Toe];

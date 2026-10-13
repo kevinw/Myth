@@ -790,10 +790,27 @@ public partial class Manager
 
 	void LiveActorInspectorImGui()
 	{
-		if (!playing || !liveActorInspectorOpen || liveInspectedActorId == null || game?.GetActorById(liveInspectedActorId) is not { } runtime ||
-			game.destroying.Contains(runtime) || game.CurrentRoom is not { } runtimeRoom ||
-			!TryGetLiveActorSource(game, runtimeRoom, runtime, positionEditableOnly: false, out var room, out var authored))
+		if (!playing || !liveActorInspectorOpen || game?.CurrentRoom is not { } runtimeRoom)
 			return;
+		Actor runtime;
+		Room? room = null;
+		JsonObject authored;
+		if (liveInspectedSpawned is { } spawned)
+		{
+			if (!game.Actors.Contains(spawned) || game.destroying.Contains(spawned))
+				return;
+			runtime = spawned;
+			// No authored spec to read VisibleWhen conditions from, so mirror the runtime values.
+			authored = [];
+			foreach (var property in ActorSpecs.GetEditableProperties(runtime))
+				authored[property.JsonName] = property.Value?.DeepClone();
+		}
+		else if (liveInspectedActorId == null || game.GetActorById(liveInspectedActorId) is not { } found ||
+			game.destroying.Contains(found) ||
+			!TryGetLiveActorSource(game, runtimeRoom, found, positionEditableOnly: false, out room, out authored))
+			return;
+		else
+			runtime = found;
 
 		var title = $"Live: {runtime.GetType().Name}";
 		SetNextWindowSize(new Vector2(300, 0), ImGuiCond.FirstUseEver);
@@ -844,9 +861,12 @@ public partial class Manager
 
 		Separator();
 		BeginDisabled(liveInspectorEdits.Count == 0);
-		if (Button("Apply to Room"))
-			ApplyLiveInspectorEdits(runtime, room, authored);
-		SameLine();
+		if (room != null)
+		{
+			if (Button("Apply to Room"))
+				ApplyLiveInspectorEdits(runtime, room, authored);
+			SameLine();
+		}
 		if (Button("Reset Live Changes"))
 			ResetLiveInspectorEdits(runtime);
 		EndDisabled();

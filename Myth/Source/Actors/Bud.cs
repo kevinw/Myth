@@ -4,6 +4,9 @@ namespace Myth;
 
 public class Bud : Pawn, ICarryable, IHitByHitbox
 {
+	[InspectorGroup("Rig")] public bool RigDraw;
+	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = DefaultRig();
+	protected override HumanoidRigSettings? DrawRig => RigDraw ? Rig : null;
 	public static bool SecondControllerControlEnabled = true;
 	internal static readonly Color Tint = new(0x7fb6ff);
 	// His speech reads as his own blue, lifted toward white so it stays legible over dark rooms.
@@ -83,7 +86,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		pilot = new(this, () => Manner);
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = Depths.BehindPlayer;
-		Play("idle");
+		PlayPawnAnimation("idle");
 	}
 
 	public override void Added()
@@ -139,7 +142,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		lingerTimer = 0;
 		State = States.Normal;
 		Squish = new Vector2(0.8f, 1.25f);
-		Play("idle");
+		PlayPawnAnimation("idle");
 		Game.TryBudStorylet("bud_carried");
 	}
 
@@ -190,7 +193,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Squish = new Vector2(0.75f, 1.3f);
 		pilot.Cancel(); // whatever he was in the middle of, re-path after landing
 		State = States.BackDash;
-		Play("back_dash", looping: false);
+		PlayPawnAnimation("back_dash", looping: false);
 		AudioEvent("hurt");
 
 		// enable to have Bud say something when you attack him
@@ -225,7 +228,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	{
 		backDashTimer = 0;
 		State = States.Normal;
-		Play("idle");
+		PlayPawnAnimation("idle");
 	}
 
 	public override PawnInput GetInput()
@@ -379,7 +382,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	public override void Render(Batcher batcher)
 	{
 		if (!BurrowHidesSprite)
-			RenderSpriteSubtexture(batcher, Tint);
+			RenderBody(batcher, Tint);
 		RenderBurrowLine(batcher);
 	}
 
