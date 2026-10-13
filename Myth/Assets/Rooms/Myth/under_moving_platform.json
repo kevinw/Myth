@@ -132,6 +132,14 @@
       "Id": "b2ac5d5f145a603d",
       "From": "FloLight",
       "Position": [173, 136]
+    },
+    {
+      "Id": "89fcfa9023690e2b",
+      "Type": "Wildlife",
+      "Position": [160, 92],
+      "BugCount": 0,
+      "FishCount": 0,
+      "FlyCount": 4
     }
   ]
 }
