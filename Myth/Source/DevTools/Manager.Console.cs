@@ -23,6 +23,9 @@ public partial class Manager
 	sealed record ConsoleCommand(MethodInfo Executor, MethodInfo? Completer);
 
 	readonly Dictionary<string, ConsoleCommand> consoleCommands = BuildConsoleCommands();
+	List<ConsoleCompletion>? consoleCommandNames;
+	ImGuiInputTextCallback? commandConsoleCallback;
+	string? commandConsolePendingFill; // written into the input box from its callback, which owns the text while it's active
 	readonly List<ConsoleCompletion> consoleCompletions = [];
 	readonly List<RoomDestination> consoleRooms = [];
 	bool commandConsoleOpen;
@@ -78,7 +81,10 @@ public partial class Manager
 		}
 
 		ImGui.SetNextItemWidth(-1);
-		var submit = ImGui.InputText("##Command", ref commandConsoleInput, 512, ImGuiInputTextFlags.EnterReturnsTrue);
+		unsafe { commandConsoleCallback ??= CommandConsoleInputCallback; }
+		var submit = ImGui.InputText("##Command", ref commandConsoleInput, 512,
+			ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.CallbackAlways | ImGuiInputTextFlags.CallbackCompletion,
+			commandConsoleCallback);
 		if (ImGui.IsKeyPressed(ImGuiKey.Escape))
 			commandConsoleOpen = false;
 		else
@@ -90,8 +96,9 @@ public partial class Manager
 			if (submit)
 			{
 				if (commandConsoleSelection >= 0)
-					commandConsoleInput = CommandName(commandConsoleInput) + " " + consoleCompletions[commandConsoleSelection].Value;
-				ExecuteConsoleCommand();
+					AcceptConsoleCompletion(commandConsoleSelection, run: true);
+				else
+					ExecuteConsoleCommand();
 			}
 		}
 
@@ -103,8 +110,7 @@ public partial class Manager
 			var selected = i == commandConsoleSelection;
 			if (ImGui.Selectable(consoleCompletions[i].Label, selected))
 			{
-				commandConsoleInput = CommandName(commandConsoleInput) + " " + consoleCompletions[i].Value;
-				ExecuteConsoleCommand();
+				AcceptConsoleCompletion(i, run: true);
 				break;
 			}
 		}
@@ -121,13 +127,71 @@ public partial class Manager
 			commandConsoleSelection = -1;
 		}
 		var space = commandConsoleInput.IndexOf(' ');
-		if (space < 0 || !consoleCommands.TryGetValue(commandConsoleInput[..space], out var command) || command.Completer == null)
+		if (space < 0)
+		{
+			CompleteCommandName(commandConsoleInput);
+			if (commandConsoleSelection >= consoleCompletions.Count)
+				commandConsoleSelection = -1;
+			return;
+		}
+		if (!consoleCommands.TryGetValue(commandConsoleInput[..space], out var command) || command.Completer == null)
 			return;
 
 		var argument = commandConsoleInput[(space + 1)..].Trim();
 		command.Completer.Invoke(this, [argument, consoleCompletions]);
 		if (commandConsoleSelection >= consoleCompletions.Count)
 			commandConsoleSelection = -1;
+	}
+
+	// Every command when empty; prefix matches ahead of substring matches. "…" marks commands that take an argument.
+	void CompleteCommandName(string typed)
+	{
+		if (consoleCommandNames == null)
+		{
+			consoleCommandNames = [];
+			foreach (var (name, command) in consoleCommands)
+				consoleCommandNames.Add(new(name, command.Completer != null ? $"{name} …" : name));
+			consoleCommandNames.Sort((a, b) => string.CompareOrdinal(a.Value, b.Value));
+		}
+		foreach (var completion in consoleCommandNames)
+			if (completion.Value.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+				consoleCompletions.Add(completion);
+		if (typed.Length > 0)
+			foreach (var completion in consoleCommandNames)
+				if (!completion.Value.StartsWith(typed, StringComparison.OrdinalIgnoreCase) &&
+					completion.Value.Contains(typed, StringComparison.OrdinalIgnoreCase))
+					consoleCompletions.Add(completion);
+	}
+
+	// A command that takes an argument fills in so its own completions show; anything else runs when `run`.
+	void AcceptConsoleCompletion(int index, bool run)
+	{
+		var completion = consoleCompletions[index];
+		var commandName = commandConsoleInput.IndexOf(' ') < 0;
+		var input = commandName ? completion.Value : CommandName(commandConsoleInput) + " " + completion.Value;
+		if (commandName && consoleCommands[completion.Value].Completer != null || !run)
+		{
+			commandConsoleInput = commandConsolePendingFill = commandName ? input + " " : input;
+			focusCommandConsole = true;
+			return;
+		}
+		commandConsoleInput = input;
+		ExecuteConsoleCommand();
+	}
+
+	unsafe int CommandConsoleInputCallback(ImGuiInputTextCallbackData* raw)
+	{
+		var data = new ImGuiInputTextCallbackDataPtr(raw);
+		if (data.EventFlag == ImGuiInputTextFlags.CallbackCompletion && consoleCompletions.Count > 0)
+			AcceptConsoleCompletion(Math.Max(0, commandConsoleSelection), run: false);
+		if (commandConsolePendingFill is { } fill)
+		{
+			commandConsolePendingFill = null;
+			data.DeleteChars(0, data.BufTextLen);
+			data.InsertChars(0, fill);
+			data.CursorPos = data.SelectionStart = data.SelectionEnd = data.BufTextLen;
+		}
+		return 0;
 	}
 
 	void ExecuteConsoleCommand()

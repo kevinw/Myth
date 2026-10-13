@@ -159,6 +159,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public float HeadRoll { get; private set; } // radians, clockwise on screen
 	public Vector2 HeadPosition => projectedPose[head];
 	public float? YawOverride;
+	// Rotates the whole figure about its torso so its arms (neck to hands) point this way on screen, by ArmAimWeight.
+	public Vector2 ArmAim = Vector2.UnitX;
+	public float ArmAimWeight;
+	public float PoseRoll { get; private set; } // radians, clockwise on screen
 	public float YawOverrideWeight;
 
 	OzzRig rig = null!;
@@ -166,6 +170,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	Vector3[] sampledPose = [];
 	Quaternion[] sampledRotations = [];
 	Vector3[] ragdollPose = [];
+	Vector3[] ragdollCarriedPose = [];
 	Vector3[] ragdollPreviousPose = [];
 	Vector3[] ragdollVelocity = [];
 	bool[] ragdollJoints = [];
@@ -244,6 +249,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float VisualEyeScale => 2.0f;
 	float eyeScale = 1;
 	float upperBodyLeanDegrees;
+	float velocityLean;
+	float velocityLeanRate;
+	float leanPreviousVelocityX;
 	float targetUpperBodyLeanDegrees;
 	float armWidthScale = 1;
 	float targetArmWidthScale = 1;
@@ -281,19 +289,24 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float LandingInertia => 1f;
 	static float LandingCompressionTime => 0.0225f;
 	static int RagdollConstraintIterations => 4;
-	static float TurnDuration => 0.28f;
 	static float TurnStartSpeed => 2f;
 	static float FootProbeAbove => 4f;
 	static float FootProbeDistance => 12f;
 	static float FootPlantDistance => 5f;
 	static float FootstepHeightThreshold => 0.5f;
 	static float FootIKSpeed => 40f;
+	static float FootPlantedSlack => 0.5f;
 	// Foot constants are tuned in pixels at 25 px/m; smaller rigs shrink them so tiny legs keep the same knee bend.
 	float FootScale => MathF.Min(1, Settings.PixelsPerMeter / 25);
 	Vector2 FootSink => new(0, 2.5f * FootScale);
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
+	static float VelocityLeanMaxAngle => 0.35f;
+	static float VelocityLeanFullSpeed => 140f;
+	static float VelocityLeanFullAcceleration => 1600f;
+	static float VelocityLeanSpring => 140f;
+	static float VelocityLeanDamping => 9f;
 	static float LookPoseResponse => 6f;
 	static float LookPoseOpenYaw => 12f * MathF.PI / 180f;
 	static Vector2 LookPoseTargetRange => new(64, 96);
@@ -365,6 +378,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		sampledPose = new Vector3[rig.JointCount];
 		sampledRotations = new Quaternion[rig.JointCount];
 		ragdollPose = new Vector3[rig.JointCount];
+		ragdollCarriedPose = new Vector3[rig.JointCount];
 		ragdollPreviousPose = new Vector3[rig.JointCount];
 		ragdollVelocity = new Vector3[rig.JointCount];
 		ragdollJoints = new bool[rig.JointCount];
@@ -526,6 +540,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 		var step = 1 / Settings.VisualFPS;
 		visualAccumulator += owner.Time.Delta;
+		// At or above the frame rate (with slack for frame-time jitter): one update per frame, over its real delta.
+		if (step <= owner.Time.Delta * 1.25f)
+		{
+			visualDelta = visualAccumulator;
+			visualAccumulator = 0;
+			poseDirty = false;
+			UpdateTurn(grounded);
+			UpdateTakeModifiers();
+			animator.Advance(advance ? visualDelta * PlaybackSpeed : 0, visualDelta, loop);
+			UpdatePose(grounded, footIK, seekGround);
+			return;
+		}
 		var ticks = Math.Min((int)(visualAccumulator / step), 4);
 		if (ticks <= 0)
 		{
@@ -720,7 +746,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 	}
 
-	float FacingYaw(Signs facing)
+	public float FacingYaw(Signs facing)
 		=> facing == Signs.Negative ? 0 : Settings.ProjectionYaw >= 0 ? -MathF.PI : MathF.PI;
 
 	float PresentationMirror()
@@ -737,14 +763,14 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			turning = true;
 			ResetFeet();
 		}
-		if (!turning || !grounded || !Settings.TurnWhileMoving && MathF.Abs(owner.Velocity.X) > TurnStartSpeed)
+		if (!turning || !Settings.TurnWhileMoving && (!grounded || MathF.Abs(owner.Velocity.X) > TurnStartSpeed))
 			return;
 
-		turnTime = MathF.Min(turnTime + visualDelta, TurnDuration);
-		var progress = turnTime / TurnDuration;
+		turnTime = MathF.Min(turnTime + visualDelta, Settings.TurnDuration);
+		var progress = turnTime / Settings.TurnDuration;
 		turnAmount = progress * progress * (3 - 2 * progress);
 		visualYaw = float.Lerp(turnFromYaw, turnToYaw, turnAmount);
-		if (turnTime < TurnDuration)
+		if (turnTime < Settings.TurnDuration)
 			return;
 
 		visualFacing = targetFacing;
@@ -762,9 +788,12 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		UpdateRagdoll();
 		ProjectPose();
 		ApplyLookPose();
-		ApplyTakePoseModifiers();
+		UpdateVelocityLean();
+		ApplyUpperBodyLean();
 		ApplyGaitAsymmetry();
 		ApplyPlantResponse();
+		ApplySquish();
+		ApplyPoseRoll();
 		UpdateSecondaryMotion();
 		UpdateGaitFootstep(grounded && footIK);
 		if (footIK)
@@ -794,13 +823,24 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		HeadRoll = float.Lerp(HeadRoll, desired, 1 - MathF.Exp(-HeadLookRate * visualDelta));
 	}
 
-	void ApplyTakePoseModifiers()
+	// Leans into speed and acceleration: forward while running, back on a skid, whipping through a reversal.
+	void UpdateVelocityLean()
 	{
-		if (MathF.Abs(upperBodyLeanDegrees) < 0.001f)
+		var velocityX = owner.Velocity.X;
+		var acceleration = (velocityX - leanPreviousVelocityX) / visualDelta;
+		leanPreviousVelocityX = velocityX;
+		var target = Math.Clamp(velocityX / VelocityLeanFullSpeed + acceleration / VelocityLeanFullAcceleration, -1, 1) *
+			VelocityLeanMaxAngle * Settings.VelocityLean * PoseModifierWeight;
+		Spring.Step(ref velocityLean, ref velocityLeanRate, target, VelocityLeanSpring, VelocityLeanDamping, visualDelta);
+	}
+
+	void ApplyUpperBodyLean()
+	{
+		var angle = upperBodyLeanDegrees * MathF.PI / 180 * (int)visualFacing + velocityLean;
+		if (MathF.Abs(angle) < 0.0001f)
 			return;
 		var pivot = projectedPose[pelvis];
-		var rotation = Matrix3x2.CreateRotation(
-			upperBodyLeanDegrees * MathF.PI / 180 * (int)visualFacing);
+		var rotation = Matrix3x2.CreateRotation(angle);
 		for (var i = 0; i < projectedPose.Length; i++)
 		{
 			var weight = upperBodyMask[i];
@@ -814,7 +854,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		var desired = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
-			: Vector2.Transform(new Vector2(-MathF.Cos(RigYaw()), 0), Matrix3x2.CreateRotation(HeadRoll));
+			: Vector2.Transform(new Vector2(-MathF.Cos(RigYaw()), 0), Matrix3x2.CreateRotation(HeadRoll + PoseRoll));
 		if (Settings.EyeMotion > 0)
 		{
 			var tick = (uint)MathF.Floor((owner.Time.SecondsF + animationPhase * EyeSaccadeInterval) /
@@ -880,6 +920,48 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		OffsetMasked(upperBodyMask, Vector2.UnitY * PlantCompression * amount);
 		OffsetMasked(plantedSide == Side.Left ? rightArmMask : leftArmMask,
 			-Vector2.UnitY * PlantShoulderLift * amount);
+	}
+
+	// The owner's sprite Squish, scaled about the ground; legs re-solve to their planted ankles so a squash
+	// bends the knees instead of shrinking the shins.
+	void ApplySquish()
+	{
+		var squish = Vector2.Lerp(Vector2.One, owner.Squish, Settings.SquishResponse);
+		if (Vector2.DistanceSquared(squish, Vector2.One) < 0.0001f)
+			return;
+		var left = CaptureLeg(leftLeg);
+		var right = CaptureLeg(rightLeg);
+		var ground = new Vector2(projectedPose[pelvis].X, (FootSink + Offset).Y);
+		for (var i = 0; i < projectedPose.Length; i++)
+			projectedPose[i] = ground + (projectedPose[i] - ground) * squish;
+		RestoreLeg(leftLeg, left);
+		RestoreLeg(rightLeg, right);
+	}
+
+	void ApplyPoseRoll()
+	{
+		var arms = (projectedPose[leftPalm] + projectedPose[rightPalm]) * 0.5f - projectedPose[neck];
+		PoseRoll = ArmAimWeight <= 0 ? 0 :
+			MathF.IEEERemainder(MathF.Atan2(ArmAim.Y, ArmAim.X) - MathF.Atan2(arms.Y, arms.X), MathF.Tau) * ArmAimWeight;
+		if (MathF.Abs(PoseRoll) < 0.0001f)
+			return;
+		var rotation = Matrix3x2.CreateRotation(PoseRoll, (projectedPose[pelvis] + projectedPose[neck]) * 0.5f);
+		for (var i = 0; i < projectedPose.Length; i++)
+			projectedPose[i] = Vector2.Transform(projectedPose[i], rotation);
+	}
+
+	readonly record struct LegCapture(Vector2 Knee, Vector2 Ankle, Vector2 Toe, Vector2 Tip, float Upper, float Lower);
+
+	LegCapture CaptureLeg(Leg leg) => new(projectedPose[leg.Knee], projectedPose[leg.Ankle], projectedPose[leg.Toe],
+		projectedPose[leg.Tip], Vector2.Distance(projectedPose[leg.Hip], projectedPose[leg.Knee]),
+		Vector2.Distance(projectedPose[leg.Knee], projectedPose[leg.Ankle]));
+
+	void RestoreLeg(Leg leg, in LegCapture capture)
+	{
+		SolveLeg(leg, capture.Ankle, capture.Upper, capture.Lower);
+		var shift = projectedPose[leg.Ankle] - capture.Ankle;
+		projectedPose[leg.Toe] = capture.Toe + shift;
+		projectedPose[leg.Tip] = capture.Tip + shift;
 	}
 
 	void OffsetMasked(OzzJointMask mask, Vector2 offset)
@@ -1022,7 +1104,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (turning && Settings.TurnInertia > 0)
 		{
 			var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
-			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
+			var progress = Math.Clamp((turnTime / Settings.TurnDuration - delay) / (1 - delay), 0, 1);
 			progress = progress * progress * (3 - 2 * progress);
 			yaw = float.Lerp(turnFromYaw, turnToYaw, progress);
 		}
@@ -1114,6 +1196,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (!ragdollReady)
 		{
 			sampledPose.CopyTo(ragdollPose, 0);
+			sampledPose.CopyTo(ragdollCarriedPose, 0);
 			Array.Clear(ragdollVelocity);
 			for (var i = 0; i < bones.Length; i++)
 				boneLengths[i] = Vector3.Distance(sampledPose[bones[i].From], sampledPose[bones[i].To]);
@@ -1136,6 +1219,12 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				}
 			pendingLandingSpeed = 0;
 		}
+
+		if (Settings.RagdollCarry > 0)
+			for (var i = 0; i < ragdollPose.Length; i++)
+				if (ragdollJoints[i])
+					ragdollPose[i] += (sampledPose[i] - ragdollCarriedPose[i]) * Settings.RagdollCarry;
+		sampledPose.CopyTo(ragdollCarriedPose, 0);
 
 		for (var remaining = visualDelta; remaining > 0;)
 		{
@@ -1268,12 +1357,20 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			var probeOrigin = seekGround ? new Vector2(animatedToe.X, owner.Position.Y) : animatedToe;
 			var probeCenter = (probeOrigin - Vector2.UnitY * FootProbeAbove * FootScale).RoundToPoint2();
 			var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
+			var terrainRelative = Settings.GaitFeetFollowTerrain && GaitActive && !seekGround;
 			if (owner.Game.TryFindSurface(owner, probe, Vector2.UnitY, FootProbeDistance * FootScale, out var hit) &&
-				hit.Normal.Y < -0.5f &&
-				(seekGround || MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance * FootScale))
+				hit.Normal.Y < -0.5f)
 			{
-				targetOffset = hit.Point.Y - animatedToe.Y;
-				plant.Planted = true;
+				if (terrainRelative)
+				{
+					targetOffset = hit.Point.Y - owner.Position.Y;
+					plant.Planted = animatedToe.Y + targetOffset >= hit.Point.Y - FootPlantedSlack;
+				}
+				else if (seekGround || MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance * FootScale)
+				{
+					targetOffset = hit.Point.Y - animatedToe.Y;
+					plant.Planted = true;
+				}
 			}
 		}
 
@@ -1318,12 +1415,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		Footstep?.Invoke(owner.Position + projectedPose[side == Side.Left ? leftLeg.Toe : rightLeg.Toe]);
 	}
 
-	void SolveLeg(Leg leg, Vector2 ankleTarget)
+	void SolveLeg(Leg leg, Vector2 ankleTarget) => SolveLeg(leg, ankleTarget,
+		Vector2.Distance(projectedPose[leg.Hip], projectedPose[leg.Knee]),
+		Vector2.Distance(projectedPose[leg.Knee], projectedPose[leg.Ankle]));
+
+	void SolveLeg(Leg leg, Vector2 ankleTarget, float upperLength, float lowerLength)
 	{
 		var hip = projectedPose[leg.Hip];
-		var animatedKnee = projectedPose[leg.Knee];
-		var upperLength = Vector2.Distance(hip, animatedKnee);
-		var lowerLength = Vector2.Distance(animatedKnee, projectedPose[leg.Ankle]);
 		var towardTarget = ankleTarget - hip;
 		var distance = towardTarget.Length();
 		if (distance <= 0.001f || upperLength <= 0.001f || lowerLength <= 0.001f)

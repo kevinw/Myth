@@ -9,6 +9,27 @@
     },
     "Mutant_Swiping": {
       "Ground": true
+    },
+    "Low_Crawl": {
+      "InPlace": "Linear"
+    },
+    "Falling_To_Roll": {
+      "InPlace": "Lock"
+    },
+    "Walking_Turn_180": {
+      "InPlace": "Linear"
+    },
+    "Running_Turn_180": {
+      "InPlace": "Lock",
+      "StripYaw": true
+    },
+    "Rope_Climb": {
+      "InPlace": "Lock",
+      "InPlaceVertical": "Linear"
+    },
+    "Run_To_Dive": {
+      "InPlace": "Lock",
+      "InPlaceVertical": "Lock"
     }
   }
 }

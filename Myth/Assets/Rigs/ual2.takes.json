@@ -63,6 +63,105 @@
     "Speed": 1,
     "FootIK": false
   },
+  "PlayerAir": {
+    "Clip": "Falling_Idle",
+    "Start": 0,
+    "End": 0.6833333,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerClimb": {
+    "Clip": "Rope_Climb",
+    "Start": 0,
+    "End": 2.5833333,
+    "Loop": true,
+    "Speed": 5,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerCrawl": {
+    "Clip": "Low_Crawl",
+    "Start": 0,
+    "End": 2.3333333,
+    "Loop": true,
+    "Speed": 3,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerDive": {
+    "Clip": "Run_To_Dive",
+    "Start": 0.72,
+    "End": 0.74,
+    "Loop": true,
+    "Speed": 0.1,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerJumpLand": {
+    "Clip": "Jump_Land",
+    "Start": 0,
+    "End": 0.7,
+    "Loop": false,
+    "Speed": 1.5,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerJumpStart": {
+    "Clip": "Jump_Start",
+    "Start": 0.33,
+    "End": 0.9,
+    "Loop": false,
+    "Speed": 2,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerRoll": {
+    "Clip": "Falling_To_Roll",
+    "Start": 0.42,
+    "End": 1.38,
+    "Loop": true,
+    "Speed": 1.4,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerRollStart": {
+    "Clip": "Falling_To_Roll",
+    "Start": 0.12,
+    "End": 0.42,
+    "Loop": false,
+    "Speed": 1.5,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerSkid": {
+    "Clip": "Running_Turn_180",
+    "Start": 0,
+    "End": 0.65,
+    "Loop": false,
+    "Speed": 1.6,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "Stomp": {
     "Clip": "Stomping",
     "Start": 0,

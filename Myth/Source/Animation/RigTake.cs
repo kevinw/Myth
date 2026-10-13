@@ -71,13 +71,20 @@ static class RigTakes
 	}
 
 #if EDITOR
+	// Live, unsaved: whatever plays this take picks it up next frame.
+	public static void Set(RigTake take)
+	{
+		EnsureLoaded();
+		takes[take.Name] = take;
+	}
+
 	public static void Save(RigTake take)
 	{
 		if (string.IsNullOrWhiteSpace(take.Name) || string.IsNullOrWhiteSpace(take.Clip))
 			throw new ArgumentException("Rig take name and clip are required.");
 		EnsureLoaded();
 		take = take with { Name = take.Name.Trim(), Speed = Math.Max(0.01f, take.Speed) };
-		takes[take.Name] = take;
+		Set(take);
 
 		var root = new JsonObject();
 		var names = new List<string>(takes.Keys);

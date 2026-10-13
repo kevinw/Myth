@@ -6,7 +6,7 @@ import re
 import sys
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Quaternion
 
 
 MIXAMO_BONE_MAP = {
@@ -113,6 +113,15 @@ def retarget(source_path, action_name, target_path, output_dir, profile, ground_
     bpy.ops.import_scene.gltf(filepath=target_path)
     target = next(obj for obj in bpy.data.objects if obj.type == "ARMATURE")
     grounded = profile.get("Ground", False)
+    # Strips horizontal root motion, which the game's physics supplies: "Linear" removes the clip's net drift
+    # (keeping its surges, so a loop stays a loop), "Lock" pins the pelvis over its first frame.
+    in_place = profile.get("InPlace")
+    # "Linear" removes net vertical drift too, e.g. a climb's rise, keeping each pull's surge; "Lock" pins the
+    # pelvis height, e.g. a leap the game's physics flies.
+    in_place_vertical = profile.get("InPlaceVertical")
+    # Counter-rotates every frame about the vertical by the hips' turn since the first frame, so a turning clip
+    # keeps its footwork and twist while the game owns facing.
+    strip_yaw = profile.get("StripYaw", False)
     target_ground_height = None
     if grounded:
         reference_action = bpy.data.actions.get(ground_reference_clip)
@@ -171,6 +180,20 @@ def retarget(source_path, action_name, target_path, output_dir, profile, ground_
     target_world_rotation_inverse = rotation(target.matrix_world).inverted()
     alignment = facing_alignment(source, source_bones, BONE_MAP, target)
 
+    def pelvis_head(frame):
+        scene.frame_set(frame)
+        source_head = source.matrix_world @ source.pose.bones[source_bones[BONE_MAP["pelvis"]]].head
+        return target_pelvis_origin + alignment @ (source_head - source_pelvis_origin) * translation_scale
+
+    def hips_rotation():
+        return alignment @ rotation(source.matrix_world @ source.pose.bones[source_bones[BONE_MAP["pelvis"]]].matrix) @ \
+            alignment.inverted()
+
+    scene.frame_set(first_frame)
+    first_hips = hips_rotation()
+    first_head = pelvis_head(first_frame)
+    drift = pelvis_head(last_frame) - first_head
+
     target.animation_data_create()
     action = bpy.data.actions.new(name)
     action.slots.new("OBJECT", target.name)
@@ -186,16 +209,30 @@ def retarget(source_path, action_name, target_path, output_dir, profile, ground_
             bone.matrix_basis.identity()
         bpy.context.view_layer.update()
 
+        unyaw = Quaternion()
+        if strip_yaw:
+            turn = hips_rotation() @ first_hips.inverted()
+            unyaw = Quaternion((turn.w, 0, 0, turn.z)).normalized().inverted()
         for target_name, source_base_name in BONE_MAP.items():
             source_name = source_bones[source_base_name]
             source_pose = rotation(source.matrix_world @ source.pose.bones[source_name].matrix)
-            delta = alignment @ source_pose @ source_rest[source_base_name].inverted() @ alignment.inverted()
+            delta = unyaw @ alignment @ source_pose @ source_rest[source_base_name].inverted() @ alignment.inverted()
             desired = target_world_rotation_inverse @ delta @ target_rest[target_name]
             pose_bone = target.pose.bones[target_name]
             head = pose_bone.head.copy()
             if target_name == "pelvis":
+                progress = (frame - first_frame) / max(1, last_frame - first_frame)
                 source_head = source.matrix_world @ source.pose.bones[source_name].head
                 head = target_pelvis_origin + alignment @ (source_head - source_pelvis_origin) * translation_scale
+                if in_place == "Lock":
+                    head.x, head.y = first_head.x, first_head.y
+                elif in_place == "Linear":
+                    head.x -= drift.x * progress
+                    head.y -= drift.y * progress
+                if in_place_vertical == "Linear":
+                    head.z -= drift.z * progress
+                elif in_place_vertical == "Lock":
+                    head.z = first_head.z
             pose_bone.matrix = Matrix.Translation(head) @ desired.to_matrix().to_4x4()
             bpy.context.view_layer.update()
 

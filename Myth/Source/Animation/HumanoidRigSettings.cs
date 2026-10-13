@@ -24,12 +24,20 @@ public sealed class HumanoidRigSettings
 	[InspectorGroup("Animation")] public bool SeedAnimationPhase;
 	[I(0, 2)] public float SecondaryMotion;
 	[I(0, 2)] public float HeadSecondaryMotion = 1;
-	[I(1, 60)] public float VisualFPS = 20;
+	[I(1, 240)] public float VisualFPS = 20; // at or above the frame rate, samples once per frame
 
 	[I(0, 1), InspectorGroup("Motion")] public float GaitAsymmetry;
 	[I(0, 2)] public float PlantResponse;
 	[I(0, 1)] public float TrackingLean;
+	[I(0, 1)] public float VelocityLean;
+	[I(0, 1)] public float SquishResponse;
+	[I(0.02f, 0.5f)] public float TurnDuration = 0.28f;
 	[I(0, 1)] public float TurnInertia;
+	// 0 = joints spring toward the animation, smoothing away fast motion like a quick run's bob; 1 = joints ride
+	// the animation and the springs only carry reactions (landings, hits, recoil).
+	[I(0, 1)] public float RagdollCarry;
+	// While walking, feet keep the clip's lift and only shift by the terrain under them, instead of snapping to it.
+	[NoSerialize] public bool GaitFeetFollowTerrain;
 	[I(0, 1)] public float EyeMotion;
 	[NoSerialize] public bool TurnWhileMoving;
 

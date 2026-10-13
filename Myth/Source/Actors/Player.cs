@@ -637,6 +637,7 @@ public abstract partial class Pawn : Actor
 	{
 		RumbleLanding(previousVelocity.Y);
 		Squish = new (1.5f, 0.70f);
+		rigVisual?.Land(previousVelocity.Y * RigLandingScale);
 		TryStartRoll(previousVelocity);
 	}
 
@@ -1260,7 +1261,7 @@ public abstract partial class Pawn : Actor
 		if (IsCarrying || regrabTimer > 0)
 			return false;
 
-		var center = Position + Hitbox.Rect.Center;
+		var center = Position + RopeGrip;
 		foreach (var actor in Game.Actors)
 		{
 			if (actor is not Rope rope || !rope.TryGrab(center, RopeGrabRadius, out var chain, out var index))
@@ -1361,12 +1362,12 @@ public abstract partial class Pawn : Actor
 		if (ropePumpDirection != 0)
 			Skew = ropePumpDirection * RopePumpSkew;
 
-		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
+		// Hang with the grip at the rope point; step there collision-aware so a swing scrapes
 		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,
 		// room teleport) means the attachment is no longer sane -- let go.
 		var riderPoint = rope.Sample(chain, climbIndex);
 		UpdateRopeCreak(rope, chain, riderPoint);
-		var target = riderPoint - Hitbox.Rect.Center;
+		var target = riderPoint - RopeGrip;
 		if ((target - Position).LengthSquared() > RopeDetachSnapDistance * RopeDetachSnapDistance)
 		{
 			ExitClimb();
@@ -1764,6 +1765,29 @@ public partial class Player : Pawn, INeuralTextureAgent
 	[InspectorGroup("Rig")] public bool RigDraw;
 	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = DefaultRig();
 	protected override HumanoidRigSettings? DrawRig => RigDraw ? Rig : null;
+	static float RigLookRange => 96f;
+	static Vector2 RigLookUp => new(24, -96);
+
+	protected override Vector2? RigLookTarget
+	{
+		get
+		{
+			if (IsPlaying("look_up"))
+				return Position + RigLookUp * new Vector2((int)Facing, 1);
+			Vector2? nearest = null;
+			var nearestDistance = RigLookRange * RigLookRange;
+			foreach (var actor in Game.Actors)
+			{
+				if (!actor.Mask.Has(Masks.Enemy))
+					continue;
+				var center = (actor.Hitbox.Rect + actor.Position).CenterF;
+				var distance = Vector2.DistanceSquared(center, Position);
+				if (distance < nearestDistance)
+					(nearest, nearestDistance) = (center, distance);
+			}
+			return nearest;
+		}
+	}
 	float deathTimer;
 	public Controls Controls => Game.Controls;
 
@@ -2299,7 +2323,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	void UpdateFootsteps()
 	{
-		if (State != States.Normal || !grounded || !IsPlaying("walk") && !IsPlaying("run") && !IsPlaying("run_start"))
+		if (RigDrawing || State != States.Normal || !grounded || !IsPlaying("walk") && !IsPlaying("run") && !IsPlaying("run_start"))
 		{
 			footstepFrame = -1;
 			return;
@@ -2314,10 +2338,11 @@ public partial class Player : Pawn, INeuralTextureAgent
 		var animation = Animation;
 		var localFrame = frame - animation.FrameStart;
 		if (localFrame >= 0 && localFrame % 6 == 0)
-		{
-			AudioEvent("footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
-		}
+			PlayFootstep();
 	}
+
+	void PlayFootstep() => AudioEvent("footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
+	protected override void OnRigFootstep(Vector2 at) => PlayFootstep();
 
 	bool attackUp = false;
 

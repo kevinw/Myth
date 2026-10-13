@@ -1,0 +1,13 @@
+{
+  "Pieces": [
+    { "Bones": "Thigh, Shin", "Count": 3, "Width": 1.15, "Color": "e8f4ff" },
+    { "Bones": "UpperArm", "Count": 2, "Width": 1.15, "Color": "e8f4ff" },
+    { "Bones": "Waist", "From": 0.1, "To": 0.55, "Width": 1.5, "Color": "ff9f6b" },
+    { "Kind": "Stud", "Bones": "Waist", "From": 0.15, "To": 0.5, "Width": 0.6, "Color": "ffe08a" },
+    { "Bones": "Hand", "Width": 1.6, "Color": "dff3ff" },
+    { "Bones": "Foot", "Width": 1.3, "Color": "ff9f6b" },
+    { "Bones": "Neck", "To": 0.5, "Width": 1.7, "Color": "ffe08a" },
+    { "Kind": "Spikes", "Bones": "Neck", "To": 0.5, "Count": 2, "Width": 1.1, "Length": 0.7, "Color": "ff9f6b" },
+    { "Kind": "Spikes", "Bones": "Neck", "To": 0.5, "Count": 2, "Width": 1.1, "Length": -0.7, "Color": "ff9f6b" }
+  ]
+}

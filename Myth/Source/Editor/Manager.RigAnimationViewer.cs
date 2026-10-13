@@ -13,6 +13,7 @@ public partial class Manager
 	bool rigAnimationViewerInitialized;
 	string rigAnimationSearch = "";
 	RigPuppet? rigAnimationPreviewActor;
+	Pawn? rigPreviewPawn;
 	string? rigTakeDraftClip;
 	string rigTakeName = "";
 	string rigTakeStatus = "";
@@ -52,14 +53,21 @@ public partial class Manager
 			rigAnimationPreviewActor = selected;
 			rigAnimationPreviewActor?.BeginAnimationPreview();
 		}
+		if (rigPreviewPawn != null && SelectedRigPawn() != rigPreviewPawn)
+		{
+			rigPreviewPawn.PreviewRigTake(null);
+			rigPreviewPawn = null;
+		}
 
 		if (visible)
 		{
 			if (rigAnimationPreviewActor is { } rig)
 				DrawRigAnimationControls(rig);
+			else if (SelectedRigPawn() is { } pawn)
+				DrawPawnRigTakeControls(pawn);
 			else
 			{
-				ImGui.TextWrapped("Select a RigPuppet in the game view.");
+				ImGui.TextWrapped("Select a RigPuppet in the game view, or a rig-drawn pawn while playing to tune its takes live.");
 				ImGui.Spacing();
 				ImGui.TextDisabled("The preview runs on the live actor so projection, lighting, IK, and blending match the game.");
 			}
@@ -83,6 +91,46 @@ public partial class Manager
 		return game.GetActorById(id) as RigPuppet;
 	}
 
+	// The player is spawned, not authored, so it's inspected by reference rather than through its room spec.
+	Pawn? SelectedRigPawn()
+		=> playing && game is { } g &&
+			(liveInspectedSpawned ?? (liveSelectedActorId is { } id ? g.GetActorById(id) : null)) is Pawn { RigVisual: not null } pawn &&
+			g.Actors.Contains(pawn) && !g.destroying.Contains(pawn) ? pawn : null;
+
+	// Tunes the takes a pawn plays during normal gameplay: edits apply live (RigTakes.Set) until saved.
+	void DrawPawnRigTakeControls(Pawn pawn)
+	{
+		var playingName = pawn.RigPlaying;
+		ImGui.TextUnformatted($"Playing: {playingName}");
+		if (RigTakes.TryGet(playingName, out var current) && current.Name != rigTakeName)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Edit"))
+				LoadRigTakeDraft(null, current);
+		}
+		if (rigTakeDraftClip is { } clipName && pawn.RigVisual!.TryGetClip(clipName, out var clip))
+		{
+			if (ImGui.Button(pawn.RigPreview == rigTakeName ? "Replay on pawn" : "Preview on pawn"))
+			{
+				RigTakes.Set(RigTakeDraft());
+				pawn.PreviewRigTake(rigTakeName);
+				rigPreviewPawn = pawn;
+			}
+			if (pawn.RigPreview != null)
+			{
+				ImGui.SameLine();
+				if (ImGui.Button("Stop preview"))
+					pawn.PreviewRigTake(null);
+			}
+			DrawRigTakeControls(null, clip);
+		}
+		else
+		{
+			ImGui.TextDisabled("Play a take (roll, skid, climb...) and hit Edit, or pick one:");
+			DrawSavedTakeCombo(null);
+		}
+	}
+
 	bool UpdateRigAnimationPreviewInEditor()
 	{
 		if (playing || rigAnimationPreviewActor is not { AnimationPreviewEnabled: true } rig)
@@ -95,6 +143,8 @@ public partial class Manager
 	{
 		rigAnimationPreviewActor?.EndAnimationPreview();
 		rigAnimationPreviewActor = null;
+		rigPreviewPawn?.PreviewRigTake(null);
+		rigPreviewPawn = null;
 	}
 
 	void DrawRigAnimationControls(RigPuppet rig)
@@ -169,7 +219,7 @@ public partial class Manager
 		if (ImGui.SliderFloat("Speed", ref playbackSpeed, 0.1f, 3, "%.2fx"))
 			rig.PlaybackSpeed = playbackSpeed;
 		var visualFps = rig.Rig.VisualFPS;
-		if (ImGui.SliderFloat("Visual FPS", ref visualFps, 1, 60, "%.0f"))
+		if (ImGui.SliderFloat("Visual FPS", ref visualFps, 1, 240, "%.0f"))
 			rig.Rig.VisualFPS = visualFps;
 
 		ImGui.SeparatorText("Procedural layers");
@@ -234,16 +284,21 @@ public partial class Manager
 		}
 	}
 
-	void DrawRigTakeControls(RigPuppet rig, OzzRig.Clip clip)
+	void DrawSavedTakeCombo(RigPuppet? rig)
+	{
+		if (!ImGui.BeginCombo("Saved take", rigTakeName))
+			return;
+		foreach (var take in RigTakes.All)
+			if (ImGui.Selectable($"{take.Name}  ({take.Clip})"))
+				LoadRigTakeDraft(rig, take);
+		ImGui.EndCombo();
+	}
+
+	// rig == null tunes the take live for whoever plays it (a pawn in gameplay) instead of previewing on a puppet.
+	void DrawRigTakeControls(RigPuppet? rig, OzzRig.Clip clip)
 	{
 		ImGui.SeparatorText("Take");
-		if (ImGui.BeginCombo("Saved take", rigTakeName))
-		{
-			foreach (var take in RigTakes.All)
-				if (ImGui.Selectable($"{take.Name}  ({take.Clip})"))
-					LoadRigTakeDraft(rig, take);
-			ImGui.EndCombo();
-		}
+		DrawSavedTakeCombo(rig);
 		ImGui.SetNextItemWidth(-1);
 		ImGui.InputText("Name", ref rigTakeName, 128);
 
@@ -260,13 +315,26 @@ public partial class Manager
 		if (ImGui.SliderFloat("Take speed", ref speed, 0.1f, 3, "%.2fx"))
 		{
 			rigTakeSpeed = speed;
-			rig.PlaybackSpeed = speed;
+			if (rig != null)
+				rig.PlaybackSpeed = speed;
+			else
+				RigTakes.Set(RigTakeDraft());
 		}
 		if (ImGui.Checkbox("Take loop", ref rigTakeLoop))
-			rig.AnimationPreviewLooping = rigTakeLoop;
+		{
+			if (rig != null)
+				rig.AnimationPreviewLooping = rigTakeLoop;
+			else
+				RigTakes.Set(RigTakeDraft());
+		}
 		ImGui.SameLine();
 		if (ImGui.Checkbox("Take foot IK", ref rigTakeFootIK))
-			rig.SetAnimationPreviewIK(rigTakeFootIK);
+		{
+			if (rig != null)
+				rig.SetAnimationPreviewIK(rigTakeFootIK);
+			else
+				RigTakes.Set(RigTakeDraft());
+		}
 
 		var lean = rigTakeUpperBodyLeanDegrees;
 		if (ImGui.SliderFloat("Upper-body lean", ref lean, -20, 20, "%.1f deg"))
@@ -287,9 +355,10 @@ public partial class Manager
 			PreviewRigTakeDraft(rig);
 		}
 
-		if (ImGui.Button("Preview take"))
+		if (rig != null && ImGui.Button("Preview take"))
 			PreviewRigTakeDraft(rig);
-		ImGui.SameLine();
+		if (rig != null)
+			ImGui.SameLine();
 		if (ImGui.Button("Save take"))
 		{
 			try
@@ -301,6 +370,14 @@ public partial class Manager
 			{
 				rigTakeStatus = e.Message;
 			}
+		}
+		if (rig == null)
+		{
+			if (rigTakeStatus.Length > 0)
+				ImGui.TextDisabled(rigTakeStatus);
+			else
+				ImGui.TextDisabled("Edits play live; Save take to keep them.");
+			return;
 		}
 		ImGui.SameLine();
 		if (ImGui.Button("Copy call"))
@@ -349,7 +426,7 @@ public partial class Manager
 		}
 	}
 
-	void LoadRigTakeDraft(RigPuppet rig, RigTake take)
+	void LoadRigTakeDraft(RigPuppet? rig, RigTake take)
 	{
 		rigTakeDraftClip = take.Clip;
 		rigTakeName = take.Name;
@@ -362,10 +439,16 @@ public partial class Manager
 		rigTakeLoop = take.Loop;
 		rigTakeFootIK = take.FootIK;
 		rigTakeStatus = "";
-		rig.PreviewTake(take);
+		rig?.PreviewTake(take);
 	}
 
-	void PreviewRigTakeDraft(RigPuppet rig) => rig.PreviewTake(RigTakeDraft());
+	void PreviewRigTakeDraft(RigPuppet? rig)
+	{
+		if (rig != null)
+			rig.PreviewTake(RigTakeDraft());
+		else
+			RigTakes.Set(RigTakeDraft());
+	}
 
 	RigTake RigTakeDraft()
 		=> new(rigTakeName, rigTakeDraftClip!, rigTakeStart, rigTakeEnd,
