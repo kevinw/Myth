@@ -101,6 +101,17 @@
       "BranchLength": 16.835,
       "Points": [[-24, -88],[-16, -16],[-32, -16],[-40, 8]
       ]
+    },
+    {
+      "Id": "3d63c44bb20eaba5",
+      "Type": "CurveRibbon",
+      "Position": [151, 114],
+      "Tint": "111113",
+      "WobbleIntensity": 11.111,
+      "WobbleFrequency": 0.747,
+      "EndWidth": 0.438,
+      "Points": [[24, 80],[32, 48],[8, 24],[-32, -8],[-56, -32],[-72, -88]
+      ]
     }
   ]
 }
