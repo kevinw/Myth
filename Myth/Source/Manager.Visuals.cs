@@ -38,6 +38,11 @@ sealed class VisualTuning
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
+	public float BackgroundRimLightStrength = 0.18f;
+	public float BackgroundLightExposure = 1.0f;
+	// Light above the knee rolls off toward the ceiling (hue-preserving) instead of clipping per channel.
+	public float LightShoulderKnee = 0.9f;
+	public float LightShoulderCeiling = 1.3f;
 	public float DitherStrength = 1.0f;
 	// The noise value that leaves the light unchanged: at the texture's mean, noise adds texture without shifting exposure.
 	public float LightNoisePivot = 0.48f;
@@ -160,6 +165,10 @@ public partial class Manager
 			VisualKnob("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1);
 			VisualKnob("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
 			VisualKnob("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
+			VisualKnob("BG Dark Rim", ref Visuals.BackgroundRimLightStrength, VisualDefaults.BackgroundRimLightStrength, 0, 0.5f);
+			VisualKnob("BG Exposure", ref Visuals.BackgroundLightExposure, VisualDefaults.BackgroundLightExposure, 0, 2);
+			VisualKnob("Shoulder Knee", ref Visuals.LightShoulderKnee, VisualDefaults.LightShoulderKnee, 0.2f, 2);
+			VisualKnob("Shoulder Ceiling", ref Visuals.LightShoulderCeiling, VisualDefaults.LightShoulderCeiling, 0.2f, 3);
 			VisualKnob("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
 			VisualKnob("Noise Pivot", ref Visuals.LightNoisePivot, VisualDefaults.LightNoisePivot, 0, 1);
 			Knobs.EndFlow();

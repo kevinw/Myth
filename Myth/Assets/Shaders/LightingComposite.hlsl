@@ -27,6 +27,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 NormalDitherSettings; // x = slope boost, y = unused, z = actor tile field populated, w = rim strength
     float4 LightNoiseSettings; // x = strength, y = pivot (noise value that leaves the light unchanged)
     float4 LightNoiseTransform; // xy = uv per world pixel, zw = drift offset in uv
+    float4 LightResponse; // x = background exposure, y = background rim strength, z = shoulder knee, w = shoulder ceiling
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -333,8 +334,8 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 // Identity below the knee, then rolls the brightest channel off toward the ceiling, preserving hue.
 float3 light_shoulder(float3 light)
 {
-    const float knee = 0.9;
-    const float ceiling = 1.3;
+    float knee = LightResponse.z;
+    float ceiling = max(LightResponse.w, knee + 0.001);
     float peak = max(light.r, max(light.g, light.b));
     if (peak <= knee)
         return light;
@@ -343,11 +344,11 @@ float3 light_shoulder(float3 light)
 }
 
 float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
-    float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
+    float4 tile_field, float dither_mask, float normal_slope, float detail_priority, float rim_strength)
 {
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
-    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
+    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * rim_strength;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
     color = lerp(color, emissive.rgb, 1.0 - emissive.a); // emissive alpha is transmittance
     return float4(saturate(color), scene.a);
@@ -366,6 +367,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 sample = target_uv((art_pixel + 0.5) * zoom / TextureSizeCamera.xy);
     float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
     float4 background_light = LightTexture.Sample(LightSampler, sample);
+    background_light.rgb *= LightResponse.x;
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
@@ -414,13 +416,13 @@ float4 fragment_main(VsOutput input) : SV_Target0
         background_light.rgb *= max(0.0, 1.0 + LightNoiseSettings.x * (noise - LightNoiseSettings.y));
     }
 
+    background_light.rgb = light_shoulder(background_light.rgb);
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
-        background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
+        background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority,
+        LightResponse.y);
     background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
     float4 foreground_light = ForegroundLightTexture.Sample(ForegroundLightSampler, sample);
-#if 1
     foreground_light.rgb = light_shoulder(foreground_light.rgb);
-#endif
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         foreground_light,
@@ -430,6 +432,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
         tile_field,
         dither_mask,
         normal_slope,
-        0.5);
+        0.5,
+        NormalDitherSettings.w);
     return saturate(foreground + background * (1.0 - foreground.a));
 }

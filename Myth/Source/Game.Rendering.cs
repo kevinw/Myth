@@ -1121,7 +1121,7 @@ public sealed partial class GameView
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[32 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[36 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1157,6 +1157,10 @@ public sealed partial class GameView
 		uniforms[i++] = 1 / noiseSize.Y;
 		uniforms[i++] = noiseOffset.X - MathF.Floor(noiseOffset.X);
 		uniforms[i++] = noiseOffset.Y - MathF.Floor(noiseOffset.Y);
+		uniforms[i++] = Manager.Visuals.BackgroundLightExposure;
+		uniforms[i++] = Manager.Visuals.BackgroundRimLightStrength;
+		uniforms[i++] = Manager.Visuals.LightShoulderKnee;
+		uniforms[i++] = Manager.Visuals.LightShoulderCeiling;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 

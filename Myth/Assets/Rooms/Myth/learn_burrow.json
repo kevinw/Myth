@@ -174,7 +174,8 @@
       "Position": [40, 120],
       "Intensity": 0.85,
       "Radius": 60.0,
-      "FlickerFrequency": 0.8
+      "FlickerFrequency": 0.8,
+      "Height": 5.636
     },
     {
       "Id": "c3d52eaaf4406d03",

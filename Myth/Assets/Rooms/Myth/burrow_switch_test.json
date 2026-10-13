@@ -56,7 +56,9 @@
       "Type": "BurrowLine",
       "Position": [98, 121],
       "BurrowSwitches": "Last",
-      "TargetActorIds": ["424784db9cdc0b11"],
+      "TargetActorIds": [
+        "424784db9cdc0b11"
+      ],
       "Points": [[-20, 16],[-56, 16],[-56, 48]
       ]
     },

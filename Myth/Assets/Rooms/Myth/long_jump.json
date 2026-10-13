@@ -87,10 +87,10 @@
       "Position": [56, 28],
       "FlickerFrequency": 0.1,
       "FlickerIntensity": 0.13,
-      "Height": 20.6,
       "Radius": 203.148,
       "LightColor": "FAC864",
-      "Intensity": 0.606
+      "Intensity": 0.606,
+      "Height": 5.818
     },
     {
       "Id": "885a0ba804dd8fc3",

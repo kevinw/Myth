@@ -170,7 +170,8 @@
     {
       "Id": "c0b984c6af0f8c02",
       "Type": "Light",
-      "Position": [260, 324]
+      "Position": [260, 324],
+      "Height": 7.636
     },
     {
       "Id": "b81078ef57220a85",
