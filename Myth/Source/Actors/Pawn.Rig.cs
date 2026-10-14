@@ -88,7 +88,7 @@ public abstract partial class Pawn
 		"hurt" => "Hit_Knockback",
 		"sword" => "Sword_Regular_A",
 		_ when animation.StartsWith("jump") || animation is "dive" => "PlayerAir",
-		_ when animation.Contains("attack") => "Sword_Regular_A",
+		_ when animation.Contains("attack") => "PlayerAttack",
 		_ => null,
 	};
 
@@ -338,6 +338,23 @@ public abstract partial class Pawn
 		rigPreview = take;
 		rigRestart |= take != null;
 	}
+
+	// Attacking, the hat swipes in the sword hand: brim in the palm, crown out along torso -> hand. Local to the pawn,
+	// with the hat's rotation; null when drawing the sprite or not attacking.
+	protected (Vector2 Position, float Rotation)? RigHatInHand
+	{
+		get
+		{
+			if (rigVisual == null || rigPlaying != "PlayerAttack")
+				return null;
+			var palm = rigVisual.RightPalm;
+			var outward = (palm - rigVisual.TorsoCenter).Normalized(-Vector2.UnitY);
+			return (palm, MathF.Atan2(outward.X, -outward.Y));
+		}
+	}
+
+	// A new action restarts its take even when the same one is already playing (back-to-back attacks).
+	protected void RestartRigTake() => rigRestart = true;
 
 	// Where a hat sits on the rig's head, local to the pawn; null when drawing the sprite.
 	protected Vector2? RigHatPosition => rigVisual == null ? null

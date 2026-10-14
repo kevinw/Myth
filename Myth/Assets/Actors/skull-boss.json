@@ -21,6 +21,7 @@
   "LaserSurfaceId": "allegation_pleach",
   "HeadSize": 0.1079,
   "HeadSpriteName": "skull_rotate",
+  "CostumeId": "skull-pants",
   "FloatingWaveSpeed": 164.558,
   "FloatingWaveThickness": 6.343,
   "StompWaveSpeed": 163.761,

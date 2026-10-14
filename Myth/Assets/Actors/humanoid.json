@@ -1,13 +1,13 @@
 {
   "Name": "Humanoid",
-  "VisualFPS": 240,
+  "VisualFPS": 24,
   "EyeSize": 0.5,
   "NeckSize": 0.25,
   "BicepSize": 0.083,
   "ThighSize": 0.125,
-  "TurnInertia": 0.3,
+  "TurnInertia": 0,
   "RagdollCarry": 1,
-  "TurnDuration": 0.12,
+  "TurnDuration": 0.05,
   "VelocityLean": 0.6,
   "SquishResponse": 0.6,
   "SkinMode": "Solid",
@@ -21,5 +21,9 @@
   "TorsoSize": 0.141,
   "ChestSize": 0.116,
   "HeadSize": 0.122,
-  "PixelsPerMeter": 14
+  "PixelsPerMeter": 14,
+  "InertialBlendTime": 0.1,
+  "LandingHold": 0.06,
+  "PixelSnap": true,
+  "KeyEvents": true
 }

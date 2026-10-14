@@ -169,6 +169,16 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	OzzRig rig = null!;
 	OzzAnimator animator = null!;
 	Vector3[] sampledPose = [];
+	Vector3[] lastSampledPose = [];
+	Vector3[] inertialOffset = [];
+	float inertialElapsed;
+	float inertialDuration;
+	bool inertialPending;
+	bool inertialActive;
+	bool landingHoldPending;
+	// KeyEvents: a clip change or a turn keys the pose now; the stepping holds between them.
+	bool keyPending;
+	Signs keyFacing;
 	Quaternion[] sampledRotations = [];
 	Vector3[] ragdollPose = [];
 	Vector3[] ragdollCarriedPose = [];
@@ -289,6 +299,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float LandingMinSpeed => 32f;
 	static float LandingInertia => 1f;
 	static float LandingCompressionTime => 0.0225f;
+	static float LandingHoldFullSpeed => 8f; // meters/second of landing speed that earns the whole LandingHold
 	static int RagdollConstraintIterations => 4;
 	static float TurnStartSpeed => 2f;
 	static float FootProbeAbove => 4f;
@@ -304,8 +315,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
 	static float VelocityLeanMaxAngle => 0.35f;
-	static float VelocityLeanFullSpeed => 140f;
-	static float VelocityLeanFullAcceleration => 1600f;
+	// Leans read input when they follow acceleration (immediate) more than velocity (which lags it).
+	static float VelocityLeanFullSpeed => 280f;
+	static float VelocityLeanFullAcceleration => 900f;
 	static float VelocityLeanSpring => 140f;
 	static float VelocityLeanDamping => 9f;
 	static float LookPoseResponse => 6f;
@@ -362,6 +374,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
 	public Vector2 LeftHandWorldPosition => owner.Position + projectedPose[leftPalm];
 	public Vector2 RightHandWorldPosition => owner.Position + projectedPose[rightPalm];
+	public Vector2 RightPalm => projectedPose[rightPalm];
+	public Vector2 TorsoCenter => (projectedPose[pelvis] + projectedPose[neck]) * 0.5f;
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 	public float PoseJostlePixels;
 
@@ -379,6 +393,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (Settings.SeedAnimationPhase)
 			animator.SetTime(animator.ActiveClip.Duration * animationPhase);
 		sampledPose = new Vector3[rig.JointCount];
+		lastSampledPose = new Vector3[rig.JointCount];
+		inertialOffset = new Vector3[rig.JointCount];
 		sampledRotations = new Quaternion[rig.JointCount];
 		ragdollPose = new Vector3[rig.JointCount];
 		ragdollCarriedPose = new Vector3[rig.JointCount];
@@ -514,8 +530,22 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		SetTakeModifierTargets(0, 1, 1);
 		var startTime = seededPhase && !string.Equals(animator.ActiveClip.Name, name, StringComparison.OrdinalIgnoreCase)
 			? rig.GetClip(name).Duration * animationPhase : 0;
-		var transition = blend ? (blendDuration >= 0 ? blendDuration : ClipBlendDuration) : 0;
+		var transition = Transition(blend ? (blendDuration >= 0 ? blendDuration : -1) : 0);
 		animator.Play(name, transition, restart, startTime);
+	}
+
+	// The animator's cross-fade for a clip change; with an inertial blend, none, and the switch is eased out here.
+	// requested < 0 means the default.
+	float Transition(float requested)
+	{
+		keyPending = true;
+		if (requested == 0)
+			return 0;
+		if (Settings.InertialBlendTime <= 0)
+			return requested > 0 ? requested : ClipBlendDuration;
+		inertialPending = true;
+		inertialDuration = requested > 0 ? requested : Settings.InertialBlendTime;
+		return 0;
 	}
 
 	public void Play(RigTake take, float blendDuration = -1, bool restart = true)
@@ -525,7 +555,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var start = Math.Clamp(take.Start, 0, clip.Duration);
 		var end = Math.Clamp(take.End, start, clip.Duration);
 		PlaybackSpeed = Math.Max(0.01f, take.Speed);
-		animator.Play(take.Clip, start, end, blendDuration >= 0 ? blendDuration : ClipBlendDuration, restart);
+		animator.Play(take.Clip, start, end, Transition(blendDuration), restart);
 	}
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true, bool seekGround = false)
@@ -555,7 +585,15 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			UpdatePose(grounded, footIK, seekGround);
 			return;
 		}
+		keyPending |= owner.Facing != keyFacing;
+		keyFacing = owner.Facing;
 		var ticks = Math.Min((int)(visualAccumulator / step), 4);
+		if (ticks <= 0 && keyPending && Settings.KeyEvents)
+		{
+			ticks = 1;
+			visualAccumulator = step;
+		}
+		keyPending = false;
 		if (ticks <= 0)
 		{
 			if (!advance && poseDirty)
@@ -646,8 +684,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	public void Land(float speed)
 	{
-		if (speed >= LandingMinSpeed)
-			pendingLandingSpeed = MathF.Max(pendingLandingSpeed, speed);
+		if (speed < LandingMinSpeed)
+			return;
+		pendingLandingSpeed = MathF.Max(pendingLandingSpeed, speed);
+		landingHoldPending = Settings.LandingHold > 0;
 	}
 
 	public void Freeze(float duration) => freezeRemaining = MathF.Max(freezeRemaining, duration);
@@ -786,6 +826,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
+		ApplyInertialBlend();
 		UpdateLookPose();
 		ApplyTrackingLean();
 		UpdateRagdoll();
@@ -806,10 +847,37 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 		else
 			ResetFeet();
+		if (Settings.PixelSnap)
+			for (var i = 0; i < projectedPose.Length; i++)
+				projectedPose[i] = projectedPose[i].Round();
 		SortBones();
 		UpdateWires();
 		UpdateHeadLook();
 		UpdateEye();
+	}
+
+	// At a clip switch the old pose becomes an offset on the new one, eased out with a fast start: most of the change
+	// shows in the first frames (crisp), the rest settles (no pop). A switch mid-blend starts from what was shown.
+	void ApplyInertialBlend()
+	{
+		if (inertialPending && ragdollReady)
+		{
+			for (var i = 0; i < sampledPose.Length; i++)
+				inertialOffset[i] = lastSampledPose[i] - sampledPose[i];
+			inertialElapsed = 0;
+			inertialActive = true;
+		}
+		inertialPending = false;
+		if (inertialActive)
+		{
+			inertialElapsed += visualDelta;
+			var remaining = 1 - Math.Clamp(inertialElapsed / MathF.Max(inertialDuration, 0.0001f), 0, 1);
+			var weight = remaining * remaining * remaining;
+			for (var i = 0; i < sampledPose.Length; i++)
+				sampledPose[i] += inertialOffset[i] * weight;
+			inertialActive = remaining > 0;
+		}
+		sampledPose.CopyTo(lastSampledPose, 0);
 	}
 
 	void UpdateHeadLook()
@@ -1220,6 +1288,11 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					ragdollPose[i].Y -= impactSpeed * LandingCompressionTime * height;
 					ragdollVelocity[i].Y -= impactSpeed * LandingInertia * height;
 				}
+			// Show the compressed contact pose, then hold it: the next updates freeze, harder landings longer.
+			if (landingHoldPending)
+				freezeRemaining = MathF.Max(freezeRemaining,
+					Settings.LandingHold * Math.Clamp(impactSpeed / LandingHoldFullSpeed, 0, 1));
+			landingHoldPending = false;
 			pendingLandingSpeed = 0;
 		}
 
@@ -1509,6 +1582,19 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			? Settings.CoreColor
 			: Color.Lerp(Settings.FarColor, Settings.NearColor, depth);
 
+	// Costume shades with depth like the bone under it: the palette's far/near ratio at that depth, so far-side
+	// clothing darkens and shifts hue as much as the limb does. Bones on the pelvis take the flat core color.
+	Color CostumeShade(Bone bone)
+	{
+		if (bone.From == pelvis || bone.To == pelvis)
+			return Color.White;
+		static float Ratio(byte far, byte near) => near == 0 ? 1 : MathF.Min(1, far / (float)near);
+		var near = Settings.NearColor;
+		var far = Settings.FarColor;
+		return Color.Lerp(new Color(Ratio(far.R, near.R), Ratio(far.G, near.G), Ratio(far.B, near.B), 1f), Color.White,
+			BoneRenderDepth(bone));
+	}
+
 	float BoneWidth(Bone bone) => Settings.PixelsPerMeter * bone.Part switch
 	{
 		Part.Torso => Settings.TorsoSize,
@@ -1732,7 +1818,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			switch (item.Kind)
 			{
 				case RigDrawKind.Costume:
-					DrawCostume(batcher, item, neuralBoneUVs[item.Index], tint,
+					DrawCostume(batcher, item, neuralBoneUVs[item.Index], Multiply(tint, CostumeShade(bones[item.Index])),
 						rimmed ? Color.Transparent : Settings.OutlineColor, skin);
 					break;
 				case RigDrawKind.Bone:

@@ -72,6 +72,16 @@
 
 Gait/sprint rates, `RigRollMinRate`, `RigLandingScale`, head-look turn/rate, `RigSkidYawRelease`, `RigRopeGripHeight` (meters), `RigCrawlLift`, `RigDiveFullAngleSpeed` / `RigDiveAngleResponse`. Settings that are worth opening in the inspector: `OutlineMode` (pawns use `Silhouette`: one rim, plus `FrontLimbOutline` where a limb passes in front of the pelvis by `FrontLimbDepth`), `VelocityLean`, `SquishResponse`, `TurnDuration`, `RagdollCarry`, `VisualFPS`.
 
+## Feel (Humanoid prefab)
+
+- `InertialBlendTime` (0.1): a clip change shows the new clip at once, with the old pose as an offset eased out with a fast start (inertialization). Explicit blend durations in `Pawn.Rig` (dive 0.3, landing out of a dive 0.08) become the inertial duration. 0 falls back to the smoothstep cross-fade (puppets).
+- `VisualFPS` 24 plus `KeyEvents`: poses step at 24 fps like keyed animation, but a clip change or a turn keys a pose on its own frame, so stepping never delays a reaction.
+- `TurnDuration` 0.05 with no `TurnInertia`: close to a sprite's instant flip.
+- `LandingHold` (0.06s at 8 m/s of impact, less for softer landings): the compressed contact pose holds, then recovers.
+- `PixelSnap`: drawn joints round to whole pixels, so a small figure doesn't shimmer.
+- Lean is weighted toward acceleration (`VelocityLeanFullSpeed`/`FullAcceleration` in the rig), so it reacts on the input frame.
+- Measured at 60 fps, jump and turn: about 9px of visible pose change within 1–2 frames, where the old settings showed about 2px for the first 4 frames.
+
 ## Open ideas
 
 Tilt the rig with the rope's angle on a swing. Distance-matched gait rates. Prone duck (avoids the duck↔crawl pop). `Leaning` / `Walking_Turn_180` are baked but unused. Footstep audio for Bud. Full clip preview on pawns (refactor `RigPuppet`'s preview into a shared helper).

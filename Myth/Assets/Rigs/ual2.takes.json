@@ -98,6 +98,17 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "PlayerAttack": {
+    "Clip": "Sword_Regular_A",
+    "Start": 0.1,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1.4,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "PlayerClimb": {
     "Clip": "Rope_Climb",
     "Start": 0,

@@ -25,6 +25,15 @@ public sealed class HumanoidRigSettings
 	[I(0, 2)] public float SecondaryMotion;
 	[I(0, 2)] public float HeadSecondaryMotion = 1;
 	[I(1, 240)] public float VisualFPS = 20; // at or above the frame rate, samples once per frame
+	// Stepped below the frame rate, a clip change or a turn still shows on its own frame instead of the next step.
+	public bool KeyEvents;
+	// 0 cross-fades clip changes. Above 0, a change shows the new clip at once and carries the old pose as an offset
+	// that eases out over this long (inertialization): the new action is fully on from its first frame, without a pop.
+	[I(0, 0.3f)] public float InertialBlendTime;
+	// A hard landing holds its compressed contact pose this long (scaled by impact) before recovering.
+	[I(0, 0.15f)] public float LandingHold;
+	// Rounds the drawn joints to whole pixels, so a small figure doesn't shimmer as they move between them.
+	public bool PixelSnap;
 
 	[I(0, 1), InspectorGroup("Motion")] public float GaitAsymmetry;
 	[I(0, 2)] public float PlantResponse;

@@ -1755,6 +1755,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static Vector2 HatDamping => new(32f, 12f);
 	static float HatMotionResponse => 0.22f;
 	static float HatMaxOffset => 3f;
+	static float HatReturnResponse => 16f; // after an attack, the hat flies from the hand back to the head this fast
 	static float HatAngularSpring => 80f;
 	static float HatAngularDamping => 12f;
 	static float HatAngularMotionResponse => 0.035f;
@@ -1814,6 +1815,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	Vector2 hatOffset;
 	Vector2 hatOffsetVelocity;
 	float hatAngle;
+	// 1 while the hat swipes in the sword hand, easing back to 0 as it returns to the head from where it was last held.
+	float hatInHand;
+	(Vector2 Position, float Rotation) hatHand;
 	float hatAngularVelocity;
 
 	public Player()
@@ -2105,6 +2109,13 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	void UpdateHat(Vector2 previousVelocity)
 	{
+		if (RigHatInHand is { } hand)
+		{
+			hatHand = hand;
+			hatInHand = 1;
+		}
+		else
+			hatInHand *= MathF.Exp(-HatReturnResponse * Time.Delta);
 		var velocityDelta = Vector2.Clamp(Velocity - previousVelocity, new(-HatMaxVelocityDelta), new(HatMaxVelocityDelta));
 		hatOffsetVelocity -= velocityDelta * HatMotionResponse;
 		hatAngularVelocity -= velocityDelta.X * HatAngularMotionResponse;
@@ -2232,6 +2243,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		attackSwipe = null;
 		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
+		RestartRigTake();
 		attackDown = !grounded && input.MoveY > 0;
 		attackUp = !attackDown && input.MoveY < 0;
 		if (brakeFromDash)
@@ -2274,6 +2286,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 			OnRollStopped(false);
 			Squish = new(0.65f, 1.4f);
 			State = States.Attack;
+			RestartRigTake();
 			Velocity.X *= 0.5f;
 			return true;
 		}
@@ -2773,9 +2786,15 @@ public partial class Player : Pawn, INeuralTextureAgent
 		var hatSpriteOrigin = hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter);
 		if (RigHatPosition is { } rigHat)
 		{
+			var at = rigHat + (PerfToggles.HatPhysics ? hatOffset : Vector2.Zero);
+			var angle = RigHeadRoll + (PerfToggles.HatPhysics ? hatAngle : 0);
+			if (hatInHand > 0.001f)
+			{
+				at = Vector2.Lerp(at, hatHand.Position, hatInHand);
+				angle += MathF.IEEERemainder(hatHand.Rotation - angle, MathF.Tau) * hatInHand;
+			}
 			var clipped = PushRigSinkClip(batcher);
-			batcher.Image(subtexture, rigHat + (PerfToggles.HatPhysics ? hatOffset : Vector2.Zero), hatSpriteOrigin,
-				new Vector2((int)Facing, 1), RigHeadRoll + (PerfToggles.HatPhysics ? hatAngle : 0), color);
+			batcher.Image(subtexture, at, hatSpriteOrigin, new Vector2((int)Facing, 1), angle, color);
 			if (clipped)
 				batcher.PopScissor();
 			return;

@@ -1,0 +1,10 @@
+{
+  "Pieces": [
+    { "Bones": "Waist", "To": 0.55, "Width": 1.12, "Color": "39324a" },
+    { "Bones": "Waist", "From": 0.05, "To": 0.25, "Width": 1.18, "Color": "5b4a38" },
+    { "Bones": "Hip, Thigh", "Width": 1.15, "Color": "39324a" },
+    { "Bones": "Shin", "To": 0.6, "Width": 1.15, "Color": "39324a" },
+    { "Kind": "Spikes", "Bones": "Shin", "From": 0.5, "To": 0.65, "Count": 3, "Width": 0.8, "Length": 0.5, "Color": "39324a" },
+    { "Kind": "Spikes", "Bones": "Shin", "From": 0.5, "To": 0.65, "Count": 3, "Width": 0.8, "Length": -0.5, "Color": "39324a" }
+  ]
+}
