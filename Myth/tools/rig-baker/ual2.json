@@ -24,7 +24,7 @@
       "sampling_rate": 30,
       "optimize": true,
       "optimization_settings": {
-        "tolerance": 0.001,
+        "tolerance": 0.004,
         "distance": 0.1
       },
       "tracks": {
@@ -43,7 +43,7 @@
       "sampling_rate": 30,
       "optimize": true,
       "optimization_settings": {
-        "tolerance": 0.001,
+        "tolerance": 0.004,
         "distance": 0.1
       },
       "tracks": {

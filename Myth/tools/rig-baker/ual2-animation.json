@@ -9,7 +9,12 @@
     {
       "clip": "*",
       "filename": "*.ozz",
-      "sampling_rate": 30
+      "sampling_rate": 30,
+      "optimize": true,
+      "optimization_settings": {
+        "tolerance": 0.004,
+        "distance": 0.1
+      }
     }
   ]
 }

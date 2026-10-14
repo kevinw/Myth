@@ -50,9 +50,11 @@ public abstract partial class Pawn
 	static float RigDiveAngleResponse => 14f;
 	static float RigDiveInResponse => 10f; // how fast the figure turns to aim the dive; the angle keeps tracking the arc
 	static float RigDiveBlendDuration => 0.3f;
+	// Landing out of a dive (no burrow) snaps upright instead of easing out at the dive's gentle in-rate.
+	static float RigDiveLandResponse => 40f;
+	static float RigDiveLandBlendDuration => 0.08f;
 	static float RigDiveReleaseGrace => 0.1f; // a jump release shorter than this doesn't count against the dive
-	static float RigDiveClipIn => 0.6f; // the dive clip takes over above this weight and lets go below the next
-	static float RigDiveClipOut => 0.3f;
+	static float RigDiveClipOut => 0.3f; // the dive clip lets go once the dive's over and its weight is below this
 	static float RigRopeGripHeight => 1.55f; // meters above the feet
 	static float RigHeadLookMaxTurn => 0.6f;
 	static float RigHeadLookRate => 8f;
@@ -93,7 +95,7 @@ public abstract partial class Pawn
 	static string? RigLeadFor(string from, string to, float velocityY) => (from, to) switch
 	{
 		(not "PlayerAir", "PlayerAir") when velocityY < 0 => "PlayerJumpStart",
-		("PlayerAir", "PlayerIdle") => "PlayerJumpLand",
+		("PlayerAir" or "PlayerDive", "PlayerIdle") => "PlayerJumpLand",
 		("PlayerCrawl", "Crouch_Idle_Loop") => "PlayerCrawlToCrouch",
 		("Crouch_Idle_Loop", "PlayerCrawl") => "PlayerCrouchToCrawl",
 		(not "PlayerRoll", "PlayerRoll") => "PlayerRollStart",
@@ -129,9 +131,17 @@ public abstract partial class Pawn
 			return;
 
 		var speed = MathF.Abs(Velocity.X);
-		// Holding jump past the peak with a burrow available: the dive toward the ground. The weight smooths that intent
-		// and the clip follows the weight with hysteresis, so tapping jump shows a partial dive instead of flickering
-		// between clips. Sinking, it holds its pose with the arms frozen at their last angle.
+		// Holding jump past the peak with a burrow available: the dive toward the ground. The dive clip comes in with the
+		// intent, before the turn has built up: the roll aims the arms the pose holds, so swapping poses under a
+		// half-built turn would swing the body backwards. It lets go only once the weight has fallen, so tapping jump
+		// shows a partial dive instead of flickering between clips. Sinking, it holds its pose, arms frozen.
+		// A burrow ends the dive: once under, and on a pop that cuts the sink short, none of it follows him back out.
+		if (State == States.Burrow ? !rigSinking : rigSinking)
+		{
+			rigSinking = rigDiveClip = false;
+			rigDiveWeight = 0;
+			rigVisual.Offset = Vector2.Zero;
+		}
 		rigDiveJumpGrace = input.JumpDown ? RigDiveReleaseGrace : MathF.Max(0, rigDiveJumpGrace - Time.Delta);
 		var airborne = rigClip == "PlayerAir" && State == States.Normal;
 		var diving = rigSinking || airborne && Velocity.Y >= 0 && rigDiveJumpGrace > 0 && CanBurrow();
@@ -142,8 +152,9 @@ public abstract partial class Pawn
 			var diveAngle = Math.Clamp(Velocity.Y / RigDiveFullAngleSpeed, -1, 1) * MathF.PI / 2;
 			rigDiveAngle = rigDiveWeight < 0.01f ? diveAngle : float.Lerp(rigDiveAngle, diveAngle, diveBlend);
 		}
-		rigDiveWeight = float.Lerp(rigDiveWeight, diving ? 1 : 0, diveIn);
-		rigDiveClip = airborne && rigDiveWeight > (rigDiveClip ? RigDiveClipOut : RigDiveClipIn);
+		rigDiveWeight = float.Lerp(rigDiveWeight, diving ? 1 : 0,
+			grounded && !rigSinking ? 1 - MathF.Exp(-RigDiveLandResponse * Time.Delta) : diveIn);
+		rigDiveClip = airborne && (diving || rigDiveClip && rigDiveWeight > RigDiveClipOut);
 		var clip = rigSinking || rigDiveClip ? "PlayerDive" :
 			RigPushing() ? "PlayerPush" :
 			// Ducking out of a run slides at run speed, which the sprite plays as "crawl". The rig crouches through
@@ -308,11 +319,13 @@ public abstract partial class Pawn
 			rigSkidFromYaw = rigVisual!.FacingYaw(-toward);
 			rigSkidToYaw = rigVisual.FacingYaw(toward);
 		}
+		var blend = name == "PlayerDive" ? RigDiveBlendDuration
+			: rigPlaying == "PlayerDive" && grounded ? RigDiveLandBlendDuration : -1;
 		rigTake = RigTakes.TryGet(name, out var take) ? take : null;
 		if (rigTake != null)
-			rigVisual!.Play(take, name == "PlayerDive" ? RigDiveBlendDuration : -1);
+			rigVisual!.Play(take, blend);
 		else
-			rigVisual!.Play(name, restart: restart);
+			rigVisual!.Play(name, restart: restart, blendDuration: blend);
 		rigPlaying = name;
 	}
 

@@ -35,7 +35,8 @@ mkdir -p "$build_dir/ozz/authored"
 	"$build_dir/build/ozz/src/animation/offline/gltf/gltf2ozz" \
 		--file="$authored_glb" --config_file="$script_dir/ual2-animation.json" --endian=little
 )
-if [[ -f "$performance_glb" ]]; then
+# The long Pose2Sim mocap performance is a third of the pack and unused; MYTH_BAKE_POSE2SIM=1 bakes it in.
+if [[ "${MYTH_BAKE_POSE2SIM:-0}" == 1 && -f "$performance_glb" ]]; then
 	mkdir -p "$build_dir/ozz/pose2sim"
 	(
 		cd "$build_dir/ozz/pose2sim"

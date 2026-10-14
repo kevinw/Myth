@@ -12,7 +12,7 @@
   "SquishResponse": 0.6,
   "SkinMode": "Solid",
   "SecondaryMotion": 0.19,
-  "NormalRoundness": 0.5,
+  "NormalRoundness": 0.9,
   "OutlineColor": "000000aa",
   "OutlineMode": "Silhouette",
   "ShinSize": 0.063,
