@@ -55,6 +55,9 @@ public sealed class HumanoidRigSettings
 	// Body sizes are meters, so the figure keeps its proportions at any PixelsPerMeter; outlines stay in pixels.
 	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
 	[I(0, 2)] public float EyeSize = 1;
+	// A ray-cast 3D head (SculptedHead): jaw, brow, nose, eye sockets, mouth, with real normals. Heads under
+	// SculptedHeadMinRadius pixels, or with a head sprite, keep the simple one.
+	public bool SculptedHead;
 	[I(-0.15f, 0.3f)] public float NeckExtension;
 	[I(0.02f, 0.5f)] public float TorsoSize = 0.2f;
 	[I(0.02f, 0.5f)] public float ChestSize = 0.16f;

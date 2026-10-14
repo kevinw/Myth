@@ -203,6 +203,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	OzzRig.Clip upperBodyHitClip = null!;
 	NeuralSkinRuntime neuralSkin = null!;
 	Sprite? headSprite;
+	SculptedHead? sculptedHead;
+	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
+	static float SculptedHeadMinRadius => 5f;
+	bool UsesSculptedHead => Settings.SculptedHead && headSprite == null && HeadRadius >= SculptedHeadMinRadius;
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
@@ -856,6 +860,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		UpdateEye();
 	}
 
+	// Rendered when drawn (it skips itself when nothing changed), so posed and stepped rigs stay current too.
+	SculptedHead? CurrentSculptedHead()
+	{
+		if (!UsesSculptedHead)
+			return null;
+		sculptedHead ??= new(owner.Game.Manager.GraphicsDevice);
+		// Head sprites count yaw the other way round.
+		sculptedHead.Render(HeadRadius, -HeadViewYaw(), 0, HeadSpriteRoll(), MouthOpen,
+			Settings.NearColor, Settings.CoreColor, Settings.FarColor, Settings.EyeSize > 0 ? Settings.AccentColor : default);
+		return sculptedHead;
+	}
+
 	// At a clip switch the old pose becomes an offset on the new one, eased out with a fast start: most of the change
 	// shows in the first frames (crisp), the rest settles (no pop). A switch mid-blend starts from what was shown.
 	void ApplyInertialBlend()
@@ -1207,6 +1223,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		animator?.Dispose();
 		neuralSkin?.Dispose();
+		sculptedHead?.Dispose();
 	}
 
 	void ProjectPose()
@@ -1895,6 +1912,16 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 
 		var position = projectedPose[head];
+		if (CurrentSculptedHead() is { ColorTexture: { } sculpted } sculpt)
+		{
+			var origin = new Vector2(sculpt.Size * 0.5f);
+			if (silhouette || outlined)
+				batcher.Image(sculpt.MaskTexture!, position, origin, Vector2.One, 0,
+					silhouette ? tint : Multiply(Settings.OutlineColor, tint));
+			if (!silhouette)
+				batcher.Image(sculpted, position, origin, Vector2.One, 0, tint);
+			return;
+		}
 		if (outlined)
 			batcher.Circle(position, HeadRadius + 1.4f, 14, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
 		batcher.Circle(position, HeadRadius, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
@@ -1961,6 +1988,11 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 
 		var position = projectedPose[head];
+		if (CurrentSculptedHead() is { NormalTexture: { } normals } sculpt)
+		{
+			batcher.Image(normals, position, new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
+			return;
+		}
 		if (Settings.NormalRoundness > 0)
 			DrawSphereNormals(batcher, position, HeadRadius + 1.4f, 14,
 				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
@@ -1978,15 +2010,21 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			return false;
 		}
 
-		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
-		var yaw = UpperBodyYaw();
-		var cameraOpenYaw = MathF.Atan2(MathF.Sin(yaw), MathF.Abs(MathF.Cos(yaw)));
-		var theta = Calc.AngleWrap((cameraYaw - cameraOpenYaw) * PresentationMirror());
+		var theta = HeadViewYaw();
 		// Frames sample yaw clockwise: front, front-left, left, back-left, back, ...
 		frameIndex = (int)MathF.Floor(theta / MathF.Tau * sprite.Frames.Count + 0.5f)
 			% sprite.Frames.Count;
 		frame = sprite.Frames[frameIndex];
 		return true;
+	}
+
+	// How far the head is turned from facing the viewer, clockwise: what picks a head sprite's frame.
+	float HeadViewYaw()
+	{
+		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
+		var yaw = UpperBodyYaw();
+		var cameraOpenYaw = MathF.Atan2(MathF.Sin(yaw), MathF.Abs(MathF.Cos(yaw)));
+		return Calc.AngleWrap((cameraYaw - cameraOpenYaw) * PresentationMirror());
 	}
 
 	internal float ExtraHeadSpriteRoll; // MathF.PI * 0.39f;

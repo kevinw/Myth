@@ -1755,7 +1755,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static Vector2 HatDamping => new(32f, 12f);
 	static float HatMotionResponse => 0.22f;
 	static float HatMaxOffset => 3f;
-	static float HatReturnResponse => 16f; // after an attack, the hat flies from the hand back to the head this fast
+	static float HatReturnResponse => 32f; // after an attack, the hat flies from the hand back to the head this fast
 	static float HatAngularSpring => 80f;
 	static float HatAngularDamping => 12f;
 	static float HatAngularMotionResponse => 0.035f;

@@ -20,6 +20,11 @@ public partial class Manager
 	static readonly string[] SurfaceRotationNames = Enum.GetNames<SurfaceRotation>();
 	const string SurfaceUndoSlot = "surface";
 	const int SurfacePreviewSize = 64;
+	const float SurfaceStripHeight = 80;
+	// The full-width strip pinned under the Surfaces window body; re-rendered when the surface or the width changes.
+	Target? surfaceStrip;
+	string? surfaceStripId;
+	bool surfaceStripDirty;
 	// Palette hex values from Lospec. Keep these local so randomization stays instant/offline.
 	static readonly SurfacePalette[] SurfacePalettes =
 	[
@@ -94,10 +99,11 @@ public partial class Manager
 		Separator();
 		if (surfaceDraft is { } draft)
 		{
-			BeginChild("SurfaceBody");
+			BeginChild("SurfaceBody", new Vector2(0, -(SurfaceStripHeight + GetStyle().ItemSpacing.Y)));
 			DrawSurfaceLayers(draft);
 			DrawSurfaceNormals(draft);
 			EndChild();
+			DrawSurfaceStrip(draft.Id);
 		}
 		else
 			TextDisabled("Create a Surface to get started.");
@@ -751,8 +757,31 @@ public partial class Manager
 		return new Subtexture(target.Attachments[0]);
 	}
 
+	void DrawSurfaceStrip(string id)
+	{
+		var width = (int)GetContentRegionAvail().X;
+		if (width <= 0 || Assets.GetSurface(id) is not { } surface)
+			return;
+		var size = new Point2((int)MathF.Ceiling(width / Scale), (int)MathF.Ceiling(SurfaceStripHeight / Scale));
+		if (surfaceStrip == null || surfaceStripDirty || surfaceStripId != id || surfaceStrip.Width != size.X)
+		{
+			if (surfaceStrip != null)
+				deferredRoomPreviewDisposals.Add(surfaceStrip);
+			surfaceStrip = new Target(GraphicsDevice, size.X, size.Y, name: $"SurfaceStrip/{id}");
+			surfaceStrip.Clear(new Color(0x24222a));
+			surfacePreviewBatcher ??= new Batcher(GraphicsDevice, "SurfacePreviews");
+			surface.Render(surfacePreviewBatcher, new Rect(0, 0, size.X, size.Y), 0);
+			surfacePreviewBatcher.Render(surfaceStrip);
+			surfacePreviewBatcher.Clear();
+			surfaceStripId = id;
+			surfaceStripDirty = false;
+		}
+		imgui.Image(new Subtexture(surfaceStrip.Attachments[0]), new Vector2(width, SurfaceStripHeight));
+	}
+
 	void InvalidateSurfacePreview(string id)
 	{
+		surfaceStripDirty = true;
 		if (surfacePreviewCache.Remove(id, out var target))
 			deferredRoomPreviewDisposals.Add(target);
 	}
@@ -777,6 +806,7 @@ public partial class Manager
 			else
 				target.Dispose();
 		surfacePreviewCache.Clear();
+		surfaceStripDirty = true;
 	}
 
 	sealed class SurfaceUndoTarget(Manager manager, string id) : IJsonUndoTarget
