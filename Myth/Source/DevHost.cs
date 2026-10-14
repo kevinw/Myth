@@ -137,37 +137,53 @@ static class DevHost
 		}
 	}
 
+	// Each connection is answered on its own task, so a command waiting on the game thread never leaves another
+	// launch's `status` check unanswered -- it would take that as nobody owning the pipe and start a second host.
 	static async Task Serve()
 	{
 		while (true)
 		{
-			await using var server = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1,
+			var server = new NamedPipeServerStream(pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
 				PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 			await server.WaitForConnectionAsync();
-			using var reader = new StreamReader(server, Encoding.UTF8, leaveOpen: true);
-			using var writer = new StreamWriter(server, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
-			var command = (await reader.ReadLineAsync())?.Replace('\0', '\n');
-			if (command == null)
-				continue;
-			await writer.WriteLineAsync(command switch
-			{
-				"run" when Interlocked.CompareExchange(ref sessionState, 1, 0) == 0 => QueueRun(),
-				"run" when Volatile.Read(ref sessionState) == 1 => "Myth is starting.",
-				"run" => await OnGameThread(m => m.RunDevCommand("wake")),
-				"status" => Volatile.Read(ref sessionState) switch
-				{
-					0 => $"Myth dev host is ready (PID {Environment.ProcessId}).",
-					1 => $"Myth is starting (PID {Environment.ProcessId}).",
-					_ => $"Myth is running (PID {Environment.ProcessId}).",
-				},
-#if EDITOR
-				"cs-reset" => DevScript.Reset(),
-				_ when command.StartsWith("cs ") => await DevScript.Execute(command[3..], fromClaude: true),
-#endif
-				_ => await OnGameThread(m => m.RunDevCommand(command)),
-			});
+			_ = Answer(server);
 		}
 	}
+
+	static async Task Answer(NamedPipeServerStream server)
+	{
+		await using var _ = server;
+		try
+		{
+			using var reader = new StreamReader(server, Encoding.UTF8, leaveOpen: true);
+			using var writer = new StreamWriter(server, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+			if ((await reader.ReadLineAsync())?.Replace('\0', '\n') is { } command)
+				await writer.WriteLineAsync(await Respond(command));
+		}
+		catch (Exception e) when (e is not IOException)
+		{
+			Console.Error.WriteLine($"[DevHost] {e}");
+		}
+		catch (IOException) { } // the client hung up
+	}
+
+	static async Task<string> Respond(string command) => command switch
+	{
+		"run" when Interlocked.CompareExchange(ref sessionState, 1, 0) == 0 => QueueRun(),
+		"run" when Volatile.Read(ref sessionState) == 1 => "Myth is starting.",
+		"run" => await OnGameThread(m => m.RunDevCommand("wake")),
+		"status" => Volatile.Read(ref sessionState) switch
+		{
+			0 => $"Myth dev host is ready (PID {Environment.ProcessId}).",
+			1 => $"Myth is starting (PID {Environment.ProcessId}).",
+			_ => $"Myth is running (PID {Environment.ProcessId}).",
+		},
+#if EDITOR
+		"cs-reset" => DevScript.Reset(),
+		_ when command.StartsWith("cs ") => await DevScript.Execute(command[3..], fromClaude: true),
+#endif
+		_ => await OnGameThread(m => m.RunDevCommand(command)),
+	};
 
 	static string QueueRun()
 	{

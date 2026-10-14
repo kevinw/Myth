@@ -45,6 +45,9 @@ public partial class Game
 		if (debug.AtlasWander.Pressed) ToggleAtlasWander();
 #if EDITOR
 		if (debug.ToggleVisuals.Pressed) Manager.ToggleVisuals();
+#if !BROWSER
+		if (debug.ToggleScripting.Pressed) Manager.ToggleScripting();
+#endif
 #endif
 		if (debug.RenderTargetShake.Pressed)
 		{

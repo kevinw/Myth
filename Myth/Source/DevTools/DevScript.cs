@@ -94,7 +94,7 @@ namespace Myth
 
 		static Vector4 ClaudeTextColor => new(1, 0.62f, 0.3f, 1);
 		const string ScriptingWindow = "Scripting";
-		bool scriptingOpen;
+		bool scriptingOpen, focusScripting;
 		string scriptInput = "";
 		volatile bool scriptRunning;
 		int scriptHistoryShown;
@@ -113,6 +113,9 @@ namespace Myth
 			}
 
 			ImGui.SetNextWindowSize(new Vector2(520, 480), ImGuiCond.FirstUseEver);
+			if (focusScripting)
+				ImGui.SetNextWindowFocus();
+			focusScripting = false;
 			DockNextToolWindow(ScriptingWindow);
 			var visible = ImGui.Begin(ScriptingWindow, ref scriptingOpen, unseen > 0 ? ImGuiWindowFlags.UnsavedDocument : ImGuiWindowFlags.None);
 			NoteDockedWindow();
@@ -139,11 +142,18 @@ namespace Myth
 			ImGui.End();
 		}
 
+		internal void ToggleScripting()
+		{
+			if (scriptingOpen)
+				scriptingOpen = false;
+			else
+				OpenScripting("");
+		}
+
 		[ConsoleCommand("scripting")]
 		void OpenScripting(string _)
 		{
-			scriptingOpen = true;
-			ImGui.SetWindowFocus(ScriptingWindow);
+			scriptingOpen = focusScripting = true;
 		}
 
 		void ScriptingWindowBody(List<DevScript.Entry> history, int unseen)
