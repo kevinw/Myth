@@ -61,8 +61,10 @@ public abstract partial class Pawn
 	static float RigHeadLookMaxTurn => 0.6f;
 	static float RigHeadLookRate => 8f;
 	static Vector2 RigHatOffset => new(0, 1);
-	static float RigPushHandHeight => 1.25f; // meters above the feet: a wall there gets pushed, a low step doesn't
 	static float RigSinkMinSpeed => 160f;
+	static int RigDuckLookAhead => 8; // pixels, a tile: the duck starts before the ceiling arrives
+	static float RigCrouchClearance => 0f; // pixels above the feet; lower ceilings switch to the crouch takes
+	static float RigCrouchGaitRate => 1.5f; // × the gait rate
 
 	// Where the eyes and head aim; null looks ahead.
 	protected virtual Vector2? RigLookTarget => null;
@@ -163,6 +165,14 @@ public abstract partial class Pawn
 			// the slide and only goes prone once it's really crawling.
 			rigClip == "PlayerCrawl" && (input.MoveX == 0 || speed > Player.CrawlSpeed * RigCrawlSpeedSlack) ? "Crouch_Idle_Loop" :
 			rigClip is "Jog_Fwd_Loop" && speed > MaxGroundSpeed * RigSprintSpeed ? "Sprint_Loop" : rigClip;
+		rigVisual.CeilingClearance = RigCeilingClearance();
+		if (rigVisual.CeilingClearance < RigCrouchClearance)
+			clip = clip switch
+			{
+				"PlayerIdle" => "Crouch_Idle_Loop",
+				"Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop" => "Crouch_Fwd_Loop",
+				_ => clip,
+			};
 		rigVisual.ArmAim = new((int)Facing * MathF.Cos(rigDiveAngle), MathF.Sin(rigDiveAngle));
 		rigVisual.ArmAimWeight = rigDiveWeight;
 		if (clip != rigRequested)
@@ -190,10 +200,11 @@ public abstract partial class Pawn
 		}
 		rigRestart = false;
 
-		var gait = shown is "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop" or "PlayerCrawl";
+		var gait = shown is "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop" or "PlayerCrawl" or "Crouch_Fwd_Loop";
 		rigVisual.GaitActive = gait;
 		rigVisual.PlaybackSpeed = (rigTake?.Speed ?? 1) * (
-			gait ? MathF.Max(RigGaitMinRate, speed / MaxGroundSpeed * RigGaitRate * (shown == "Sprint_Loop" ? RigSprintRate : 1)) :
+			gait ? MathF.Max(RigGaitMinRate, speed / MaxGroundSpeed * RigGaitRate *
+				(shown == "Sprint_Loop" ? RigSprintRate : shown == "Crouch_Fwd_Loop" ? RigCrouchGaitRate : 1)) :
 			shown == "PlayerRoll" ? MathF.Max(RigRollMinRate, speed / MaxGroundSpeed) :
 			// Pulls only while climbing up; hanging and sliding down hold the grip.
 			shown == "PlayerClimb" ? (State == States.Climb && input.MoveY < 0 ? ScriptedClimbSpeed : 0) : 1);
@@ -206,6 +217,35 @@ public abstract partial class Pawn
 		rigVisual.Update(grounded && !rigSinking, footIK: grounded && !rigSinking, loop: rigTake?.Loop ?? rigPlaying.EndsWith("_Loop"));
 	}
 
+	// Pixels above the feet to the lowest ceiling over the body and a tile toward where it's heading; null when
+	// nothing is within reach of a standing rig's head.
+	float? RigCeilingClearance()
+	{
+		if (!grounded || State != States.Normal)
+			return null;
+		var rect = Hitbox.Rect;
+		var ahead = input.MoveX != 0 ? Math.Sign(input.MoveX) : Math.Sign(Velocity.X);
+		var reach = (int)MathF.Ceiling(2 * rigVisual!.Settings.PixelsPerMeter);
+		var left = Position.X + rect.Left + Math.Min(0, ahead * RigDuckLookAhead);
+		var width = rect.Width + Math.Abs(ahead) * RigDuckLookAhead;
+		if (!Game.OverlapsSolid(this, new RectInt(left, Position.Y - reach, width, reach + rect.Top)))
+			return null;
+		int? lowest = null;
+		for (var x = left; x < left + width; x++)
+		{
+			// Solid at body height is a wall or step to stop at, not a ceiling to duck under.
+			if (Game.OverlapsSolid(this, new RectInt(x, Position.Y + rect.Top, 1, -rect.Top)))
+				continue;
+			for (var height = -rect.Top; height < (lowest ?? reach); height++)
+				if (Game.OverlapsSolid(this, new RectInt(x, Position.Y - height - 1, 1, 1)))
+				{
+					lowest = height;
+					break;
+				}
+		}
+		return lowest;
+	}
+
 	// How far the leading hand is short of the wall face (negative: through it).
 	float RigPushReach(HumanoidRigVisual visual)
 	{
@@ -215,15 +255,14 @@ public abstract partial class Pawn
 		return Facing > 0 ? wall - MathF.Max(left, right) : wall - MathF.Min(left, right);
 	}
 
-	// Standing and leaning into a solid that's there at hand height, not just a step at the feet.
+	// Pressing into a solid flush against us at head height, not just a step at the feet or a low ceiling ahead.
 	bool RigPushing()
 	{
 		if (!grounded || State != States.Normal || input.MoveX == 0 || Math.Sign(input.MoveX) != (int)Facing ||
 			rigClip is not ("PlayerIdle" or "Walk_Loop" or "Jog_Fwd_Loop"))
 			return false;
-		var hand = (int)MathF.Round(RigPushHandHeight * rigVisual!.Settings.PixelsPerMeter);
 		var rect = Hitbox.Rect;
-		return Game.OverlapsSolid(this, new RectInt(Position.X + (Facing > 0 ? rect.Right : rect.Left - 1), Position.Y - hand - 1, 1, 3));
+		return Game.OverlapsSolid(this, new RectInt(Position.X + (Facing > 0 ? rect.Right : rect.Left - 1), Position.Y + rect.Top, 1, 3));
 	}
 
 	// Climbing, slides the rig sideways so its hands, not its chest, are on the rope; pushing, so its leading hand

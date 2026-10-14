@@ -167,6 +167,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	// Swings the whole figure about its left hand (the grip), radians clockwise on screen; folded into PoseRoll.
 	public float GripRoll;
 	public float YawOverrideWeight;
+	// Set by the owner: pixels above its feet to the lowest ceiling over it; the head ducks beneath. Null: open above.
+	public float? CeilingClearance;
+	float duckDepth;
 
 	OzzRig rig = null!;
 	OzzAnimator animator = null!;
@@ -342,6 +345,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float NeuralFootContactDuration => 0.14f;
 	static float PlantResponseDuration => 0.2f;
 	static float PlantCompression => 1.5f;
+	static float DuckMargin => 0f; // pixels kept between the head and the ceiling
+	static float DuckResponse => 14f;
+	static float DuckMaxHunch => 1.15f; // radians of forward stoop before the knees take the rest
+	static float DuckMaxKneeDrop => 0.5f; // × pelvis height
 	static float PlantShoulderLift => 1.1f;
 	static float GaitHeadOffset => 1.1f;
 	static float GaitShoulderOffset => 0.8f;
@@ -844,6 +851,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		ApplyGaitAsymmetry();
 		ApplyPlantResponse();
 		ApplySquish();
+		ApplyCeilingDuck();
 		ApplyPoseRoll();
 		UpdateSecondaryMotion();
 		UpdateGaitFootstep(grounded && footIK);
@@ -1025,6 +1033,39 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var ground = new Vector2(projectedPose[pelvis].X, (FootSink + Offset).Y);
 		for (var i = 0; i < projectedPose.Length; i++)
 			projectedPose[i] = ground + (projectedPose[i] - ground) * squish;
+		RestoreLeg(leftLeg, left);
+		RestoreLeg(rightLeg, right);
+	}
+
+	// Measured on this frame's pose, so it lowers the head exactly as far as this clip needs: a forward stoop first,
+	// then bent knees for the rest.
+	void ApplyCeilingDuck()
+	{
+		var headTop = -(projectedPose[head].Y - HeadRadius);
+		var needed = CeilingClearance is { } clearance ? MathF.Max(0, headTop - clearance + DuckMargin) : 0;
+		duckDepth = float.Lerp(duckDepth, needed, 1 - MathF.Exp(-DuckResponse * visualDelta));
+		if (duckDepth < 0.01f)
+			return;
+
+		var pivot = projectedPose[pelvis];
+		var reach = projectedPose[head] - pivot;
+		var forward = (int)visualFacing;
+		var lean = MathF.Atan2(reach.X * forward, -reach.Y);
+		var length = reach.Length();
+		var hunch = Math.Clamp(MathF.Acos(Math.Clamp((-reach.Y - duckDepth) / length, -1, 1)) - lean, 0, DuckMaxHunch);
+		var rotation = Matrix3x2.CreateRotation(hunch * forward, pivot);
+		var headBefore = projectedPose[head].Y;
+		for (var i = 0; i < projectedPose.Length; i++)
+			if (upperBodyMask[i] > 0)
+				projectedPose[i] = Vector2.Lerp(projectedPose[i], Vector2.Transform(projectedPose[i], rotation), upperBodyMask[i]);
+
+		var crouch = Math.Clamp(duckDepth - (projectedPose[head].Y - headBefore), 0, (FootSink.Y - pivot.Y) * DuckMaxKneeDrop);
+		if (crouch <= 0)
+			return;
+		var left = CaptureLeg(leftLeg);
+		var right = CaptureLeg(rightLeg);
+		for (var i = 0; i < projectedPose.Length; i++)
+			projectedPose[i].Y += crouch;
 		RestoreLeg(leftLeg, left);
 		RestoreLeg(rightLeg, right);
 	}
