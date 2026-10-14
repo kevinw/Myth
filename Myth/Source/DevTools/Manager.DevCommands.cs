@@ -15,7 +15,7 @@ namespace Myth;
 //   dotnet bin/Debug/net10.0/Myth.dll --dev-command "eval go Myth/Cellar"
 //
 // These run on the game thread (drained by DevHost.Pump in Update), so reading game state is safe.
-// Answers must be a single line -- the pipe protocol is line-delimited.
+// For arbitrary C# against the live session, see DevScript (`cs`, code on stdin).
 public partial class Manager
 {
 	internal string RunDevCommand(string line)

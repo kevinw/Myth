@@ -279,6 +279,8 @@
 	<ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythTestShip)' != 'true' and '$(MythShip)' != 'true'">
 		<PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />
 		<PackageReference Include="Anthropic" Version="12.55.0" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.6.0" />
+		<PackageReference Include="Mono.Cecil" Version="0.11.6" />
 		<None Remove="EditorAssets/**" />
 		<Content Include="EditorAssets/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>

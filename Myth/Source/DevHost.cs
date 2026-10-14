@@ -14,7 +14,7 @@ static class DevHost
 	static readonly string runRequestPath = Path.GetFullPath("obj/myth-dev-run.request");
 	static int sessionState;
 	// Commands that touch game state wait here until Pump answers them on the game thread.
-	static readonly ConcurrentQueue<(string Command, TaskCompletionSource<string> Reply)> pending = new();
+	static readonly ConcurrentQueue<(Func<Manager, string> Run, TaskCompletionSource<string> Reply)> pending = new();
 
 	public static void Run(StartArgs args)
 	{
@@ -33,17 +33,7 @@ static class DevHost
 		Directory.CreateDirectory(Path.GetDirectoryName(pidPath)!);
 		File.WriteAllText(pidPath, Environment.ProcessId.ToString());
 		File.Delete(runRequestPath);
-		_ = Task.Run(async () =>
-		{
-			try
-			{
-				await Serve();
-			}
-			catch (Exception e)
-			{
-				Environment.FailFast("Myth dev-host command server failed.", e);
-			}
-		});
+		StartServer();
 		Console.WriteLine($"Myth dev host ready (PID {Environment.ProcessId}).");
 
 		try
@@ -69,8 +59,31 @@ static class DevHost
 		}
 	}
 
+	// A plain editor launch answers dev commands too, unless another process already owns this directory's pipe.
+	public static void Listen()
+	{
+		if (TrySend("status", out _))
+			return;
+		Volatile.Write(ref sessionState, 2);
+		StartServer();
+	}
+
+	static void StartServer() => Task.Run(async () =>
+	{
+		try
+		{
+			await Serve();
+		}
+		catch (Exception e)
+		{
+			Environment.FailFast("Myth dev-host command server failed.", e);
+		}
+	});
+
 	public static bool Send(string command)
 	{
+		if (command == "cs")
+			command = "cs " + Console.In.ReadToEnd();
 		if (TrySend(command, out var response))
 		{
 			Console.WriteLine(response);
@@ -107,9 +120,10 @@ static class DevHost
 			client.Connect(100);
 			using var reader = new StreamReader(client, Encoding.UTF8, leaveOpen: true);
 			using var writer = new StreamWriter(client, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
-			writer.WriteLine(command);
-			response = reader.ReadLine();
-			return response != null;
+			// Requests stay one line on the wire; replies run until the server closes the pipe.
+			writer.WriteLine(command.ReplaceLineEndings("\0"));
+			response = reader.ReadToEnd().TrimEnd();
+			return response.Length > 0;
 		}
 		catch (TimeoutException)
 		{
@@ -132,21 +146,25 @@ static class DevHost
 			await server.WaitForConnectionAsync();
 			using var reader = new StreamReader(server, Encoding.UTF8, leaveOpen: true);
 			using var writer = new StreamWriter(server, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
-			var command = await reader.ReadLineAsync();
+			var command = (await reader.ReadLineAsync())?.Replace('\0', '\n');
 			if (command == null)
 				continue;
 			await writer.WriteLineAsync(command switch
 			{
 				"run" when Interlocked.CompareExchange(ref sessionState, 1, 0) == 0 => QueueRun(),
 				"run" when Volatile.Read(ref sessionState) == 1 => "Myth is starting.",
-				"run" => await OnGameThread("wake"),
+				"run" => await OnGameThread(m => m.RunDevCommand("wake")),
 				"status" => Volatile.Read(ref sessionState) switch
 				{
 					0 => $"Myth dev host is ready (PID {Environment.ProcessId}).",
 					1 => $"Myth is starting (PID {Environment.ProcessId}).",
 					_ => $"Myth is running (PID {Environment.ProcessId}).",
 				},
-				_ => await OnGameThread(command),
+#if EDITOR
+				"cs-reset" => DevScript.Reset(),
+				_ when command.StartsWith("cs ") => await DevScript.Execute(command[3..], fromClaude: true),
+#endif
+				_ => await OnGameThread(m => m.RunDevCommand(command)),
 			});
 		}
 	}
@@ -157,14 +175,14 @@ static class DevHost
 		return "Myth launch requested.";
 	}
 
-	// Hand the command to the running game and wait for its single-line answer.
-	static async Task<string> OnGameThread(string command)
+	// Hand the work to the running game and wait for its answer.
+	internal static async Task<string> OnGameThread(Func<Manager, string> run)
 	{
 		if (Volatile.Read(ref sessionState) != 2)
 			return "error: no Myth session is running.";
 
 		var reply = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-		pending.Enqueue((command, reply));
+		pending.Enqueue((run, reply));
 		try
 		{
 			return await reply.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -181,7 +199,7 @@ static class DevHost
 	{
 		while (pending.TryDequeue(out var item))
 		{
-			try { item.Reply.TrySetResult(manager.RunDevCommand(item.Command)); }
+			try { item.Reply.TrySetResult(item.Run(manager)); }
 			catch (Exception e) { item.Reply.TrySetResult($"error: {e.Message}"); }
 		}
 	}

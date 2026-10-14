@@ -127,15 +127,17 @@
       "Position": [200, 168],
       "PixelsPerMeter": 60,
       "ProjectionYaw": 100.976,
-      "HeadSize": 0.065,
-      "TorsoSize": 0.0833,
-      "BicepSize": 0.05,
       "ForearmSize": 0.0417,
-      "ThighSize": 0.0667,
-      "ChestSize": 0.0667,
-      "NeckSize": 0.05,
       "ShinSize": 0.05,
-      "FootSize": 0.0333
+      "FootSize": 0.0333,
+      "SculptedHead": true,
+      "HeadShapeId": "doll",
+      "HeadSize": 0.151,
+      "ChestSize": 0.288,
+      "TorsoSize": 0.158,
+      "NeckSize": 0.02,
+      "BicepSize": 0.157,
+      "ThighSize": 0.126
     }
   ]
 }

@@ -196,8 +196,12 @@ fn vertex_main(
 	/// </summary>
 	public ImGuiMouseCursor MouseCursor { get; private set; }
 
+	// Null (ImGui's default font) unless a monoFontPath was given.
+	public ImFontPtr MonoFont { get; }
+
 	public ImGuiRenderer(App app, string? customFontPath = null, int customFontFace = 0, bool enableGamepadNav = false, string? iniPath = null, float frameRounding = 2,
-		string? mergedFontPath = null, ushort[]? mergedFontGlyphRanges = null, float mergedFontSize = IconFontSize, float scale = 2)
+		string? mergedFontPath = null, ushort[]? mergedFontGlyphRanges = null, float mergedFontSize = IconFontSize, float scale = 2,
+		string? monoFontPath = null)
 	{
 		this.app = app;
 		this.gamepadNav = enableGamepadNav;
@@ -271,6 +275,16 @@ fn vertex_main(
 						RasterizerDensity = scale
 					};
 					io.Fonts.AddFontFromFileTTF(mergedFontPath, mergedFontSize, config, mergedFontGlyphRangesHandle.AddrOfPinnedObject());
+					config.Destroy();
+				}
+			}
+
+			if (monoFontPath != null && File.Exists(monoFontPath))
+			{
+				unsafe
+				{
+					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig()) { RasterizerDensity = scale };
+					MonoFont = io.Fonts.AddFontFromFileTTF(monoFontPath, FontSize, config);
 					config.Destroy();
 				}
 			}

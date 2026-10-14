@@ -54,6 +54,10 @@ try
 		return;
 	}
 #endif
+#if EDITOR && !BROWSER
+	if (!startArgs.IsToolRun)
+		DevHost.Listen();
+#endif
 	var manager = Manager.Create(startArgs);
 	PlatformSpecific.ManagerSetup(manager);
 	manager.Run();

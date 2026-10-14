@@ -42,6 +42,8 @@ public abstract partial class Pawn
 	static float RigLandingScale => 0.5f;
 	static float RigSkidYawRelease => 0.15f;
 	static float RigRopeHandResponse => 20f;
+	static float RigRopeTilt => 0.6f; // × the rope's angle off vertical at the grip
+	static float RigRopeTiltResponse => 12f;
 	static float RigCrawlLift => 2f; // prone, the torso's drawn thickness sinks into the ground
 	static float RigCrawlSpeedSlack => 1.15f; // × CrawlSpeed: faster is still the slide out of a run
 	// Diving, the outstretched arms point along the arc: ahead at the peak, down falling at this speed.
@@ -196,6 +198,7 @@ public abstract partial class Pawn
 			// Pulls only while climbing up; hanging and sliding down hold the grip.
 			shown == "PlayerClimb" ? (State == States.Climb && input.MoveY < 0 ? ScriptedClimbSpeed : 0) : 1);
 		UpdateRigOffset(shown);
+		rigVisual.GripRoll = float.Lerp(rigVisual.GripRoll, RopeSwingAngle() * RigRopeTilt, 1 - MathF.Exp(-RigRopeTiltResponse * Time.Delta));
 		UpdateRigSkidYaw();
 		rigVisual.LookTarget = rigVisual.HeadLookTarget = RigLookTarget;
 		rigVisual.HeadLookMaxTurn = RigHeadLookMaxTurn;

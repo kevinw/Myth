@@ -170,6 +170,7 @@ public partial class Manager
 			ImGui.MenuItem("Rig Animations", null, ref rigAnimationViewerOpen);
 #if !BROWSER
 			ImGui.MenuItem("SFX", null, ref proceduralSoundEditor.Open);
+			ImGui.MenuItem(ScriptingWindow, null, ref scriptingOpen);
 #endif
 			ImGui.MenuItem("Preferences", null, ref preferencesOpen);
 			ImGui.MenuItem("MIDI Controls", null, ref midiWindowOpen);

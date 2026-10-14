@@ -413,7 +413,8 @@ public partial class Manager : App
 			iniPath: Path.Join(UserPath, "editor-layout.ini"),
 			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
 			mergedFontGlyphRanges: EditorIcons.GlyphRanges,
-			scale: DEFAULT_UI_SCALE);
+			scale: DEFAULT_UI_SCALE,
+			monoFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "JetBrainsMono-Regular.ttf"));
 #elif BROWSER
 		imgui = new(this, scale: 1);
 #endif

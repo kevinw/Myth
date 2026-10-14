@@ -236,6 +236,10 @@ public partial class Manager
 		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
 		BurrowDebugOverlayImGui();
+#if !BROWSER
+		ScriptOverlayImGui();
+		ScriptingImGui();
+#endif
 		LiveTileEditingImGui();
 		LiveActorEditingImGui();
 		LiveStatusImGui();

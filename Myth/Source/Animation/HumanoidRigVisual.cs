@@ -164,6 +164,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public Vector2 ArmAim = Vector2.UnitX;
 	public float ArmAimWeight;
 	public float PoseRoll { get; private set; } // radians, clockwise on screen
+	// Swings the whole figure about its left hand (the grip), radians clockwise on screen; folded into PoseRoll.
+	public float GripRoll;
 	public float YawOverrideWeight;
 
 	OzzRig rig = null!;
@@ -1032,9 +1034,16 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var arms = (projectedPose[leftPalm] + projectedPose[rightPalm]) * 0.5f - projectedPose[neck];
 		PoseRoll = ArmAimWeight <= 0 ? 0 :
 			MathF.IEEERemainder(MathF.Atan2(ArmAim.Y, ArmAim.X) - MathF.Atan2(arms.Y, arms.X), MathF.Tau) * ArmAimWeight;
-		if (MathF.Abs(PoseRoll) < 0.0001f)
+		RotatePose(PoseRoll, (projectedPose[pelvis] + projectedPose[neck]) * 0.5f);
+		RotatePose(GripRoll, projectedPose[leftPalm]);
+		PoseRoll += GripRoll;
+	}
+
+	void RotatePose(float angle, Vector2 pivot)
+	{
+		if (MathF.Abs(angle) < 0.0001f)
 			return;
-		var rotation = Matrix3x2.CreateRotation(PoseRoll, (projectedPose[pelvis] + projectedPose[neck]) * 0.5f);
+		var rotation = Matrix3x2.CreateRotation(angle, pivot);
 		for (var i = 0; i < projectedPose.Length; i++)
 			projectedPose[i] = Vector2.Transform(projectedPose[i], rotation);
 	}

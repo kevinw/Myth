@@ -1385,6 +1385,15 @@ public abstract partial class Pawn : Actor
 		}
 	}
 
+	// The rope's angle off hanging straight down at the grip, radians clockwise on screen; 0 off the rope.
+	protected float RopeSwingAngle()
+	{
+		if (State != States.Climb || climbRope == null || climbChain == null)
+			return 0;
+		var along = climbRope.Sample(climbChain, climbIndex + 1) - climbRope.Sample(climbChain, climbIndex - 1);
+		return MathF.IEEERemainder(MathF.Atan2(along.Y, along.X) - MathF.PI / 2, MathF.Tau);
+	}
+
 	void UpdateRopeCreak(Rope rope, Rope.Chain chain, Vector2 riderPoint)
 	{
 		if (!chain.Pinned)
