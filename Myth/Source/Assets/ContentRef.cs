@@ -83,6 +83,14 @@ public readonly struct CostumeContent : IContentKind
 	}
 }
 
+public readonly struct HeadShapeContent : IContentKind
+{
+	public static string ContentKey(string name) => $"Packed/Visuals/heads/{name}.json";
+
+	public static void Collect(ContentDependencyCollector collector, string name, string origin)
+		=> collector.IncludeParsed(ContentKey(name), origin, HeadShape.Parse);
+}
+
 public readonly struct RibbonStyleContent : IContentKind
 {
 	public static string ContentKey(string name) => $"Packed/Visuals/ribbon-styles/{name}.json";

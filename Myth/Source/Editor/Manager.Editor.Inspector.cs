@@ -35,7 +35,9 @@ public partial class Manager
 		}
 		actorSpecInspectorOpen = open;
 		if (IsWindowDocked())
-			DrawDockedInspectorTitle(windowTitle);
+			DrawDockedInspectorTitle(windowTitle, filter: specPropertyFilter);
+		else
+			DrawPropertyFilterButtonsInTitleBar(specPropertyFilter);
 
 		var changed = false;
 		var spec = ActorSpecs.Get(selectedActorSpecId);
@@ -43,13 +45,14 @@ public partial class Manager
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(selectedActorSpecId));
 		if (spec != null)
 			changed |= DrawRandomizeActorPropertiesButton(selectedActorSpecId, null, spec);
+		DrawPropertyFilterField(specPropertyFilter);
 		string? propertyGroup = null;
 		var propertyGroupOpen = true;
-		foreach (var property in actorPropertyScratch)
+		foreach (var property in ArrangeProperties(specPropertyFilter, property => property.HasLocalValue))
 		{
 			if (spec != null && HideInactiveActorProperty(spec, property))
 				continue;
-			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen, specPropertyFilter.Active))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
@@ -203,7 +206,8 @@ public partial class Manager
 			if (room != null)
 				PreviewActorProperty(room, actor, property.Name, value, preview);
 		}
-		else if (property.Type == typeof(ContentRef<CostumeContent>) || property.Type == typeof(ContentRef<RibbonStyleContent>))
+		else if (property.Type == typeof(ContentRef<CostumeContent>) || property.Type == typeof(ContentRef<RibbonStyleContent>) ||
+			property.Type == typeof(ContentRef<HeadShapeContent>))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			var changed = false;
@@ -214,7 +218,8 @@ public partial class Manager
 					value = "";
 					changed = true;
 				}
-				foreach (var name in property.Type == typeof(ContentRef<CostumeContent>) ? (IEnumerable<string>)Assets.Costumes.Keys : Assets.RibbonStyles.Keys)
+				foreach (var name in property.Type == typeof(ContentRef<CostumeContent>) ? (IEnumerable<string>)Assets.Costumes.Keys
+					: property.Type == typeof(ContentRef<HeadShapeContent>) ? Assets.HeadShapes.Keys : Assets.RibbonStyles.Keys)
 					if (Selectable(name, value == name))
 					{
 						value = name;
@@ -644,9 +649,13 @@ public partial class Manager
 		if (IsWindowDocked())
 			DrawDockedInspectorTitle(windowTitle, actorId, () => {
 				changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
-			});
-		else if (actorId is not null)
-			DrawActorIdInWindowTitle(windowTitle, actorId);
+			}, instancePropertyFilter);
+		else
+		{
+			if (actorId is not null)
+				DrawActorIdInWindowTitle(windowTitle, actorId, PropertyFilterButtonsWidth);
+			DrawPropertyFilterButtonsInTitleBar(instancePropertyFilter);
+		}
 
 		//changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
 		if (!open)
@@ -759,13 +768,14 @@ public partial class Manager
 		if (inspectorAction)
 			Separator();
 
+		DrawPropertyFilterField(instancePropertyFilter);
 		string? propertyGroup = null;
 		var propertyGroupOpen = true;
-		foreach (var property in actorPropertyScratch)
+		foreach (var property in ArrangeProperties(instancePropertyFilter, property => property.HasLocalValue))
 		{
 			if (HideInactiveActorProperty(actor, property))
 				continue;
-			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen, instancePropertyFilter.Active))
 				continue;
 			NoteMidiActorProperty(property);
 			PushID(property.JsonName);
@@ -812,7 +822,7 @@ public partial class Manager
 		else
 			runtime = found;
 
-		var title = $"Live: {runtime.GetType().Name}";
+		var title = runtime.GetType().Name;
 		SetNextWindowSize(new Vector2(300, 500), ImGuiCond.FirstUseEver);
 		var open = liveActorInspectorOpen;
 		if (!Begin($"{title}###LiveActorInspector", ref open))
@@ -829,13 +839,18 @@ public partial class Manager
 		}
 
 		if (IsWindowDocked())
-			DrawDockedInspectorTitle(title, runtime.ActorId);
-		else if (runtime.ActorId != null)
-			DrawActorIdInWindowTitle(title, runtime.ActorId);
+			DrawDockedInspectorTitle(title, runtime.ActorId, filter: livePropertyFilter);
+		else
+		{
+			if (runtime.ActorId != null)
+				DrawActorIdInWindowTitle(title, runtime.ActorId, PropertyFilterButtonsWidth);
+			DrawPropertyFilterButtonsInTitleBar(livePropertyFilter);
+		}
 
 		Separator();
 
-		// Properties scroll; the apply/reset buttons stay pinned below them.
+		// The filter stays on top and the apply/reset buttons pinned below; the properties scroll between them.
+		DrawPropertyFilterField(livePropertyFilter);
 		BeginChild("LiveProperties", new Vector2(0, -(GetFrameHeightWithSpacing() + GetStyle().ItemSpacing.Y)));
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(runtime));
@@ -843,7 +858,9 @@ public partial class Manager
 		livePropertyTarget = runtime;
 		string? propertyGroup = null;
 		var propertyGroupOpen = true;
-		foreach (var source in actorPropertyScratch)
+		// Changed live, or authored on this actor (or its own prefab spec).
+		foreach (var source in ArrangeProperties(livePropertyFilter,
+			property => liveInspectorEdits.ContainsKey(property.Name) || JsonUtil.ContainsProperty(authored, property.JsonName)))
 		{
 			var property = source with
 			{
@@ -852,7 +869,7 @@ public partial class Manager
 			};
 			if (HideInactiveActorProperty(authored, property))
 				continue;
-			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen, livePropertyFilter.Active))
 				continue;
 			NoteMidiActorProperty(property);
 			PushID(property.JsonName);
@@ -884,12 +901,120 @@ public partial class Manager
 		End();
 	}
 
-	static bool PropertyGroupVisible(ActorSpecs.EditableProperty property, ref string? currentGroup, ref bool open)
+	sealed class PropertyFilter
+	{
+		public string Text = "";
+		public bool ChangedOnly;
+		public bool SearchOpen;
+		public bool FocusSearch;
+		public bool Active => Text.Length > 0 || ChangedOnly;
+	}
+
+	readonly PropertyFilter specPropertyFilter = new(), instancePropertyFilter = new(), livePropertyFilter = new();
+	readonly List<ActorSpecs.EditableProperty> arrangedProperties = [];
+	readonly Dictionary<string, int> propertyGroupOrder = [];
+
+	static float PropertyFilterButtonSize => GetFontSize() + 4;
+	static float PropertyFilterButtonsWidth => PropertyFilterButtonSize * 2 + GetStyle().ItemInnerSpacing.X;
+
+	// Search and changed-only, as two small icon buttons that light up while on.
+	static void DrawPropertyFilterButtons(PropertyFilter filter)
+	{
+		PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
+		if (PropertyFilterIcon(EditorIcons.Search, "##PropertySearch", filter.SearchOpen,
+			filter.SearchOpen ? "Close the filter" : "Filter properties by name or group"))
+		{
+			filter.SearchOpen = !filter.SearchOpen;
+			filter.FocusSearch = filter.SearchOpen;
+			if (!filter.SearchOpen)
+				filter.Text = "";
+		}
+		SameLine(0, GetStyle().ItemInnerSpacing.X);
+		if (PropertyFilterIcon(EditorIcons.Pencil, "##ChangedOnly", filter.ChangedOnly, filter.ChangedOnly
+			? "Showing changed properties only. Click to show all."
+			: "Show only properties changed here (not inherited from the prefab or the type's default)."))
+			filter.ChangedOnly = !filter.ChangedOnly;
+		PopStyleVar();
+	}
+
+	static bool PropertyFilterIcon(string icon, string id, bool on, string tooltip)
+	{
+		var style = GetStyle();
+		PushStyleColor(ImGuiCol.Button, on ? style.Colors[(int)ImGuiCol.ButtonActive] : Vector4.Zero);
+		var clicked = Button(icon + id, new Vector2(PropertyFilterButtonSize));
+		PopStyleColor();
+		if (IsItemHovered())
+			SetTooltip(tooltip);
+		return clicked;
+	}
+
+	// A floating window's title bar holds the buttons, just left of the close button.
+	static void DrawPropertyFilterButtonsInTitleBar(PropertyFilter filter)
+	{
+		var windowPos = GetWindowPos();
+		var windowSize = GetWindowSize();
+		var titleHeight = GetFrameHeight();
+		var cursor = GetCursorScreenPos();
+		PushClipRect(windowPos, windowPos + new Vector2(windowSize.X, titleHeight), false);
+		SetCursorScreenPos(new Vector2(
+			windowPos.X + windowSize.X - titleHeight - GetStyle().ItemInnerSpacing.X - PropertyFilterButtonsWidth,
+			windowPos.Y + (titleHeight - PropertyFilterButtonSize) * 0.5f));
+		DrawPropertyFilterButtons(filter);
+		PopClipRect();
+		SetCursorScreenPos(cursor);
+	}
+
+	// The search field, only while it's been opened from its icon; Escape closes it.
+	static void DrawPropertyFilterField(PropertyFilter filter)
+	{
+		if (!filter.SearchOpen)
+			return;
+		if (filter.FocusSearch)
+		{
+			SetKeyboardFocusHere();
+			filter.FocusSearch = false;
+		}
+		SetNextItemWidth(-1);
+		InputTextWithHint("##PropertyFilter", "filter properties", ref filter.Text, 64);
+		if (IsItemFocused() && IsKeyPressed(ImGuiKey.Escape))
+		{
+			filter.SearchOpen = false;
+			filter.Text = "";
+		}
+	}
+
+	// actorPropertyScratch, arranged for drawing: a group's properties together in the order the group first appears
+	// (several settings objects share names like Motion or Palette), filtered by name, group, and changed-ness.
+	// The scratch list itself stays whole for lookups like HideInactiveActorProperty's.
+	List<ActorSpecs.EditableProperty> ArrangeProperties(PropertyFilter filter, Func<ActorSpecs.EditableProperty, bool> changed)
+	{
+		propertyGroupOrder.Clear();
+		foreach (var property in actorPropertyScratch)
+			propertyGroupOrder.TryAdd(property.Group ?? "", propertyGroupOrder.Count);
+		arrangedProperties.Clear();
+		foreach (var property in actorPropertyScratch)
+			if ((!filter.ChangedOnly || changed(property)) && (filter.Text.Length == 0 ||
+				property.DisplayName.Contains(filter.Text, StringComparison.OrdinalIgnoreCase) ||
+				property.Name.Contains(filter.Text, StringComparison.OrdinalIgnoreCase) ||
+				property.Group?.Contains(filter.Text, StringComparison.OrdinalIgnoreCase) == true))
+				arrangedProperties.Add(property);
+		// OrderBy is stable: within a group, properties keep their declared order.
+		var grouped = arrangedProperties.OrderBy(property => propertyGroupOrder[property.Group ?? ""]).ToList();
+		arrangedProperties.Clear();
+		arrangedProperties.AddRange(grouped);
+		return arrangedProperties;
+	}
+
+	// Filtering opens every group, so matches are never hidden behind a collapsed header.
+	static bool PropertyGroupVisible(ActorSpecs.EditableProperty property, ref string? currentGroup, ref bool open,
+		bool forceOpen = false)
 	{
 		if (property.Group == currentGroup)
 			return open;
 		currentGroup = property.Group;
 		PushID(property.JsonName);
+		if (forceOpen && currentGroup != null)
+			SetNextItemOpen(true);
 		open = currentGroup == null || CollapsingHeader(currentGroup);
 		PopID();
 		return open;
@@ -936,7 +1061,8 @@ public partial class Manager
 			ForgetLiveEditRecord(room.Id, actorId);
 	}
 
-	static void DrawDockedInspectorTitle(string title, string? detail = null, Action? sameLineCallback = null)
+	static void DrawDockedInspectorTitle(string title, string? detail = null, Action? sameLineCallback = null,
+		PropertyFilter? filter = null)
 	{
 		AlignTextToFramePadding();
 		TextUnformatted(title);
@@ -953,10 +1079,16 @@ public partial class Manager
 			SameLine(0, GetStyle().ItemInnerSpacing.X);
 			sameLineCallback();
 		}
+		if (filter != null)
+		{
+			SameLine();
+			SetCursorPosX(GetCursorPosX() + MathF.Max(0, GetContentRegionAvail().X - PropertyFilterButtonsWidth));
+			DrawPropertyFilterButtons(filter);
+		}
 		Separator();
 	}
 
-	static void DrawActorIdInWindowTitle(string title, string actorId)
+	static void DrawActorIdInWindowTitle(string title, string actorId, float reserveRight = 0)
 	{
 		var style = GetStyle();
 		var windowPos = GetWindowPos();
@@ -971,7 +1103,7 @@ public partial class Manager
 			titleStartX + titleSize.X + style.ItemInnerSpacing.X,
 			windowPos.Y + (titleHeight - titleSize.Y) * 0.5f);
 		var draw = GetWindowDrawList();
-		draw.PushClipRect(windowPos, windowPos + new Vector2(windowSize.X - titleHeight, titleHeight), false);
+		draw.PushClipRect(windowPos, windowPos + new Vector2(windowSize.X - titleHeight - reserveRight, titleHeight), false);
 		draw.AddText(position, ColorConvertFloat4ToU32(textColor), actorId);
 		draw.PopClipRect();
 	}
@@ -1009,6 +1141,16 @@ public partial class Manager
 				}
 			if (property.Name == nameof(HumanoidRigSettings.SurfaceId))
 				return mode != RigSkinMode.Surface;
+			// A head sprite replaces the procedural head; its scale only matters with one.
+			var headSprite = ActorSpecs.ReadResolvedString(actor, nameof(HumanoidRigSettings.HeadSpriteName)) is { Length: > 0 };
+			if (property.Name == nameof(HumanoidRigSettings.HeadSpriteScale))
+				return !headSprite;
+			if (property.Name is nameof(HumanoidRigSettings.SculptedHead) or nameof(HumanoidRigSettings.HeadShapeId))
+				return headSprite;
+			// Front-limb outlines only exist in the silhouette outline mode.
+			if (property.Name is nameof(HumanoidRigSettings.FrontLimbOutline) or nameof(HumanoidRigSettings.FrontLimbDepth))
+				return !string.Equals(ActorSpecs.ReadResolvedString(actor, nameof(HumanoidRigSettings.OutlineMode)),
+					nameof(RigOutlineMode.Silhouette), StringComparison.OrdinalIgnoreCase);
 			if (property.Name.StartsWith("Neural", StringComparison.Ordinal) ||
 				property.Name.StartsWith("RigNeural", StringComparison.Ordinal))
 				return mode != RigSkinMode.NCA;

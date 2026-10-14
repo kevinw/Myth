@@ -162,6 +162,7 @@ public partial class Manager
 			ImGui.Separator();
 			ImGui.MenuItem("Tile Kits", null, ref tileKitEditorOpen);
 			ImGui.MenuItem("Surfaces", null, ref surfaceEditorOpen);
+			ImGui.MenuItem("Heads", null, ref headEditorOpen);
 			ImGui.MenuItem("NCT Tiles", null, ref nctEditorOpen);
 			if (ImGui.MenuItem("Particles", null, particleEditor.PinnedWindowOpen))
 				particleEditor.TogglePinnedWindow();

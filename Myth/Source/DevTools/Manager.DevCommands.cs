@@ -123,8 +123,9 @@ public partial class Manager
 			var memberType = member is FieldInfo field ? field.FieldType : ((PropertyInfo)member).PropertyType;
 			try
 			{
-				var value = memberType.IsEnum
-					? Enum.Parse(memberType, parts[2], ignoreCase: true)
+				// Content references and other wrappers build from their string constructor.
+				var value = memberType.IsEnum ? Enum.Parse(memberType, parts[2], ignoreCase: true)
+					: memberType.GetConstructor([typeof(string)]) is { } fromString ? fromString.Invoke([parts[2]])
 					: Convert.ChangeType(parts[2], memberType, CultureInfo.InvariantCulture);
 				if (member is FieldInfo assign)
 					assign.SetValue(target, value);

@@ -24,6 +24,7 @@ public sealed class HumanoidRigSettings
 	[InspectorGroup("Animation")] public bool SeedAnimationPhase;
 	[I(0, 2)] public float SecondaryMotion;
 	[I(0, 2)] public float HeadSecondaryMotion = 1;
+	
 	[I(1, 240)] public float VisualFPS = 20; // at or above the frame rate, samples once per frame
 	// Stepped below the frame rate, a clip change or a turn still shows on its own frame instead of the next step.
 	public bool KeyEvents;
@@ -53,11 +54,8 @@ public sealed class HumanoidRigSettings
 	[I(4, 120), InspectorGroup("Body")] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
 	// Body sizes are meters, so the figure keeps its proportions at any PixelsPerMeter; outlines stay in pixels.
-	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
 	[I(0, 2)] public float EyeSize = 1;
 	// A ray-cast 3D head (SculptedHead): jaw, brow, nose, eye sockets, mouth, with real normals. Heads under
-	// SculptedHeadMinRadius pixels, or with a head sprite, keep the simple one.
-	public bool SculptedHead;
 	[I(-0.15f, 0.3f)] public float NeckExtension;
 	[I(0.02f, 0.5f)] public float TorsoSize = 0.2f;
 	[I(0.02f, 0.5f)] public float ChestSize = 0.16f;
@@ -75,10 +73,17 @@ public sealed class HumanoidRigSettings
 	[I(0, 1), InspectorGroup("Lighting")] public float NormalRoundness;
 	[I(0, 1)] public float NormalIrregularity;
 
-	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public ContentRef<SurfaceContent> SurfaceId = new("");
+	[InspectorGroup("Head")]
+	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
 	public string HeadSpriteName = "";
 	[I(0.25f, 2)] public float HeadSpriteScale = 1;
+	// SculptedHeadMinRadius pixels, or with a head sprite, keep the simple one.
+	public bool SculptedHead;
+	// The sculpted head's features (Sources/Heads); setting one turns the sculpted head on.
+	public ContentRef<HeadShapeContent> HeadShapeId = new("");
+
+	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 	[InspectorGroup("Costume")] public ContentRef<CostumeContent> CostumeId = new("");
 
 	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;

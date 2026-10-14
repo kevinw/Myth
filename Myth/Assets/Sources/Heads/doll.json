@@ -1,0 +1,23 @@
+{
+  "CraniumWidth": 0.98,
+  "CraniumHeight": 1.02,
+  "CraniumDepth": 0.98,
+  "CraniumLift": 0.1,
+  "JawWidth": 0.48,
+  "JawHeight": 0.34,
+  "JawDepth": 0.56,
+  "JawDrop": 0.4,
+  "JawForward": 0.22,
+  "BrowSize": 0.05,
+  "NoseSize": 0.08,
+  "NoseLength": 0.06,
+  "NoseDroop": 0.06,
+  "NoseHeight": 0.0,
+  "EyeSpacing": 0.42,
+  "EyeSize": 0.34,
+  "EyeHeight": 0.1,
+  "EyeDepth": 0.78,
+  "MouthWidth": 0.12,
+  "MouthHeight": -0.42,
+  "MouthSize": 0.04
+}

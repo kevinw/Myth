@@ -21,13 +21,14 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	Color[] normals = [];
 	Color[] mask = [];
 	bool[] hit = [];
-	(float Radius, float Yaw, float Pitch, float Roll, float Mouth, Color Near, Color Core, Color Far, Color Eye) last;
+	(HeadShape? Shape, int Version, float Radius, float Yaw, float Pitch, float Roll, float Mouth, Color Near, Color Core,
+		Color Far, Color Eye) last;
 
-	public void Render(float radius, float yaw, float pitch, float roll, float mouthOpen,
+	public void Render(HeadShape shape, float radius, float yaw, float pitch, float roll, float mouthOpen,
 		Color near, Color core, Color far, Color eye)
 	{
-		var key = (MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll), MathF.Round(mouthOpen * 32) / 32,
-			near, core, far, eye);
+		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
+			MathF.Round(mouthOpen * 32) / 32, near, core, far, eye);
 		if (ColorTexture != null && key == last)
 			return;
 		last = key;
@@ -52,6 +53,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		var rayDirection = Vector3.TransformNormal(-Vector3.UnitZ, toHead);
 		var half = size * 0.5f;
 		var mouth = mouthOpen;
+		var s = shape;
 
 		Array.Clear(hit);
 		for (var y = 0; y < size; y++)
@@ -72,7 +74,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 				var found = false;
 				for (var step = 0; step < MaxSteps && travelled < depth * 2; step++)
 				{
-					var distance = Distance(position, mouth);
+					var distance = Distance(position, s, mouth);
 					if (distance < 0.004f)
 					{
 						found = true;
@@ -85,14 +87,14 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 					continue;
 
 				hit[i] = true;
-				var normal = SurfaceNormal(position, mouth);
+				var normal = SurfaceNormal(position, s, mouth);
 				var viewNormal = Vector3.Normalize(Vector3.TransformNormal(normal, toView));
 				// Screen normals: x right, y down, z toward the viewer.
 				normals[i] = new Color(viewNormal.X * 0.5f + 0.5f, -viewNormal.Y * 0.5f + 0.5f, viewNormal.Z * 0.5f + 0.5f, 1f);
 				// Banded form: a fixed key light from above and in front, plus cavity depth, quantized to the palette.
-				var occlusion = Math.Clamp(Distance(position + normal * 0.22f, mouth) / 0.22f, 0, 1);
+				var occlusion = Math.Clamp(Distance(position + normal * 0.22f, s, mouth) / 0.22f, 0, 1);
 				var light = Math.Clamp(Vector3.Dot(viewNormal, KeyLight), 0, 1) * 0.65f + occlusion * 0.35f;
-				colors[i] = InEyeGlow(position) && eye.A > 0 ? eye
+				colors[i] = InEyeGlow(position, s) && eye.A > 0 ? eye
 					: occlusion < 0.4f ? far : light > 0.62f ? near : light > 0.4f ? core : far;
 			}
 
@@ -127,39 +129,55 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	static float Quantize(float angle) => MathF.Round(angle * 180 / MathF.PI * 2) / 2;
 
 	static readonly Vector3 KeyLight = Vector3.Normalize(new Vector3(0, 0.75f, 0.65f));
-	static readonly Vector3 SocketLeft = new(-0.34f, 0.06f, 0.72f);
-	static readonly Vector3 SocketRight = new(0.34f, 0.06f, 0.72f);
 
-	static float Distance(Vector3 p, float mouthOpen)
+	static Vector3 Socket(HeadShape s, float side) => new(s.EyeSpacing * side, s.EyeHeight, s.EyeDepth);
+
+	static float Distance(Vector3 p, HeadShape s, float mouthOpen)
 	{
-		var cranium = Ellipsoid(p - new Vector3(0, 0.14f, -0.08f), new Vector3(0.84f, 0.92f, 1f));
-		var jaw = Ellipsoid(p - new Vector3(0, -0.46f, 0.2f), new Vector3(0.64f, 0.48f, 0.7f));
-		var brow = Capsule(p, new Vector3(-0.44f, 0.26f, 0.8f), new Vector3(0.44f, 0.26f, 0.8f), 0.15f);
-		var nose = Capsule(p, new Vector3(0, 0.16f, 0.88f), new Vector3(0, -0.18f, 1.18f), 0.15f);
-		var d = SmoothUnion(cranium, jaw, 0.22f);
-		d = SmoothUnion(d, brow, 0.1f);
-		d = SmoothUnion(d, nose, 0.07f);
-		var sockets = MathF.Min(Sphere(p - SocketLeft, 0.25f), Sphere(p - SocketRight, 0.25f));
-		d = SmoothSubtract(d, sockets, 0.05f);
-		var mouth = Capsule(p, new Vector3(-0.3f, -0.52f, 0.86f), new Vector3(0.3f, -0.52f, 0.86f),
-			0.05f + mouthOpen * 0.14f);
-		return SmoothSubtract(d, mouth, 0.04f);
+		var cranium = Ellipsoid(p - new Vector3(0, s.CraniumLift, -0.08f), new Vector3(s.CraniumWidth, s.CraniumHeight, s.CraniumDepth));
+		var jaw = Ellipsoid(p - new Vector3(0, -s.JawDrop, s.JawForward), new Vector3(s.JawWidth, s.JawHeight, s.JawDepth));
+		var d = SmoothUnion(cranium, jaw, MathF.Max(0.01f, s.JawBlend));
+		if (s.BrowSize > 0)
+			d = SmoothUnion(d, Capsule(p, new Vector3(-s.BrowWidth, s.BrowHeight, s.BrowForward),
+				new Vector3(s.BrowWidth, s.BrowHeight, s.BrowForward), s.BrowSize), 0.1f);
+		if (s.NoseSize > 0)
+		{
+			var root = new Vector3(0, s.NoseHeight, 0.88f);
+			d = SmoothUnion(d, Capsule(p, root, root + new Vector3(0, -s.NoseDroop, s.NoseLength), s.NoseSize), 0.07f);
+		}
+		if (s.EarSize > 0)
+		{
+			var ear = new Vector3(s.CraniumWidth, s.EarHeight, -0.05f);
+			var ears = MathF.Min(Ellipsoid(p - ear, new Vector3(0.35f, 1, 0.7f) * s.EarSize),
+				Ellipsoid(p - ear * new Vector3(-1, 1, 1), new Vector3(0.35f, 1, 0.7f) * s.EarSize));
+			d = SmoothUnion(d, ears, 0.05f);
+		}
+		if (s.EyeSize > 0)
+			d = SmoothSubtract(d, MathF.Min(Sphere(p - Socket(s, -1), s.EyeSize), Sphere(p - Socket(s, 1), s.EyeSize)), 0.05f);
+		if (s.MouthWidth > 0)
+			d = SmoothSubtract(d, Capsule(p, new Vector3(-s.MouthWidth, s.MouthHeight, 0.86f),
+				new Vector3(s.MouthWidth, s.MouthHeight, 0.86f), s.MouthSize + mouthOpen * 0.14f), 0.04f);
+		return d;
 	}
 
 	// The accent eye glints at the back of each socket.
-	static bool InEyeGlow(Vector3 p)
-		=> Vector3.DistanceSquared(p, SocketLeft - new Vector3(0, 0.02f, 0.1f)) < 0.012f ||
-			Vector3.DistanceSquared(p, SocketRight - new Vector3(0, 0.02f, 0.1f)) < 0.012f;
+	static bool InEyeGlow(Vector3 p, HeadShape s)
+	{
+		var glow = s.EyeSize * 0.45f;
+		var back = new Vector3(0, -0.02f, s.EyeSize * 0.4f);
+		return s.EyeSize > 0 && (Vector3.DistanceSquared(p, Socket(s, -1) - back) < glow * glow ||
+			Vector3.DistanceSquared(p, Socket(s, 1) - back) < glow * glow);
+	}
 
-	static Vector3 SurfaceNormal(Vector3 p, float mouthOpen)
+	static Vector3 SurfaceNormal(Vector3 p, HeadShape s, float mouthOpen)
 	{
 		const float e = 0.01f;
 		var a = new Vector3(1, -1, -1);
 		var b = new Vector3(-1, -1, 1);
 		var c = new Vector3(-1, 1, -1);
 		var d = new Vector3(1, 1, 1);
-		return Vector3.Normalize(a * Distance(p + a * e, mouthOpen) + b * Distance(p + b * e, mouthOpen) +
-			c * Distance(p + c * e, mouthOpen) + d * Distance(p + d * e, mouthOpen));
+		return Vector3.Normalize(a * Distance(p + a * e, s, mouthOpen) + b * Distance(p + b * e, s, mouthOpen) +
+			c * Distance(p + c * e, s, mouthOpen) + d * Distance(p + d * e, s, mouthOpen));
 	}
 
 	static float Sphere(Vector3 p, float radius) => p.Length() - radius;

@@ -287,10 +287,8 @@
       "Type": "RigPuppetProp",
       "Position": [179, 288],
       "TorsoSize": 0.3106,
-      "PixelsPerMeter": 34.946,
       "PoseAnimationName": "Male_Sitting_Pose",
       "PoseProgress": 0.75,
-      "ProjectionYaw": 62.341,
       "NeuralFireRate": 0,
       "NeuralFPS": 1,
       "NeuralColorAmount": 0.485,
@@ -315,7 +313,10 @@
       "FrontLimbDepth": 0.061,
       "FrontLimbOutline": 0.401,
       "SurfaceId": "roborate_greenwithe",
-      "NeckExtension": 0.231
+      "NeckExtension": 0.231,
+      "HeadShapeId": "stock",
+      "PixelsPerMeter": 37.736,
+      "ProjectionYaw": 60.948
     },
     {
       "Id": "d04525a9a576ac82",

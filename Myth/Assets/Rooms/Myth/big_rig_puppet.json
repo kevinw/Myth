@@ -105,7 +105,6 @@
       "Id": "d1f6e003cc376574",
       "Type": "RigPuppetProp",
       "Position": [232, 212],
-      "NeckExtension": 0.0515,
       "ProjectionYaw": 62.341,
       "NeuralFireRate": 0,
       "NeuralFPS": 1,
@@ -131,7 +130,9 @@
       "NeckSize": 0.025,
       "ShinSize": 0.025,
       "FootSize": 0.0167,
-      "SculptedHead": true
+      "SculptedHead": true,
+      "HeadShapeId": "brute",
+      "NeckExtension": -0.019
     },
     {
       "Id": "05e44fdc65a46bcb",

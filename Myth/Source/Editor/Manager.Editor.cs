@@ -254,6 +254,7 @@ public partial class Manager
 		if (particleEditor.PinnedWindowOpen)
 			DockNextToolWindow("Particles##Pinned");
 		particleEditor.PinnedWindowImGui(game, Scale, NoteDockedWindow);
+		HeadEditorImGui(); // also while playing: edits show live on the rigs
 		if (!playing && !startingPlay)
 		{
 			ActorInstancesImGui();

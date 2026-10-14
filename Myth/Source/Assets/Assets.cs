@@ -233,7 +233,7 @@ public static partial class Assets
 			(@"^Packed/Visuals/(manifest\.bin|atlas\.qoi|lighting-noise\.qoi)$", []),
 			($@"^Packed/Visuals/{WorldMap.Folder}/{world}\.(qoi|json)$", []),
 			(@"^Packed/Visuals/textures/", ["png"]),
-			(@"^Packed/Visuals/(surfaces|costumes|ribbon-styles)/[^/]+$", ["json"]),
+			(@"^Packed/Visuals/(surfaces|costumes|heads|ribbon-styles)/[^/]+$", ["json"]),
 			(@"^Rigs/[^/]+$", ["json", "ozzpack"]),
 			($@"^Rooms/{world}\.regions\.json$", []),
 			($"^Rooms/{world}/", ["json"]),
@@ -697,6 +697,7 @@ public static partial class Assets
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, BuildVisualAssetPackManifest(bake, "", null));
 		BuildSurfaces(gfx, Content, "Sources/Surfaces");
 		LoadCostumes(Content, "Sources/Costumes");
+		LoadHeadShapes(Content, "Sources/Heads");
 		LoadRibbonStyles(Content, "Sources/RibbonStyles");
 
 		if (buildPackPath != null)
@@ -950,6 +951,7 @@ public static partial class Assets
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, manifest);
 		BuildSurfaces(gfx, pack, "surfaces");
 		LoadCostumes(pack, "costumes");
+		LoadHeadShapes(pack, "heads");
 		LoadRibbonStyles(pack, "ribbon-styles");
 		// Registration data ships inside the pack (baked with the images), so pack mode
 		// never depends on spec files being present or current.
@@ -1022,6 +1024,7 @@ public static partial class Assets
 
 		CopyJsonFolder(Path.Join(SourcesPath, "Surfaces"), surfacesDir);
 		CopyJsonFolder(Path.Join(SourcesPath, "Costumes"), Path.Join(directory, "costumes"));
+		CopyJsonFolder(Path.Join(SourcesPath, "Heads"), Path.Join(directory, "heads"));
 		CopyJsonFolder(Path.Join(SourcesPath, "RibbonStyles"), Path.Join(directory, "ribbon-styles"));
 	}
 

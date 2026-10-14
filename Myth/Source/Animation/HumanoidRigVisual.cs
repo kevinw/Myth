@@ -206,7 +206,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	SculptedHead? sculptedHead;
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
 	static float SculptedHeadMinRadius => 5f;
-	bool UsesSculptedHead => Settings.SculptedHead && headSprite == null && HeadRadius >= SculptedHeadMinRadius;
+	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
+		HeadRadius >= SculptedHeadMinRadius;
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
@@ -867,7 +868,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			return null;
 		sculptedHead ??= new(owner.Game.Manager.GraphicsDevice);
 		// Head sprites count yaw the other way round.
-		sculptedHead.Render(HeadRadius, -HeadViewYaw(), 0, HeadSpriteRoll(), MouthOpen,
+		sculptedHead.Render(Assets.GetHeadShape(Settings.HeadShapeId), HeadRadius, -HeadViewYaw(), 0,
+			HeadSpriteRoll(), MouthOpen,
 			Settings.NearColor, Settings.CoreColor, Settings.FarColor, Settings.EyeSize > 0 ? Settings.AccentColor : default);
 		return sculptedHead;
 	}
