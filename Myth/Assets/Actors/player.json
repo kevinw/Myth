@@ -1,0 +1,7 @@
+{
+  "Name": "Player",
+  "From": "Humanoid",
+  "Type": "Player",
+  "CostumeId": "brass-wanderer",
+  "NeckExtension": 0.054
+}

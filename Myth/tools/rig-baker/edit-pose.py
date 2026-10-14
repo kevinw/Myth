@@ -10,10 +10,25 @@ from bpy.app.handlers import persistent
 def arguments():
     parser = argparse.ArgumentParser(description="Open the UAL2 armature for Myth pose authoring")
     parser.add_argument("--action", required=True)
+    parser.add_argument("--from", dest="source", help="a new action starts from this action's first frame")
+    parser.add_argument("--wall", type=float,
+                        help="show a wall guide this many meters in front of the body (not saved or exported)")
+    parser.add_argument("--loop", type=int,
+                        help="a new action is keyed at 1, the middle and this frame; saving copies frame 1 onto it")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
 args = arguments()
+
+
+def key_pose(frame):
+    for bone in armature.pose.bones:
+        bone.keyframe_insert("location", frame=frame, group=bone.name)
+        bone.keyframe_insert(
+            "rotation_quaternion" if bone.rotation_mode == "QUATERNION" else "rotation_euler",
+            frame=frame, group=bone.name)
+        bone.keyframe_insert("scale", frame=frame, group=bone.name)
+
 armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
 if len(armatures) != 1:
     raise RuntimeError(f"Expected one armature, found {len(armatures)}")
@@ -22,16 +37,19 @@ armature = armatures[0]
 armature.animation_data_create()
 action = bpy.data.actions.get(args.action)
 if action is None:
+    if args.source:
+        source = bpy.data.actions.get(args.source)
+        if source is None:
+            raise RuntimeError(f"No action named {args.source}")
+        armature.animation_data.action = source
+        bpy.context.scene.frame_set(int(source.frame_range[0]))
+        bpy.context.view_layer.update()
     action = bpy.data.actions.new(args.action)
     action.use_fake_user = True
     armature.animation_data.action = action
     bpy.context.scene.frame_set(1)
-    for bone in armature.pose.bones:
-        bone.keyframe_insert("location", frame=1, group=bone.name)
-        bone.keyframe_insert(
-            "rotation_quaternion" if bone.rotation_mode == "QUATERNION" else "rotation_euler",
-            frame=1, group=bone.name)
-        bone.keyframe_insert("scale", frame=1, group=bone.name)
+    for frame in [1] + ([(1 + args.loop) // 2, args.loop] if args.loop else []):
+        key_pose(frame)
 else:
     armature.animation_data.action = action
 
@@ -59,6 +77,31 @@ for window in bpy.context.window_manager.windows:
         with bpy.context.temp_override(window=window, area=area, region=region):
             bpy.ops.view3d.view_axis(type="FRONT", align_active=True)
             bpy.ops.view3d.view_selected(use_all_regions=False)
+
+# The rig faces -Y, so the wall stands across it at -Y. Display-only: it's removed before each save.
+WALL_GUIDE = "Wall guide (not saved)"
+
+
+def add_wall_guide():
+    if args.wall is None or bpy.data.objects.get(WALL_GUIDE):
+        return
+    y = -args.wall
+    mesh = bpy.data.meshes.new(WALL_GUIDE)
+    mesh.from_pydata([(-1, y, 0), (1, y, 0), (1, y, 2.2), (-1, y, 2.2)], [], [(0, 1, 2, 3)])
+    guide = bpy.data.objects.new(WALL_GUIDE, mesh)
+    guide.display_type = "WIRE"
+    guide.hide_select = True
+    bpy.context.scene.collection.objects.link(guide)
+
+
+def remove_wall_guide():
+    if guide := bpy.data.objects.get(WALL_GUIDE):
+        mesh = guide.data
+        bpy.data.objects.remove(guide)
+        bpy.data.meshes.remove(mesh)
+
+
+add_wall_guide()
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 bake_script = os.path.join(script_dir, "bake-ual2.sh")
@@ -90,20 +133,20 @@ def poll_bake():
 
 @persistent
 def key_pose_before_save(_):
+    remove_wall_guide()
     if armature.animation_data.action != action:
         return
     bpy.context.scene.frame_set(1)
-    for bone in armature.pose.bones:
-        bone.keyframe_insert("location", frame=1, group=bone.name)
-        bone.keyframe_insert(
-            "rotation_quaternion" if bone.rotation_mode == "QUATERNION" else "rotation_euler",
-            frame=1, group=bone.name)
-        bone.keyframe_insert("scale", frame=1, group=bone.name)
+    key_pose(1)
+    # A loop ends where it starts: frame 1's pose closes it.
+    if args.loop:
+        key_pose(args.loop)
 
 
 @persistent
 def bake_after_save(_):
     global _bake_again
+    add_wall_guide()
     if _bake_process is not None and _bake_process.poll() is None:
         _bake_again = True
     else:

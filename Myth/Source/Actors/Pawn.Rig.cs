@@ -9,30 +9,9 @@ public abstract partial class Pawn
 {
 	// Player and Bud expose rig settings; other pawns (Stalker) bring their own rig, so theirs would collide.
 	protected virtual HumanoidRigSettings? DrawRig => null;
-	protected static HumanoidRigSettings DefaultRig() => new()
-	{
-		PixelsPerMeter = 12f,
-		VisualFPS = 240,
-		HeadSize = 1.6f,
-		EyeSize = 0.5f,
-		TorsoSize = 2,
-		BicepSize = 1,
-		ForearmSize = 1,
-		ThighSize = 1.5f,
-		TurnInertia = 0.3f,
-		RagdollCarry = 1,
-		TurnDuration = 0.12f,
-		VelocityLean = 0.6f,
-		SquishResponse = 0.6f,
-		SkinMode = RigSkinMode.Solid,
-		SecondaryMotion = 0.19f,
-		NormalRoundness = 0.5f,
-		CostumeId = "brass-wanderer",
-		OutlineColor = Color.Black * 0.4f,
-	};
 
 	HumanoidRigVisual? rigVisual;
-	string rigClip = "Idle_Loop";
+	string rigClip = "PlayerIdle";
 	string rigRequested = "";
 	// A take bridging two clips -- jump start, landing -- played to its end before the requested clip resumes.
 	string? rigLead;
@@ -41,6 +20,8 @@ public abstract partial class Pawn
 	string? rigPreview; // forced by the rig animation viewer; a one-shot hands back when it finishes
 	float rigDiveAngle;
 	float rigDiveWeight;
+	float rigDiveJumpGrace;
+	bool rigDiveClip;
 	bool rigRestart;
 	// The skid clip's own turn is baked out (StripYaw); its yaw is swept here along the clip instead, so the turn
 	// reads with the footwork rather than snapping when Facing flips.
@@ -48,6 +29,9 @@ public abstract partial class Pawn
 	float rigSkidFromYaw;
 	float rigSkidToYaw;
 	float rigSkidYawWeight;
+	// A dive that ends in a burrow keeps its momentum into the surface, cut off where it meets it (PushRigSinkClip).
+	bool rigSinking;
+	Vector2 rigSinkVelocity;
 
 	// Locomotion clips play at this rate at full ground speed, slowing with the pawn.
 	static float RigGaitRate => 2.2f;
@@ -59,14 +43,22 @@ public abstract partial class Pawn
 	static float RigSkidYawRelease => 0.15f;
 	static float RigRopeHandResponse => 20f;
 	static float RigCrawlLift => 2f; // prone, the torso's drawn thickness sinks into the ground
+	static float RigCrawlSpeedSlack => 1.15f; // × CrawlSpeed: faster is still the slide out of a run
 	// Diving, the outstretched arms point along the arc: ahead at the peak, down falling at this speed.
 	// The figure is rotated to aim them, whatever angle the dive take was authored at.
 	static float RigDiveFullAngleSpeed => 130f;
-	static float RigDiveAngleResponse => 20f;
+	static float RigDiveAngleResponse => 14f;
+	static float RigDiveInResponse => 10f; // how fast the figure turns to aim the dive; the angle keeps tracking the arc
+	static float RigDiveBlendDuration => 0.3f;
+	static float RigDiveReleaseGrace => 0.1f; // a jump release shorter than this doesn't count against the dive
+	static float RigDiveClipIn => 0.6f; // the dive clip takes over above this weight and lets go below the next
+	static float RigDiveClipOut => 0.3f;
 	static float RigRopeGripHeight => 1.55f; // meters above the feet
 	static float RigHeadLookMaxTurn => 0.6f;
 	static float RigHeadLookRate => 8f;
 	static Vector2 RigHatOffset => new(0, 1);
+	static float RigPushHandHeight => 1.25f; // meters above the feet: a wall there gets pushed, a low step doesn't
+	static float RigSinkMinSpeed => 160f;
 
 	// Where the eyes and head aim; null looks ahead.
 	protected virtual Vector2? RigLookTarget => null;
@@ -82,9 +74,9 @@ public abstract partial class Pawn
 	static string? RigClipFor(string animation) => animation switch
 	{
 		"skid" => "PlayerSkid",
-		"idle" or "look_up" => "Idle_Loop",
+		"idle" or "look_up" => "PlayerIdle",
 		"climb" or "climb_idle" or "climb_down" or "climb_fall" => "PlayerClimb",
-		"wall_slide" => "Idle_Rail_Loop",
+		"wall_slide" => "PlayerWallSlide",
 		"walk" => "Walk_Loop",
 		"run" or "run_start" => "Jog_Fwd_Loop",
 		"duck" or "burrow" => "Crouch_Idle_Loop",
@@ -101,7 +93,9 @@ public abstract partial class Pawn
 	static string? RigLeadFor(string from, string to, float velocityY) => (from, to) switch
 	{
 		(not "PlayerAir", "PlayerAir") when velocityY < 0 => "PlayerJumpStart",
-		("PlayerAir", "Idle_Loop") => "PlayerJumpLand",
+		("PlayerAir", "PlayerIdle") => "PlayerJumpLand",
+		("PlayerCrawl", "Crouch_Idle_Loop") => "PlayerCrawlToCrouch",
+		("Crouch_Idle_Loop", "PlayerCrawl") => "PlayerCrouchToCrawl",
 		(not "PlayerRoll", "PlayerRoll") => "PlayerRollStart",
 		_ => null,
 	};
@@ -135,26 +129,37 @@ public abstract partial class Pawn
 			return;
 
 		var speed = MathF.Abs(Velocity.X);
-		// Holding jump past the peak with a burrow available: the dive toward the ground.
-		var diving = rigClip == "PlayerAir" && State == States.Normal && Velocity.Y >= 0 && input.JumpDown && CanBurrow();
-		var clip = diving ? "PlayerDive" :
-			rigClip is "Jog_Fwd_Loop" && speed > MaxGroundSpeed * RigSprintSpeed ? "Sprint_Loop" : rigClip;
+		// Holding jump past the peak with a burrow available: the dive toward the ground. The weight smooths that intent
+		// and the clip follows the weight with hysteresis, so tapping jump shows a partial dive instead of flickering
+		// between clips. Sinking, it holds its pose with the arms frozen at their last angle.
+		rigDiveJumpGrace = input.JumpDown ? RigDiveReleaseGrace : MathF.Max(0, rigDiveJumpGrace - Time.Delta);
+		var airborne = rigClip == "PlayerAir" && State == States.Normal;
+		var diving = rigSinking || airborne && Velocity.Y >= 0 && rigDiveJumpGrace > 0 && CanBurrow();
 		var diveBlend = 1 - MathF.Exp(-RigDiveAngleResponse * Time.Delta);
-		if (diving)
+		var diveIn = 1 - MathF.Exp(-RigDiveInResponse * Time.Delta);
+		if (diving && !rigSinking)
 		{
 			var diveAngle = Math.Clamp(Velocity.Y / RigDiveFullAngleSpeed, -1, 1) * MathF.PI / 2;
 			rigDiveAngle = rigDiveWeight < 0.01f ? diveAngle : float.Lerp(rigDiveAngle, diveAngle, diveBlend);
 		}
-		rigDiveWeight = float.Lerp(rigDiveWeight, diving ? 1 : 0, diveBlend);
+		rigDiveWeight = float.Lerp(rigDiveWeight, diving ? 1 : 0, diveIn);
+		rigDiveClip = airborne && rigDiveWeight > (rigDiveClip ? RigDiveClipOut : RigDiveClipIn);
+		var clip = rigSinking || rigDiveClip ? "PlayerDive" :
+			RigPushing() ? "PlayerPush" :
+			// Ducking out of a run slides at run speed, which the sprite plays as "crawl". The rig crouches through
+			// the slide and only goes prone once it's really crawling.
+			rigClip == "PlayerCrawl" && (input.MoveX == 0 || speed > Player.CrawlSpeed * RigCrawlSpeedSlack) ? "Crouch_Idle_Loop" :
+			rigClip is "Jog_Fwd_Loop" && speed > MaxGroundSpeed * RigSprintSpeed ? "Sprint_Loop" : rigClip;
 		rigVisual.ArmAim = new((int)Facing * MathF.Cos(rigDiveAngle), MathF.Sin(rigDiveAngle));
 		rigVisual.ArmAimWeight = rigDiveWeight;
 		if (clip != rigRequested)
 		{
 			// Once the sim has turned around, the skid finishes before the run resumes.
 			var skidHolds = rigPlaying == "PlayerSkid" && Facing != rigSkidFacing &&
-				clip is "Idle_Loop" or "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop";
+				clip is "PlayerIdle" or "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop";
 			rigLead = skidHolds ? "PlayerSkid" :
-				RigLeadFor(rigRequested, clip, Velocity.Y) is { } lead && RigTakes.TryGet(lead, out _) ? lead : null;
+				RigLeadFor(rigRequested, clip, Velocity.Y) is { } lead && RigTakes.TryGet(lead, out var leadTake) &&
+				rigVisual.TryGetClip(leadTake.Clip, out _) ? lead : null; // a take whose clip isn't baked yet is skipped
 			rigRequested = clip;
 		}
 		if (rigLead != null && rigPlaying == rigLead && rigVisual.AnimationFinished)
@@ -184,17 +189,97 @@ public abstract partial class Pawn
 		rigVisual.LookTarget = rigVisual.HeadLookTarget = RigLookTarget;
 		rigVisual.HeadLookMaxTurn = RigHeadLookMaxTurn;
 		rigVisual.HeadLookRate = RigHeadLookRate;
-		rigVisual.Update(grounded, footIK: grounded, loop: rigTake?.Loop ?? rigPlaying.EndsWith("_Loop"));
+		rigVisual.Update(grounded && !rigSinking, footIK: grounded && !rigSinking, loop: rigTake?.Loop ?? rigPlaying.EndsWith("_Loop"));
 	}
 
-	// Climbing, slides the rig sideways so its hands, not its chest, are on the rope; crawling, lifts it.
+	// How far the leading hand is short of the wall face (negative: through it).
+	float RigPushReach(HumanoidRigVisual visual)
+	{
+		var wall = Position.X + (Facing > 0 ? Hitbox.Rect.Right : Hitbox.Rect.Left);
+		var left = visual.LeftHandWorldPosition.X;
+		var right = visual.RightHandWorldPosition.X;
+		return Facing > 0 ? wall - MathF.Max(left, right) : wall - MathF.Min(left, right);
+	}
+
+	// Standing and leaning into a solid that's there at hand height, not just a step at the feet.
+	bool RigPushing()
+	{
+		if (!grounded || State != States.Normal || input.MoveX == 0 || Math.Sign(input.MoveX) != (int)Facing ||
+			rigClip is not ("PlayerIdle" or "Walk_Loop" or "Jog_Fwd_Loop"))
+			return false;
+		var hand = (int)MathF.Round(RigPushHandHeight * rigVisual!.Settings.PixelsPerMeter);
+		var rect = Hitbox.Rect;
+		return Game.OverlapsSolid(this, new RectInt(Position.X + (Facing > 0 ? rect.Right : rect.Left - 1), Position.Y - hand - 1, 1, 3));
+	}
+
+	// Climbing, slides the rig sideways so its hands, not its chest, are on the rope; pushing, so its leading hand
+	// is on the wall rather than through it; crawling, lifts it.
 	void UpdateRigOffset(string shown)
 	{
 		var visual = rigVisual!;
-		var target = new Vector2(State == States.Climb
-			? visual.Offset.X + Position.X + Hitbox.Rect.CenterF.X - visual.LeftHandWorldPosition.X : 0,
+		if (rigSinking)
+		{
+			visual.Offset += rigSinkVelocity * Time.Delta;
+			// Held through the burrow's entry window even once buried (the clip hides it all): BurrowHidesSprite
+			// waits on that window, and an early end would draw the pose, unclipped, on the surface.
+			rigSinking = State == States.Burrow && (burrowEnterTimer > 0 || !RigSubmerged(visual.GetVisualBounds()));
+			if (!rigSinking)
+				visual.Offset = Vector2.Zero; // hidden by now, or popped straight back out
+			return;
+		}
+		var target = new Vector2(
+			State == States.Climb ? visual.Offset.X + Position.X + Hitbox.Rect.CenterF.X - visual.LeftHandWorldPosition.X :
+			shown == "PlayerPush" ? visual.Offset.X + RigPushReach(visual) : 0,
 			shown == "PlayerCrawl" ? -RigCrawlLift : 0);
 		visual.Offset = Vector2.Lerp(visual.Offset, target, 1 - MathF.Exp(-RigRopeHandResponse * Time.Delta));
+	}
+
+	// Once a dive's burrow has attached: the body flies on into the surface instead of squashing onto it.
+	// `from` is where it was drawn before the burrow snapped the pawn onto the surface.
+	protected void BeginRigSink(Point2 from, Vector2 velocity)
+	{
+		if (rigVisual == null || rigRequested != "PlayerDive")
+			return;
+		rigSinking = true;
+		rigSinkVelocity = (velocity.Normalized(burrow.Toward) + burrow.Toward).Normalized(burrow.Toward) *
+			MathF.Max(velocity.Length(), RigSinkMinSpeed);
+		rigVisual.Offset += from - Position;
+	}
+
+	// Every drawn pixel is past the burrow surface, so the burrow can take over hiding the body.
+	bool RigSubmerged(Rect worldBounds)
+	{
+		var surface = (Vector2)Position;
+		var toward = burrow.Toward;
+		return Vector2.Dot(worldBounds.TopLeft - surface, toward) > 0 && Vector2.Dot(worldBounds.TopRight - surface, toward) > 0 &&
+			Vector2.Dot(worldBounds.BottomLeft - surface, toward) > 0 && Vector2.Dot(worldBounds.BottomRight - surface, toward) > 0;
+	}
+
+	// Sinking, scissors away everything past the burrow surface -- a real cut, so a thin jumpthru doesn't show the
+	// body below it. Surfaces are cut along their dominant axis. Pop the scissor when this returns true.
+	protected bool PushRigSinkClip(Batcher batcher)
+	{
+		if (!rigSinking)
+			return false;
+		const float Far = 100000;
+		var toward = burrow.Toward;
+		var axis = MathF.Abs(toward.X) > MathF.Abs(toward.Y) ? new Vector2(MathF.Sign(toward.X), 0) : new Vector2(0, MathF.Sign(toward.Y));
+		var surface = (Vector2)(Position - RenderPosition); // drawing is local to RenderPosition
+		var across = axis.TurnLeft() * Far;
+		var open = (RectInt)Rect.Between(Vector2.Transform(surface + across, batcher.Matrix),
+			Vector2.Transform(surface - across - axis * Far, batcher.Matrix));
+		batcher.PushScissor(batcher.Scissor is { } outer ? outer.GetIntersection(open) : open);
+		return true;
+	}
+
+	void DrawRigClipped(Batcher batcher, Color color, bool silhouette)
+	{
+		if (BurrowHidesSprite)
+			return;
+		var clipped = PushRigSinkClip(batcher);
+		rigVisual!.Draw(batcher, color, silhouette);
+		if (clipped)
+			batcher.PopScissor();
 	}
 
 	void UpdateRigSkidYaw()
@@ -225,7 +310,7 @@ public abstract partial class Pawn
 		}
 		rigTake = RigTakes.TryGet(name, out var take) ? take : null;
 		if (rigTake != null)
-			rigVisual!.Play(take);
+			rigVisual!.Play(take, name == "PlayerDive" ? RigDiveBlendDuration : -1);
 		else
 			rigVisual!.Play(name, restart: restart);
 		rigPlaying = name;
@@ -243,7 +328,7 @@ public abstract partial class Pawn
 
 	// Where a hat sits on the rig's head, local to the pawn; null when drawing the sprite.
 	protected Vector2? RigHatPosition => rigVisual == null ? null
-		: rigVisual.HeadPosition - Vector2.UnitY * rigVisual.Settings.HeadSize + RigHatOffset;
+		: rigVisual.HeadPosition - Vector2.UnitY * rigVisual.HeadRadius + RigHatOffset;
 	protected float RigHeadRoll => rigVisual == null ? 0 : rigVisual.HeadRoll + rigVisual.PoseRoll;
 
 	protected void RenderBody(Batcher batcher, Color color)
@@ -251,7 +336,7 @@ public abstract partial class Pawn
 		if (rigVisual == null)
 			RenderSpriteSubtexture(batcher, color);
 		else if (!SpriteBlinkHidden)
-			rigVisual.Draw(batcher, color, silhouette: false);
+			DrawRigClipped(batcher, color, silhouette: false);
 	}
 
 	public override void Render(Batcher batcher) => RenderBody(batcher, Color.White);
@@ -260,8 +345,13 @@ public abstract partial class Pawn
 	{
 		if (rigVisual == null)
 			base.RenderNormals(batcher);
-		else
+		else if (!BurrowHidesSprite)
+		{
+			var clipped = PushRigSinkClip(batcher);
 			rigVisual.DrawNormals(batcher);
+			if (clipped)
+				batcher.PopScissor();
+		}
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
@@ -269,7 +359,7 @@ public abstract partial class Pawn
 		if (rigVisual == null)
 			base.RenderShadow(batcher, color);
 		else
-			rigVisual.Draw(batcher, color, silhouette: true);
+			DrawRigClipped(batcher, color, silhouette: true);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)
@@ -277,7 +367,7 @@ public abstract partial class Pawn
 		if (rigVisual == null)
 			base.RenderReflection(batcher, color);
 		else
-			rigVisual.Draw(batcher, color, silhouette: true);
+			DrawRigClipped(batcher, color, silhouette: true);
 	}
 
 	public override void RenderEmissive(Batcher batcher)

@@ -102,11 +102,22 @@ public partial class Manager
 	{
 		var playingName = pawn.RigPlaying;
 		ImGui.TextUnformatted($"Playing: {playingName}");
-		if (RigTakes.TryGet(playingName, out var current) && current.Name != rigTakeName)
+		// Raw clips (idle, walk, jog...) edit as a new take of the same name, which overrides the clip once set.
+		var isTake = RigTakes.TryGet(playingName, out var current);
+		OzzRig.Clip? raw = null;
+		if (playingName != rigTakeName && (isTake || pawn.RigVisual!.TryGetClip(playingName, out raw)))
 		{
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Edit"))
-				LoadRigTakeDraft(null, current);
+			{
+				if (isTake)
+					LoadRigTakeDraft(null, current);
+				else
+				{
+					rigTakeDraftClip = null;
+					SyncRigTakeDraft(raw!);
+				}
+			}
 		}
 		if (rigTakeDraftClip is { } clipName && pawn.RigVisual!.TryGetClip(clipName, out var clip))
 		{

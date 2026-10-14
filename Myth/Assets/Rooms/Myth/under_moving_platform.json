@@ -140,6 +140,11 @@
       "BugCount": 0,
       "FishCount": 0,
       "FlyCount": 4
+    },
+    {
+      "Id": "1385956df36c3e4d",
+      "Type": "PlayerStart",
+      "Position": [272, 126]
     }
   ]
 }

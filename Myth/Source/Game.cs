@@ -522,14 +522,14 @@ public partial class Game : IDisposable
 				}
 				else if (spawnFallbackPlayer)
 				{
-					Create<Player>(position);
+					SpawnPlayer(position);
 				}
 				respawnPosition = position;
 			}
 			else if (spawnFallbackPlayer && GetFirst<PlayerStart>() == null)
 			{
 				respawnPosition = FindFallbackPlayerPosition(room, fallbackPlayerDirection);
-				Create<Player>(respawnPosition);
+				SpawnPlayer(respawnPosition);
 			}
 			else if (GetFirst<PlayerStart>() is { } playerStart)
 			{
@@ -541,7 +541,7 @@ public partial class Game : IDisposable
 				else
 				{
 					respawnPosition = playerStart.Position;
-					Create<Player>(respawnPosition);
+					SpawnPlayer(respawnPosition);
 				}
 			}
 			EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
@@ -2517,7 +2517,7 @@ public partial class Game : IDisposable
 
 		LoadRoom(room);
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
-			Create<Player>(position);
+			SpawnPlayer(position);
 		EnsureBudForPlayer(repositionExisting: true);
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.Reload, Point2.Zero);
 		FinishRoomActivation(RoomChangeKind.Reload);
@@ -2562,7 +2562,7 @@ public partial class Game : IDisposable
 			if (GetFirst<Player>() is { } player)
 				player.Position = playerStart.Position;
 			else
-				Create<Player>(playerStart.Position);
+				SpawnPlayer(playerStart.Position);
 		}
 		EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.InitialLoad, Point2.Zero);
@@ -3231,12 +3231,15 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		Create<Bud>(position, bud =>
+		ActorSpecs.Create(this, "Bud", position, bud =>
 		{
 			bud.Facing = player.Facing;
 			bud.KeepOnRoomTransition = true;
 		});
 	}
+
+	// Player and Bud spawn from their prefabs (Assets/Actors), so their rig tuning lives in data.
+	void SpawnPlayer(Point2? position) => ActorSpecs.Create(this, "Player", position);
 
 	Point2 FindBudSpawnPosition(Player player)
 	{

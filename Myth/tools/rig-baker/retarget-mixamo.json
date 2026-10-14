@@ -30,6 +30,9 @@
     "Run_To_Dive": {
       "InPlace": "Lock",
       "InPlaceVertical": "Lock"
+    },
+    "Push": {
+      "InPlace": "Lock"
     }
   }
 }

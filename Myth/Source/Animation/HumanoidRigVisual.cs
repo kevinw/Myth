@@ -5,6 +5,7 @@ using static Myth.RigDraw;
 namespace Myth;
 
 public enum RigSkinMode { Solid, Surface, NCA }
+public enum RigOutlineMode { PerPiece, Silhouette }
 
 interface IHumanoidRigAccessoryVisual
 {
@@ -49,16 +50,16 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		return turnedPoint.X * cameraCos + turnedPoint.Z * cameraSin;
 	}
 
-	enum Part { Torso, Bicep, Forearm, Hand, Thigh, Other }
+	enum Part { Torso, Chest, Neck, Bicep, Forearm, Hand, Thigh, Shin, Foot }
 	enum Side { None, Left, Right }
 	internal enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
 
 	public IHumanoidRigAccessoryVisual? Accessory;
 	readonly List<RigDrawItem> drawItems = [];
 
-	readonly record struct BoneSpec(string From, string To, float Width, Part Part, bool Combat = false,
+	readonly record struct BoneSpec(string From, string To, Part Part, bool Combat = false,
 		Side Leg = Side.None, Side Arm = Side.None, RigTags Tags = RigTags.None);
-	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, Side Leg, Side Arm, RigTags Tags, int Parent = -1)
+	readonly record struct Bone(int From, int To, Part Part, bool Combat, Side Leg, Side Arm, RigTags Tags, int Parent = -1)
 		: IRigBone;
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe, int Tip);
 
@@ -98,31 +99,31 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
-		new("pelvis", "spine_01", 5, Part.Torso, true, Tags: RigTags.Waist),
-		new("spine_01", "spine_02", 5, Part.Torso, true, Tags: RigTags.Trunk),
-		new("spine_02", "spine_03", 5, Part.Torso, true, Tags: RigTags.Trunk),
-		new("spine_03", "neck_01", 4, Part.Other, true, Tags: RigTags.Trunk),
-		new("neck_01", "Head", 3, Part.Other, true, Tags: RigTags.Neck),
-		new("spine_03", "clavicle_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
-		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
-		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.UpperArm | RigTags.Left),
-		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true, Arm: Side.Left, Tags: RigTags.Forearm | RigTags.Left),
-		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true, Arm: Side.Left, Tags: RigTags.Hand | RigTags.Left),
-		new("spine_03", "clavicle_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
-		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
-		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.UpperArm | RigTags.Right),
-		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true, Arm: Side.Right, Tags: RigTags.Forearm | RigTags.Right),
-		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true, Arm: Side.Right, Tags: RigTags.Hand | RigTags.Right),
-		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: Side.Left, Tags: RigTags.Hip | RigTags.Left),
-		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: Side.Left, Tags: RigTags.Thigh | RigTags.Left),
-		new("calf_l", "foot_l", 3, Part.Other, Leg: Side.Left, Tags: RigTags.Shin | RigTags.Left),
-		new("foot_l", "ball_l", 2, Part.Other, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
-		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
-		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: Side.Right, Tags: RigTags.Hip | RigTags.Right),
-		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: Side.Right, Tags: RigTags.Thigh | RigTags.Right),
-		new("calf_r", "foot_r", 3, Part.Other, Leg: Side.Right, Tags: RigTags.Shin | RigTags.Right),
-		new("foot_r", "ball_r", 2, Part.Other, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
-		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
+		new("pelvis", "spine_01", Part.Torso, true, Tags: RigTags.Waist),
+		new("spine_01", "spine_02", Part.Torso, true, Tags: RigTags.Trunk),
+		new("spine_02", "spine_03", Part.Torso, true, Tags: RigTags.Trunk),
+		new("spine_03", "neck_01", Part.Chest, true, Tags: RigTags.Trunk),
+		new("neck_01", "Head", Part.Neck, true, Tags: RigTags.Neck),
+		new("spine_03", "clavicle_l", Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
+		new("clavicle_l", "upperarm_l", Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
+		new("upperarm_l", "lowerarm_l", Part.Bicep, true, Arm: Side.Left, Tags: RigTags.UpperArm | RigTags.Left),
+		new("lowerarm_l", "hand_l", Part.Forearm, true, Arm: Side.Left, Tags: RigTags.Forearm | RigTags.Left),
+		new("hand_l", "middle_01_l", Part.Hand, true, Arm: Side.Left, Tags: RigTags.Hand | RigTags.Left),
+		new("spine_03", "clavicle_r", Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
+		new("clavicle_r", "upperarm_r", Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
+		new("upperarm_r", "lowerarm_r", Part.Bicep, true, Arm: Side.Right, Tags: RigTags.UpperArm | RigTags.Right),
+		new("lowerarm_r", "hand_r", Part.Forearm, true, Arm: Side.Right, Tags: RigTags.Forearm | RigTags.Right),
+		new("hand_r", "middle_01_r", Part.Hand, true, Arm: Side.Right, Tags: RigTags.Hand | RigTags.Right),
+		new("pelvis", "thigh_l", Part.Thigh, Leg: Side.Left, Tags: RigTags.Hip | RigTags.Left),
+		new("thigh_l", "calf_l", Part.Thigh, Leg: Side.Left, Tags: RigTags.Thigh | RigTags.Left),
+		new("calf_l", "foot_l", Part.Shin, Leg: Side.Left, Tags: RigTags.Shin | RigTags.Left),
+		new("foot_l", "ball_l", Part.Foot, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
+		new("ball_l", "ball_leaf_l", Part.Foot, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
+		new("pelvis", "thigh_r", Part.Thigh, Leg: Side.Right, Tags: RigTags.Hip | RigTags.Right),
+		new("thigh_r", "calf_r", Part.Thigh, Leg: Side.Right, Tags: RigTags.Thigh | RigTags.Right),
+		new("calf_r", "foot_r", Part.Shin, Leg: Side.Right, Tags: RigTags.Shin | RigTags.Right),
+		new("foot_r", "ball_r", Part.Foot, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
+		new("ball_r", "ball_leaf_r", Part.Foot, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
 	];
 
 	public readonly HumanoidRigSettings Settings = configuredSettings ?? new();
@@ -352,6 +353,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	}
 	public bool Turning => turning;
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
+	public float HeadRadius => Settings.HeadSize * Settings.PixelsPerMeter;
 	public bool EyeVisible => Settings.EyeSize > 0 && (headSprite == null || TryHeadSpriteEyeOffset(out _));
 	public Vector2 EyeOffset => TryHeadSpriteEyeOffset(out var position)
 		? position
@@ -359,6 +361,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[leftLeg.Toe];
 	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
 	public Vector2 LeftHandWorldPosition => owner.Position + projectedPose[leftPalm];
+	public Vector2 RightHandWorldPosition => owner.Position + projectedPose[rightPalm];
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 	public float PoseJostlePixels;
 
@@ -391,7 +394,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var spec = BoneSpecs[i];
-			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part,
+			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Part,
 				spec.Combat, spec.Leg, spec.Arm, spec.Tags);
 			ragdollJoints[bones[i].From] = true;
 			ragdollJoints[bones[i].To] = true;
@@ -1179,7 +1182,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var to = ragdollPose[head];
 		var direction = to - from;
 		return direction.LengthSquared() > 0.000001f
-			? to + Vector3.Normalize(direction) * (Settings.NeckExtension / Settings.PixelsPerMeter)
+			? to + Vector3.Normalize(direction) * Settings.NeckExtension
 			: to;
 	}
 
@@ -1506,15 +1509,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			? Settings.CoreColor
 			: Color.Lerp(Settings.FarColor, Settings.NearColor, depth);
 
-	float BoneWidth(Bone bone) => bone.Part switch
+	float BoneWidth(Bone bone) => Settings.PixelsPerMeter * bone.Part switch
 	{
 		Part.Torso => Settings.TorsoSize,
+		Part.Chest => Settings.ChestSize,
+		Part.Neck => Settings.NeckSize,
 		Part.Bicep => Settings.BicepSize * armWidthScale,
 		Part.Forearm => Settings.ForearmSize * armWidthScale,
 		Part.Hand => Settings.ForearmSize * handWidthScale *
 			(!scaleLeftHandOnly || bone.Arm == Side.Left ? runtimeHandWidthScale : 1),
 		Part.Thigh => Settings.ThighSize,
-		_ => bone.Width,
+		Part.Shin => Settings.ShinSize,
+		_ => Settings.FootSize,
 	};
 
 	float BoneRenderDepth(Bone bone)
@@ -1551,7 +1557,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			neuralBoneUVs[i] = new(NeuralUV(a), NeuralUV(b), NeuralUV(c), NeuralUV(d));
 		}
 		neuralHeadUV = NeuralUV(projectedPose[head]);
-		neuralHeadUVRadius = new Vector2(Settings.HeadSize) / (Vector2)NeuralSize;
+		neuralHeadUVRadius = new Vector2(HeadRadius) / (Vector2)NeuralSize;
 	}
 
 	public bool OverlapsCombatBounds(in RectInt worldBounds)
@@ -1567,7 +1573,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				MathF.Max(fromWidth, toWidth) * 0.5f + Settings.CombatBoundsPadding))
 				return true;
 		}
-		return bounds.Overlaps(new Circle(projectedPose[head], Settings.HeadSize + Settings.CombatBoundsPadding), out _);
+		return bounds.Overlaps(new Circle(projectedPose[head], HeadRadius + Settings.CombatBoundsPadding), out _);
 	}
 
 	static bool CapsuleOverlaps(in Rect bounds, Vector2 from, Vector2 to, float radius)
@@ -1598,13 +1604,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			batcher.CircleLine(from, radius, 1, 10, color);
 			batcher.CircleLine(to, radius, 1, 10, color);
 		}
-		batcher.CircleLine(owner.Position + projectedPose[head], Settings.HeadSize + Settings.CombatBoundsPadding,
+		batcher.CircleLine(owner.Position + projectedPose[head], HeadRadius + Settings.CombatBoundsPadding,
 			1, 14, color);
 	}
 
 	public Rect GetVisualBounds()
 	{
-		var headRadius = Settings.HeadSize + 1.4f;
+		var headRadius = HeadRadius + 1.4f;
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 			headRadius = new Vector2(frame.Subtexture.Width, frame.Subtexture.Height).Length() *
 				Settings.HeadSpriteScale * 0.5f;
@@ -1712,27 +1718,35 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			Neural.NeuralColorAmount, normals: false);
 		skin.Push(batcher);
 		var outline = Multiply(Settings.OutlineColor, tint);
+		var rimmed = Settings.OutlineMode == RigOutlineMode.Silhouette;
+		if (rimmed)
+			DrawSilhouette(batcher, outline, parts);
+		var frontLimbOutline = Color.Black * Settings.FrontLimbOutline * (tint.A / 255f);
 		foreach (var item in drawItems)
 		{
 			if (!Includes(item, parts))
 				continue;
+			var pieceOutline = !rimmed ? outline
+				: item.Kind is RigDrawKind.Bone or RigDrawKind.Hand && InFrontOfBody(bones[item.Index]) ? frontLimbOutline
+				: Color.Transparent;
 			switch (item.Kind)
 			{
 				case RigDrawKind.Costume:
-					DrawCostume(batcher, item, neuralBoneUVs[item.Index], tint, Settings.OutlineColor, skin);
+					DrawCostume(batcher, item, neuralBoneUVs[item.Index], tint,
+						rimmed ? Color.Transparent : Settings.OutlineColor, skin);
 					break;
 				case RigDrawKind.Bone:
-					DrawBone(batcher, item, neuralBoneUVs[item.Index], Multiply(item.Color, tint), outline, skin);
+					DrawBone(batcher, item, neuralBoneUVs[item.Index], Multiply(item.Color, tint), pieceOutline, skin);
 					break;
 				case RigDrawKind.Hand:
 					var color = Multiply(item.Color, tint);
 					var spinAmount = HandSpinAmount(bones[item.Index]);
-					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 2, outline);
+					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 2, pieceOutline);
 					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 0, color);
 					DrawHandPalmSkin(batcher, item, color, skin);
 					break;
 				case RigDrawKind.Head:
-					DrawHead(batcher, tint, silhouette: false, skin);
+					DrawHead(batcher, tint, silhouette: false, skin, outlined: !rimmed);
 					break;
 				case RigDrawKind.Wire:
 					DrawWire(batcher, item.Index, tint, silhouette: false);
@@ -1779,7 +1793,11 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 	}
 
-	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin)
+	bool InFrontOfBody(Bone bone)
+		=> (bone.Arm != Side.None || bone.Leg != Side.None) && (bone.Tags & (RigTags.Shoulder | RigTags.Hip)) == 0 &&
+			BoneDepth(bone) - jointDepth[pelvis] > Settings.FrontLimbDepth;
+
+	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin, bool outlined = true)
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
@@ -1791,10 +1809,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 
 		var position = projectedPose[head];
-		batcher.Circle(position, Settings.HeadSize + 1.4f, 14,
-			silhouette ? tint : Multiply(Settings.OutlineColor, tint));
-		batcher.Circle(position, Settings.HeadSize, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
-		skin.Circle(batcher, position, Settings.HeadSize, neuralHeadUV, neuralHeadUVRadius,
+		if (outlined)
+			batcher.Circle(position, HeadRadius + 1.4f, 14, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
+		batcher.Circle(position, HeadRadius, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
+		skin.Circle(batcher, position, HeadRadius, neuralHeadUV, neuralHeadUVRadius,
 			Multiply(Settings.NearColor, tint));
 		if (!silhouette && Settings.EyeSize > 0)
 			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
@@ -1858,11 +1876,11 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 		var position = projectedPose[head];
 		if (Settings.NormalRoundness > 0)
-			DrawSphereNormals(batcher, position, Settings.HeadSize + 1.4f, 14,
+			DrawSphereNormals(batcher, position, HeadRadius + 1.4f, 14,
 				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
 		else
-			batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
-		skin.Circle(batcher, position, Settings.HeadSize, neuralHeadUV, neuralHeadUVRadius, Color.White);
+			batcher.Circle(position, HeadRadius + 1.4f, 14, flat);
+		skin.Circle(batcher, position, HeadRadius, neuralHeadUV, neuralHeadUVRadius, Color.White);
 	}
 
 	bool TryGetHeadSpriteFrame(out Sprite.Frame frame, out int frameIndex)

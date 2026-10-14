@@ -95,36 +95,48 @@ public partial class Manager
 	// drive authored content without an editor round-trip. Ids are what `state` reports as `ground`.
 	[UnconditionalSuppressMessage("Trimming", "IL2075", Justification =
 		"Actors are registered via ActorSpecs.RegisterActor, which preserves public fields and properties.")]
+	// set <actorId|player> <member[.nested...]> <value>, e.g. `set player Rig.PixelsPerMeter 40`.
 	string DevSet(string argument)
 	{
 		var parts = argument.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
 		if (parts.Length < 3)
-			return "error: set takes <actorId> <member> <value>";
-		if (game?.GetActorById(parts[0]) is not { } actor)
+			return "error: set takes <actorId|player> <member[.nested]> <value>";
+		if ((parts[0] == "player" ? game?.GetFirst<Player>() : game?.GetActorById(parts[0])) is not Actor actor)
 			return $"error: no actor '{parts[0]}' in the current room";
 
-		var type = actor.GetType();
-		object? member = type.GetField(parts[1], BindingFlags.Public | BindingFlags.Instance)
-			?? (object?)type.GetProperty(parts[1], BindingFlags.Public | BindingFlags.Instance);
-		if (member == null)
-			return $"error: {type.Name} has no public member '{parts[1]}'";
+		object target = actor;
+		var path = parts[1].Split('.');
+		for (var i = 0; ; i++)
+		{
+			var type = target.GetType();
+			object? member = type.GetField(path[i], BindingFlags.Public | BindingFlags.Instance)
+				?? (object?)type.GetProperty(path[i], BindingFlags.Public | BindingFlags.Instance);
+			if (member == null)
+				return $"error: {type.Name} has no public member '{path[i]}'";
+			if (i < path.Length - 1)
+			{
+				target = (member is FieldInfo nested ? nested.GetValue(target) : ((PropertyInfo)member).GetValue(target))
+					?? throw new InvalidOperationException($"{path[i]} is null");
+				continue;
+			}
 
-		var memberType = member is FieldInfo field ? field.FieldType : ((PropertyInfo)member).PropertyType;
-		try
-		{
-			var value = memberType.IsEnum
-				? Enum.Parse(memberType, parts[2], ignoreCase: true)
-				: Convert.ChangeType(parts[2], memberType, CultureInfo.InvariantCulture);
-			if (member is FieldInfo assign)
-				assign.SetValue(actor, value);
-			else
-				((PropertyInfo)member).SetValue(actor, value);
+			var memberType = member is FieldInfo field ? field.FieldType : ((PropertyInfo)member).PropertyType;
+			try
+			{
+				var value = memberType.IsEnum
+					? Enum.Parse(memberType, parts[2], ignoreCase: true)
+					: Convert.ChangeType(parts[2], memberType, CultureInfo.InvariantCulture);
+				if (member is FieldInfo assign)
+					assign.SetValue(target, value);
+				else
+					((PropertyInfo)member).SetValue(target, value);
+			}
+			catch (Exception e)
+			{
+				return $"error: {e.Message}";
+			}
+			return $"{actor.GetType().Name}.{parts[1]} = {parts[2]}";
 		}
-		catch (Exception e)
-		{
-			return $"error: {e.Message}";
-		}
-		return $"{type.Name}.{parts[1]} = {parts[2]}";
 	}
 
 	// How much the surface under the player faces up: 1 flat, 0 a vertical wall. Sizes the rider
@@ -161,14 +173,15 @@ public partial class Manager
 			"dash-right" => new PawnInput(1, 0, false, false, true, true),
 			"jump-right" => new PawnInput(1, 0, true, true, false),
 			"up" => new PawnInput(0, -1, false, false, false),
+			"down" => new PawnInput(0, 1, false, false, false),
 			"jump-up" => new PawnInput(0, -1, true, true, false),
 			"roll-left" => new PawnInput(-1, 1, false, false, false),
 			"roll-right" => new PawnInput(1, 1, false, false, false),
 			_ => player.ScriptedInput,
 		};
-		return argument is "off" or "none" or "left" or "right" or "dash-left" or "dash-right" or "jump-right" or "up" or "jump-up" or "roll-left" or "roll-right"
+		return argument is "off" or "none" or "left" or "right" or "dash-left" or "dash-right" or "jump-right" or "up" or "down" or "jump-up" or "roll-left" or "roll-right"
 			? $"input: {argument}"
-			: $"error: unknown input '{argument}' (off, none, left, right, dash-left, dash-right, jump-right, up, jump-up, roll-left, roll-right)";
+			: $"error: unknown input '{argument}' (off, none, left, right, dash-left, dash-right, jump-right, up, down, jump-up, roll-left, roll-right)";
 	}
 
 	// Pumped every frame from Manager.Update; dev work that has to tick lives here.

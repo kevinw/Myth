@@ -813,7 +813,7 @@ public partial class Manager
 			runtime = found;
 
 		var title = $"Live: {runtime.GetType().Name}";
-		SetNextWindowSize(new Vector2(300, 0), ImGuiCond.FirstUseEver);
+		SetNextWindowSize(new Vector2(300, 500), ImGuiCond.FirstUseEver);
 		var open = liveActorInspectorOpen;
 		if (!Begin($"{title}###LiveActorInspector", ref open))
 		{
@@ -835,6 +835,8 @@ public partial class Manager
 
 		Separator();
 
+		// Properties scroll; the apply/reset buttons stay pinned below them.
+		BeginChild("LiveProperties", new Vector2(0, -(GetFrameHeightWithSpacing() + GetStyle().ItemSpacing.Y)));
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(runtime));
 		BeginMidiActorInspector($"live:{runtime.ActorId}");
@@ -858,6 +860,7 @@ public partial class Manager
 			PopID();
 		}
 		livePropertyTarget = null;
+		EndChild();
 
 		Separator();
 		BeginDisabled(liveInspectorEdits.Count == 0);
@@ -865,6 +868,14 @@ public partial class Manager
 		{
 			if (Button("Apply to Room"))
 				ApplyLiveInspectorEdits(runtime, room, authored);
+			SameLine();
+		}
+		else if (runtime.AuthoredSpec is { } prefab &&
+			ActorSpecs.ReadResolvedString(prefab, "Name") is { } prefabName && ActorSpecs.CanSaveSpec(prefabName))
+		{
+			if (Button("Apply to Prefab"))
+				ApplyLiveInspectorEditsToPrefab(runtime, prefab);
+			SetItemTooltip("Each value goes to the prefab that sets it (e.g. Humanoid), else this actor's own.");
 			SameLine();
 		}
 		if (Button("Reset Live Changes"))
@@ -896,6 +907,22 @@ public partial class Manager
 			ForgetLiveEditRecord(room.Id, actorId);
 		CaptureLiveInspectorValues(runtime);
 		DisplayMessage($"Applied live {runtime.GetType().Name} properties");
+	}
+
+	// Spawned actors (Player, Bud) have no room to apply to; their edits go to the prefabs they spawned from.
+	void ApplyLiveInspectorEditsToPrefab(Actor runtime, JsonObject prefab)
+	{
+		var saved = new SortedSet<string>();
+		foreach (var (name, value) in liveInspectorEdits)
+			if (ActorSpecs.DefiningSpecName(prefab, name) is { } specName)
+			{
+				ActorSpecs.SetProperty(specName, name, value);
+				saved.Add(specName);
+			}
+		foreach (var specName in saved)
+			ActorSpecs.SaveSpec(specName);
+		CaptureLiveInspectorValues(runtime);
+		DisplayMessage($"Applied live {runtime.GetType().Name} properties to {string.Join(", ", saved)}");
 	}
 
 	void ResetLiveInspectorEdits(Actor runtime)

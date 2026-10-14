@@ -2,10 +2,11 @@ using Foster.Framework;
 using System.Numerics;
 namespace Myth;
 
+[GameActor(HideFromPalette = true)]
 public class Bud : Pawn, ICarryable, IHitByHitbox
 {
 	[InspectorGroup("Rig")] public bool RigDraw = true;
-	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = BudRig();
+	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = new(); // body and palette from Assets/Actors/bud.json
 	protected override HumanoidRigSettings? DrawRig => RigDraw ? Rig : null;
 	static float RigLookRange => 64f;
 	protected override Vector2? RigLookTarget => Game.GetFirst<Player>() is { } player &&
@@ -14,17 +15,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	internal static readonly Color Tint = new(0x7fb6ff);
 	// His speech reads as his own blue, lifted toward white so it stays legible over dark rooms.
 	internal static readonly Color SpeechColor = Color.Lerp(Tint, Color.White, 0.45f);
-
-	// The player's rig in his own blue and costume.
-	static HumanoidRigSettings BudRig()
-	{
-		var rig = DefaultRig();
-		rig.CostumeId = "bud-crest";
-		rig.NearColor = Color.Lerp(Tint, Color.White, 0.35f);
-		rig.CoreColor = Tint;
-		rig.FarColor = Color.Lerp(Tint, Color.Black, 0.45f);
-		return rig;
-	}
 	private const int StruckSpeechEnemyDistance = Game.TileSize * 4;
 	private const float EnterDelay = 1.0f;
 	private const int EnterGroundProbeDepth = 4;

@@ -147,7 +147,12 @@
       "TravelSpeed": 17.703,
       "SpeedMultiplier": 0.391,
       "RigVisualFPS": 13.083,
-      "RigBootThickness": 0.5
+      "RigBootThickness": 0.5,
+      "RigHeadSize": 0.1299,
+      "RigTorsoSize": 0.1665,
+      "RigBicepSize": 0.0999,
+      "RigForearmSize": 0.0833,
+      "RigThighSize": 0.1332
     },
     {
       "Id": "acaad7395d6e3be7",

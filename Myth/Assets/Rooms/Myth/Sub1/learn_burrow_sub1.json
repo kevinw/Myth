@@ -92,10 +92,17 @@
       "PoseAnimationName": "Hit_To_Side_Of_Body",
       "PoseProgress": 0.646,
       "PixelsPerMeter": 49.668,
-      "HeadSize": 6.959,
+      "HeadSize": 0.1401,
       "EyeSize": 0,
-      "NeckExtension": -4,
-      "BicepSize": 9.527
+      "NeckExtension": -0.0805,
+      "BicepSize": 0.1918,
+      "TorsoSize": 0.1007,
+      "ForearmSize": 0.0503,
+      "ThighSize": 0.0805,
+      "ChestSize": 0.0805,
+      "NeckSize": 0.0604,
+      "ShinSize": 0.0604,
+      "FootSize": 0.0403
     }
   ]
 }

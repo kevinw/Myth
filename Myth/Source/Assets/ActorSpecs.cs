@@ -251,7 +251,21 @@ public static class ActorSpecs
 		return null;
 	}
 
-	public static Actor? Create(Game game, string id, Point2? position = null)
+	// The prefab in spec's From chain that sets name -- where an edit to it belongs -- else spec itself.
+	public static string? DefiningSpecName(JsonObject spec, string name)
+	{
+		var leaf = spec;
+		for (var depth = 0; depth < 64; depth++)
+		{
+			if (JsonUtil.ContainsProperty(spec, name))
+				return ReadString(spec, NameKey);
+			if (ReadString(spec, FromKey) is not { } from || !specs.TryGetValue(from, out spec!))
+				break;
+		}
+		return ReadString(leaf, NameKey);
+	}
+
+	public static Actor? Create(Game game, string id, Point2? position = null, Action<Actor>? init = null)
 	{
 		if (!specs.TryGetValue(id, out var spec))
 		{
@@ -259,10 +273,11 @@ public static class ActorSpecs
 			return null;
 		}
 
-		return Create(game, spec, position);
+		return Create(game, spec, position, init: init);
 	}
 
-	public static Actor? Create(Game game, JsonObject spec, Point2? position = null, string? sessionDestroyKey = null)
+	public static Actor? Create(Game game, JsonObject spec, Point2? position = null, string? sessionDestroyKey = null,
+		Action<Actor>? init = null)
 	{
 		var typeName = ReadResolvedString(spec, TypeKey);
 		if (string.IsNullOrWhiteSpace(typeName) || !actorTypes.TryGetValue(typeName, out var type))
@@ -276,6 +291,7 @@ public static class ActorSpecs
 		{
 			actor.SessionDestroyKey = sessionDestroyKey;
 			Apply(actor, type.Type, spec);
+			init?.Invoke(actor);
 #if EDITOR
 			actor.AuthoredSpec = spec;
 #endif

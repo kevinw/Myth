@@ -1,0 +1,9 @@
+{
+  "Name": "Bud",
+  "From": "Humanoid",
+  "Type": "Bud",
+  "CostumeId": "bud-crest",
+  "NearColor": "ABCFFF",
+  "CoreColor": "7FB6FF",
+  "FarColor": "45648C"
+}

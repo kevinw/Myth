@@ -110,9 +110,15 @@
       "ProjectionYaw": 44.308,
       "HeadLooksAtPlayer": true,
       "EyeSize": 0.918,
-      "BicepSize": 3.769,
-      "ForearmSize": 3.885,
-      "ThighSize": 6.379
+      "BicepSize": 0.0813,
+      "ForearmSize": 0.0838,
+      "ThighSize": 0.1377,
+      "HeadSize": 0.0842,
+      "TorsoSize": 0.1079,
+      "ChestSize": 0.0863,
+      "NeckSize": 0.0647,
+      "ShinSize": 0.0647,
+      "FootSize": 0.0432
     },
     {
       "Id": "63cb4743fbd36ab2",

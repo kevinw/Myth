@@ -120,6 +120,28 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "PlayerCrawlToCrouch": {
+    "Clip": "Pose_CrawlToCrouch",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerCrouchToCrawl": {
+    "Clip": "Pose_CrouchToCrawl",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "PlayerDive": {
     "Clip": "Run_To_Dive",
     "Start": 0.72,
@@ -127,6 +149,17 @@
     "Loop": true,
     "Speed": 0.1,
     "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerIdle": {
+    "Clip": "Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true,
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1
@@ -149,6 +182,17 @@
     "Loop": false,
     "Speed": 2,
     "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerPush": {
+    "Clip": "Push",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true,
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1
@@ -182,6 +226,17 @@
     "Loop": false,
     "Speed": 1.6,
     "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerWallSlide": {
+    "Clip": "Pose_WallSlide",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": false,
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1

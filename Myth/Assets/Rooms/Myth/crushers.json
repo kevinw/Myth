@@ -460,10 +460,10 @@
       "NeuralWeightsFile": "banded_0037_circular.bin",
       "PoseAnimationName": "Getting_Hit",
       "PoseProgress": 0.245,
-      "HeadSize": 3.05,
-      "TorsoSize": 6.353,
-      "BicepSize": 4.06,
-      "ThighSize": 2.113
+      "HeadSize": 0.122,
+      "TorsoSize": 0.2541,
+      "BicepSize": 0.1624,
+      "ThighSize": 0.0845
     },
     {
       "Id": "730915a813aafa8f",

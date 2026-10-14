@@ -74,7 +74,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var scale = Owner.Rig.PixelsPerMeter;
 		var innerRadius = InnerRadius / scale;
 		var outerRadius = OuterRadius / scale;
-		var armRadius = MathF.Max(CollisionRadius, Owner.Rig.BicepSize * 0.45f) / scale;
+		var armRadius = MathF.Max(CollisionRadius / scale, Owner.Rig.BicepSize * 0.45f);
 		for (var i = 0; i < FoldCount; i++)
 		{
 			var angle = (i + 0.5f) * MathF.Tau / FoldCount + spin;

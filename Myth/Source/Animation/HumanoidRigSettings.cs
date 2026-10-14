@@ -43,13 +43,18 @@ public sealed class HumanoidRigSettings
 
 	[I(4, 120), InspectorGroup("Body")] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
-	[I(0.5f, 12)] public float HeadSize = 3.9f;
+	// Body sizes are meters, so the figure keeps its proportions at any PixelsPerMeter; outlines stay in pixels.
+	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
 	[I(0, 2)] public float EyeSize = 1;
-	[I(-4, 12)] public float NeckExtension;
-	[I(0.5f, 12)] public float TorsoSize = 5;
-	[I(0.5f, 10)] public float BicepSize = 3;
-	[I(0.5f, 10)] public float ForearmSize = 2.5f;
-	[I(0.5f, 12)] public float ThighSize = 4;
+	[I(-0.15f, 0.3f)] public float NeckExtension;
+	[I(0.02f, 0.5f)] public float TorsoSize = 0.2f;
+	[I(0.02f, 0.5f)] public float ChestSize = 0.16f;
+	[I(0.02f, 0.5f)] public float NeckSize = 0.12f;
+	[I(0.02f, 0.4f)] public float BicepSize = 0.12f;
+	[I(0.02f, 0.4f)] public float ForearmSize = 0.1f;
+	[I(0.02f, 0.5f)] public float ThighSize = 0.16f;
+	[I(0.02f, 0.5f)] public float ShinSize = 0.12f;
+	[I(0.02f, 0.4f)] public float FootSize = 0.08f;
 	[I(0, 0.75f)] public float LimbTaper;
 	// 0 = each limb bone starts at its own width; 1 = it starts at the width its parent ended at.
 	[I(0, 1)] public float JointContinuity = 1;
@@ -71,6 +76,11 @@ public sealed class HumanoidRigSettings
 	public Color NearColor = new(0xb7cdd0);
 	public Color CoreColor = new(0x708b94);
 	public Color OutlineColor = new(0x171d27);
+	// Silhouette: one rim around the whole figure; inside it, only limbs in front of the body get an outline --
+	// translucent black, so it reads as a darker shade of whatever they cross.
+	public RigOutlineMode OutlineMode = RigOutlineMode.PerPiece;
+	[I(0, 1)] public float FrontLimbOutline = 0.35f;
+	[I(0, 0.3f)] public float FrontLimbDepth = 0.05f; // meters nearer than the pelvis
 	[NoSerialize] public Color AccentColor = new(0xd92240);
 }
 

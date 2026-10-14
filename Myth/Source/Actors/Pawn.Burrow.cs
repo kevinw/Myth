@@ -124,6 +124,7 @@ public abstract partial class Pawn
 	// starts already sealed in the seam.
 	bool TryStartBurrow(Vector2 previousVelocity, Vector2 toward, Actor? sealedBy)
 	{
+		var from = Position;
 		Hitbox = new(BurrowHitboxRect);
 		burrow.Toward = toward;
 		bool snapped;
@@ -188,6 +189,7 @@ public abstract partial class Pawn
 		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), maxSpeed);
 
 		State = States.Burrow;
+		BeginRigSink(from, previousVelocity);
 		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrow.Toward);
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
@@ -219,7 +221,7 @@ public abstract partial class Pawn
 		get
 		{
 			if (PerfToggles.HeadSlide) return false;
-			return State == States.Burrow && burrowEnterTimer <= 0;
+			return State == States.Burrow && burrowEnterTimer <= 0 && !rigSinking;
 		}
 	}
 
@@ -378,7 +380,7 @@ public abstract partial class Pawn
 			burrowEnterTimer = Calc.Approach(burrowEnterTimer, 0, Time.Delta);
 			var t = 1f - burrowEnterTimer / BurrowEnterSquishTime;
 			var peak = SurfaceSquish(burrow.Toward, BurrowSquashNormal, BurrowSquashTangent);
-			Squish = Vector2.Lerp(Vector2.One, peak, t);
+			Squish = rigSinking ? Vector2.One : Vector2.Lerp(Vector2.One, peak, t);
 		}
 
 		// Resolve travel from the world input. Movement is a latched "orbit" that you

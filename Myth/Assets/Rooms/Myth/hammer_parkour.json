@@ -137,7 +137,16 @@
       "Type": "RigPuppetProp",
       "Position": [31, 153],
       "PixelsPerMeter": 60,
-      "ProjectionYaw": 100.976
+      "ProjectionYaw": 100.976,
+      "HeadSize": 0.065,
+      "TorsoSize": 0.0833,
+      "BicepSize": 0.05,
+      "ForearmSize": 0.0417,
+      "ThighSize": 0.0667,
+      "ChestSize": 0.0667,
+      "NeckSize": 0.05,
+      "ShinSize": 0.05,
+      "FootSize": 0.0333
     },
     {
       "Id": "f3897a5d2032a193",

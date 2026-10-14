@@ -34,11 +34,11 @@ public class Stalker : Pawn, INeuralTextureAgent
 	[I(12, 40)] public float RigPixelsPerMeter = 23f;
 	[I(-60, 60)] public float RigProjectionYaw = 18f;
 	[I(1, 60)] public float RigVisualFPS = 16f;
-	[I(2, 12)] public float RigHeadSize = 3.9f;
-	[I(2, 12)] public float RigTorsoSize = 5;
-	[I(1, 10)] public float RigBicepSize = 3;
-	[I(1, 10)] public float RigForearmSize = 2.5f;
-	[I(1, 12)] public float RigThighSize = 4;
+	[I(0.05f, 0.5f)] public float RigHeadSize = 0.17f; // meters
+	[I(0.05f, 0.5f)] public float RigTorsoSize = 0.217f;
+	[I(0.03f, 0.4f)] public float RigBicepSize = 0.13f;
+	[I(0.03f, 0.4f)] public float RigForearmSize = 0.109f;
+	[I(0.03f, 0.5f)] public float RigThighSize = 0.174f;
 	[I(0, 2)] public float RigTrackingLean = 1;
 	[I(0, 2)] public float RigHitReactionStrength = 0.8f;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;

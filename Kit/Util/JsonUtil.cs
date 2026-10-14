@@ -134,8 +134,9 @@ internal static class JsonUtil
 		return null;
 	}
 
+	// RRGGBB, or RRGGBBAA when translucent -- ReadColor takes either.
 	public static string ColorToHex(Color color)
-		=> $"{color.R:X2}{color.G:X2}{color.B:X2}";
+		=> color.A == 255 ? $"{color.R:X2}{color.G:X2}{color.B:X2}" : $"{color.R:X2}{color.G:X2}{color.B:X2}{color.A:X2}";
 
 	public static bool TryReadInt(JsonNode? node, out int value)
 	{

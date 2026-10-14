@@ -79,7 +79,7 @@ public abstract partial class Pawn : Actor
 
 	public static float MaxGroundSpeed => 93.T();
 	public static float MaxAirSpeed => 100.T();
-	protected static float CrawlSpeed => 28.T();
+	internal static float CrawlSpeed => 28.T();
 	public static float GroundAccel => 400.T();
 	public static float AirAccel => 310.T();
 	public static float Friction => 480.T();
@@ -1763,7 +1763,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 	[I(1, MaxHealth)] public int Health = MaxHealth;
 	[InspectorGroup("Rig")] public bool RigDraw;
-	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = DefaultRig();
+	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = new(); // from Assets/Actors/player.json
 	protected override HumanoidRigSettings? DrawRig => RigDraw ? Rig : null;
 	static float RigLookRange => 96f;
 	static Vector2 RigLookUp => new(24, -96);
@@ -2773,8 +2773,11 @@ public partial class Player : Pawn, INeuralTextureAgent
 		var hatSpriteOrigin = hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter);
 		if (RigHatPosition is { } rigHat)
 		{
+			var clipped = PushRigSinkClip(batcher);
 			batcher.Image(subtexture, rigHat + (PerfToggles.HatPhysics ? hatOffset : Vector2.Zero), hatSpriteOrigin,
 				new Vector2((int)Facing, 1), RigHeadRoll + (PerfToggles.HatPhysics ? hatAngle : 0), color);
+			if (clipped)
+				batcher.PopScissor();
 			return;
 		}
 		if (CurrentSpriteFrame is not { } playerFrame || Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
