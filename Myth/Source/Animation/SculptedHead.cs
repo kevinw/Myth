@@ -56,7 +56,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		var s = shape;
 
 		Array.Clear(hit);
-		for (var y = 0; y < size; y++)
+		Parallel.For(0, size, y =>
+		{
 			for (var x = 0; x < size; x++)
 			{
 				var i = y * size + x;
@@ -95,8 +96,9 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 				var occlusion = Math.Clamp(Distance(position + normal * 0.22f, s, mouth) / 0.22f, 0, 1);
 				var light = Math.Clamp(Vector3.Dot(viewNormal, KeyLight), 0, 1) * 0.65f + occlusion * 0.35f;
 				colors[i] = InEyeGlow(position, s) && eye.A > 0 ? eye
-					: occlusion < 0.4f ? far : light > 0.62f ? near : light > 0.4f ? core : far;
+					: occlusion < 0.4f ? far : light > 0.62f && !OnSnoutFace(position, s) ? near : light > 0.4f ? core : far;
 			}
+		});
 
 		// The mask: the shape dilated one pixel, so outlines and silhouettes hug it.
 		for (var y = 0; y < size; y++)
@@ -143,7 +145,21 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		if (s.NoseSize > 0)
 		{
 			var root = new Vector3(0, s.NoseHeight, 0.88f);
-			d = SmoothUnion(d, Capsule(p, root, root + new Vector3(0, -s.NoseDroop, s.NoseLength), s.NoseSize), 0.07f);
+			var tip = root + new Vector3(0, -s.NoseDroop, s.NoseLength);
+			var nose = Capsule(p, root, tip, s.NoseSize);
+			if (s.NoseFlat > 0 && tip != root)
+			{
+				var edge = s.NoseSize * 0.25f;
+				nose = float.Lerp(nose, Cylinder(p, root, tip, s.NoseSize - edge) - edge, s.NoseFlat);
+			}
+			d = SmoothUnion(d, nose, 0.07f);
+			if (s.NostrilSize > 0)
+			{
+				// The nostrils sit in the nose's end face, wherever it points.
+				var face = tip + (tip - root).Normalized(Vector3.UnitZ) * (s.NoseFlat > 0 ? 0 : s.NoseSize);
+				var apart = new Vector3(s.NoseSize * 0.45f, 0, 0);
+				d = SmoothSubtract(d, MathF.Min(Sphere(p - face - apart, s.NostrilSize), Sphere(p - face + apart, s.NostrilSize)), 0.03f);
+			}
 		}
 		if (s.EarSize > 0)
 		{
@@ -158,6 +174,17 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			d = SmoothSubtract(d, Capsule(p, new Vector3(-s.MouthWidth, s.MouthHeight, 0.86f),
 				new Vector3(s.MouthWidth, s.MouthHeight, 0.86f), s.MouthSize + mouthOpen * 0.14f), 0.04f);
 		return d;
+	}
+
+	// A flat snout's end face sits a shade down from the cheeks around it, so it reads as a disc head-on.
+	static bool OnSnoutFace(Vector3 p, HeadShape s)
+	{
+		if (s.NoseFlat < 0.5f || s.NoseSize <= 0)
+			return false;
+		var root = new Vector3(0, s.NoseHeight, 0.88f);
+		var axis = new Vector3(0, -s.NoseDroop, s.NoseLength);
+		var along = Vector3.Dot(p - root, axis) / axis.LengthSquared();
+		return along > 0.97f && (p - root - axis * along).LengthSquared() < s.NoseSize * s.NoseSize * 0.8f;
 	}
 
 	// The accent eye glints at the back of each socket.
@@ -195,6 +222,18 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		var ba = b - a;
 		var h = Math.Clamp(Vector3.Dot(pa, ba) / Vector3.Dot(ba, ba), 0, 1);
 		return (pa - ba * h).Length() - radius;
+	}
+
+	static float Cylinder(Vector3 p, Vector3 a, Vector3 b, float radius)
+	{
+		var ba = b - a;
+		var pa = p - a;
+		var baba = Vector3.Dot(ba, ba);
+		var paba = Vector3.Dot(pa, ba);
+		var x = (pa * baba - ba * paba).Length() - radius * baba;
+		var y = MathF.Abs(paba - baba * 0.5f) - baba * 0.5f;
+		var d = MathF.Max(x, y) < 0 ? -MathF.Min(x * x, y * y * baba) : (x > 0 ? x * x : 0) + (y > 0 ? y * y * baba : 0);
+		return MathF.Sign(d) * MathF.Sqrt(MathF.Abs(d)) / baba;
 	}
 
 	static float SmoothUnion(float a, float b, float k)

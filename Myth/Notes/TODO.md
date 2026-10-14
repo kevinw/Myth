@@ -1,3 +1,4 @@
+- a pig head variant with floppy ear costume
 - a spell check pass on user visible strings
 - localized strings
 - ori-like glittering discoball wall; faking specular highlights with slight view angle noise

@@ -36,6 +36,7 @@ public partial class Manager
 		("Brow", nameof(HeadShape.BrowHeight), -0.1f, 0.6f), ("Brow", nameof(HeadShape.BrowForward), 0.4f, 1.1f),
 		("Nose", nameof(HeadShape.NoseSize), 0f, 0.35f), ("Nose", nameof(HeadShape.NoseLength), 0f, 0.8f),
 		("Nose", nameof(HeadShape.NoseHeight), -0.3f, 0.5f), ("Nose", nameof(HeadShape.NoseDroop), -0.3f, 0.8f),
+		("Nose", nameof(HeadShape.NoseFlat), 0f, 1f), ("Nose", nameof(HeadShape.NostrilSize), 0f, 0.15f),
 		("Eyes", nameof(HeadShape.EyeSpacing), 0.1f, 0.6f), ("Eyes", nameof(HeadShape.EyeHeight), -0.3f, 0.5f),
 		("Eyes", nameof(HeadShape.EyeSize), 0f, 0.45f), ("Eyes", nameof(HeadShape.EyeDepth), 0.4f, 1f),
 		("Mouth", nameof(HeadShape.MouthWidth), 0f, 0.6f), ("Mouth", nameof(HeadShape.MouthHeight), -0.9f, -0.1f),

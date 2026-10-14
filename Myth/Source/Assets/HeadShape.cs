@@ -29,6 +29,8 @@ public sealed class HeadShape
 	public float NoseLength { get; set; } = 0.3f;
 	public float NoseHeight { get; set; } = 0.16f;
 	public float NoseDroop { get; set; } = 0.34f;
+	public float NoseFlat { get; set; } // 0 a rounded nose .. 1 a flat-faced snout
+	public float NostrilSize { get; set; }
 
 	public float EyeSpacing { get; set; } = 0.34f;
 	public float EyeHeight { get; set; } = 0.06f;
