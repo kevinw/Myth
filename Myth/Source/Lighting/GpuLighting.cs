@@ -12,7 +12,7 @@ sealed class GpuLighting : IDisposable
 	const int ShadowRows = MaxLights + 1;
 
 	[StructLayout(LayoutKind.Sequential)]
-	readonly struct GpuLight(Vector2 position, float radius, float height, Vector4 colorIntensity, Vector4 cookie, Vector4 cookieShape, Vector4 shadow)
+	internal readonly struct GpuLight(Vector2 position, float radius, float height, Vector4 colorIntensity, Vector4 cookie, Vector4 cookieShape, Vector4 shadow)
 	{
 		public readonly Vector2 Position = position;
 		public readonly float Radius = radius;
@@ -126,6 +126,9 @@ sealed class GpuLighting : IDisposable
 
 	// World rect the masks cover. Lights that can't reach it are dropped in AddLight.
 	Rect visibleWorld;
+
+	// The lights gathered for the frame being lit; actors drawing before the next Begin see last frame's.
+	internal ReadOnlySpan<GpuLight> Lights => lights.AsSpan(0, lightCount);
 
 	public void Begin(in Rect visibleWorld)
 	{

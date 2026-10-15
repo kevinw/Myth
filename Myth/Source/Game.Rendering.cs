@@ -2630,6 +2630,7 @@ public sealed partial class GameView
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
+	internal ReadOnlySpan<GpuLighting.GpuLight> SceneLights => gpuLighting is { } lighting ? lighting.Lights : default;
 	readonly ProceduralWallRenderer? proceduralWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	bool hasProceduralWalls;

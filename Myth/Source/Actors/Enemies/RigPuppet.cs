@@ -1046,6 +1046,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
 	public override void RenderNormals(Batcher batcher) => visual?.DrawNormals(batcher, VisualParts);
+	public override void RenderEmissive(Batcher batcher) => visual?.DrawEmissive(batcher);
 
 	internal void RenderBehindPlayer(Batcher batcher)
 	{

@@ -1,0 +1,18 @@
+{
+  "Name": "Colossus",
+  "Type": "RigPuppet",
+  "Health": 40,
+  "IdleAnimationName": "Idle_Loop",
+  "WalkAnimationName": "Walk_Loop",
+  "ProjectionYaw": 35,
+  "PixelsPerMeter": 95,
+  "SculptedBody": true,
+  "SkinMetallic": 1,
+  "SculptedHead": true,
+  "HeadShapeId": "brute",
+  "HeadSize": 0.13,
+  "NearColor": "e3ad98",
+  "CoreColor": "b07466",
+  "FarColor": "643a44",
+  "OutlineColor": "171d27"
+}

@@ -35,6 +35,8 @@ public sealed class IAttribute(float min, float max) : Attribute
 {
 	public float Min => min;
 	public float Max => max;
+	// Draw as a dial; consecutive dials flow into a grid (Knobs).
+	public bool Knob { get; init; }
 }
 
 // String fields are single-line in the inspector; this gives one a text box Lines tall

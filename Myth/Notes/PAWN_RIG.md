@@ -4,7 +4,7 @@
 
 - `Source/Actors/Pawn.Rig.cs`: all the glue. The **sprite state machine keeps running unseen**. Gameplay reads its animation names and durations, so never remove `Play(...)` calls. `PlayPawnAnimation(name)` plays the sprite animation and records a rig request via `RigClipFor(name)`. Each frame, `UpdateRig()` (called at the end of `Pawn.Update`) turns that request into what the rig actually shows.
 - `Source/Animation/HumanoidRigVisual.cs`: the shared humanoid rig, also used by `Stalker`, `RigPuppet` and `EyeLaserPuppet`. Every new behaviour there is **opt-in through a `HumanoidRigSettings` field that defaults to off**, so the puppets look the same. Keep it that way: ELP is hand-tuned.
-- **Units:** body sizes (`HeadSize`, `TorsoSize`, … `FootSize`, `NeckExtension`) are meters, scaled by `PixelsPerMeter`, so zooming keeps proportions. Outlines, eye and joint-radius floor stay in pixels.
+- **Units:** body sizes (`HeadSize`, `TorsoSize`, … `FootSize`, `NeckExtension`, `ShoulderDrop`) are meters, scaled by `PixelsPerMeter`, so zooming keeps proportions. Outlines, eye and joint-radius floor stay in pixels.
 - `HumanoidRigSettings`: serialized, inspector-editable. `[NoSerialize]` flags (`TurnWhileMoving`, `GaitFeetFollowTerrain`) are set in code by Pawn.
 - Pawn rig settings are data: `Assets/Actors/humanoid.json` (shared body, motion, outline; no `Type`, so it never spawns) ← `player.json` / `bud.json` (costume, Bud's palette). `Game.SpawnPlayer` and `EnsureBudForPlayer` spawn from those prefabs. In the live inspector, **Apply to Prefab** writes each edited value to the prefab that sets it (e.g. `HeadSize` → Humanoid), else to the actor's own prefab, and saves. Other live actors pick it up on respawn.
 - Sprite mode must keep working. Every rig path is guarded by `rigVisual != null` / `RigDrawing`. Toggle with `RigDraw` in the inspector.
@@ -71,7 +71,7 @@
 
 ## Tunables (live via getters in `Pawn.Rig.cs`)
 
-Gait/sprint rates, `RigRollMinRate`, `RigLandingScale`, head-look turn/rate, `RigSkidYawRelease`, `RigRopeGripHeight` (meters), `RigCrawlLift`, `RigDiveFullAngleSpeed` / `RigDiveAngleResponse`. Settings that are worth opening in the inspector: `OutlineMode` (pawns use `Silhouette`: one rim, plus `FrontLimbOutline` where a limb passes in front of the pelvis by `FrontLimbDepth`), `VelocityLean`, `SquishResponse`, `TurnDuration`, `RagdollCarry`, `VisualFPS`.
+Gait/sprint rates, `RigRollMinRate`, `RigLandingScale`, head-look turn/rate, `RigSkidYawRelease`, `RigRopeGripHeight` (meters), `RigCrawlLift`, `RigDiveFullAngleSpeed` / `RigDiveAngleResponse`. Settings that are worth opening in the inspector: `OutlineMode` (pawns use `Silhouette`: one rim, plus `FrontLimbOutline` where a limb passes in front of the pelvis by `FrontLimbDepth`), `VelocityLean`, `SquishResponse`, `TurnDuration`, `RagdollCarry`, `VisualFPS`, and for the upper-body silhouette `ShoulderDrop`, `NeckSize`, `NeckTaper`, `ChestTaper`.
 
 ## Feel (Humanoid prefab)
 

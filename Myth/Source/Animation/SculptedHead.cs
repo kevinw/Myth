@@ -4,15 +4,16 @@ using Foster.Framework;
 namespace Myth;
 
 // A head as a small signed distance field -- cranium, jaw, brow, nose, carved eye sockets and mouth -- ray-marched
-// orthographically on the GPU (SculptedHead.hlsl) into tiny targets: palette color (banded by cavity depth, so
-// sockets and mouth read dark), screen-space normals for the lighting pass, and a 1px-dilated mask for outlines and
-// silhouettes (SculptedHeadMask.hlsl). Head-local units are head radii: x is the head's right, y up, z out of the
-// face. Re-renders only when its inputs change. The CPU version below is the reference the shaders are verified
-// against (Verify); keep the two in step.
+// orthographically on the GPU (SculptedHead.hlsl) into tiny targets: color shaded like a SculptedBody (sockets and
+// mouth read dark by cavity), screen-space normals for the lighting pass, scene-light highlights for the emissive
+// pass, and a 1px-dilated mask for outlines and silhouettes (SculptedHeadMask.hlsl). Head-local units are head
+// radii: x is the head's right, y up, z out of the face. Re-renders only when its inputs change. The CPU version
+// below is the reference the shape is verified against (Verify); keep the two in step.
 sealed class SculptedHead(GraphicsDevice device) : IDisposable
 {
 	const float Extent = 1.45f; // the shape's reach past the radius (nose, jaw), in radii
 	const int MaxSteps = 40;
+	const int MaxLights = SculptedBody.MaxLights;
 
 	static readonly BlendMode Overwrite = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly TextureSampler Nearest = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
@@ -20,16 +21,17 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	readonly Batcher batcher = new(device, "SculptedHead");
 	readonly Material headMaterial = new(null, LoadShader(device, "SculptedHead"));
 	readonly Material maskMaterial = new(null, LoadShader(device, "SculptedHeadMask"));
-	Target? marched; // color, raw normal (alpha = hit)
+	Target? marched; // color, raw normal (alpha = hit), specular
 	Target? dilated; // mask, normal
 
 	public Texture? ColorTexture => marched?.Attachments[0];
 	public Texture? NormalTexture => dilated?.Attachments[1];
 	public Texture? MaskTexture => dilated?.Attachments[0];
+	public Texture? SpecularTexture => marched?.Attachments[2];
 	public int Size { get; private set; }
 
 	(HeadShape? Shape, int Version, float Radius, float Yaw, float Pitch, float Roll, float Mouth, Color Near, Color Core,
-		Color Far, Color Eye) last;
+		Color Far, Color Eye, int Shading) last;
 
 	static Shader LoadShader(GraphicsDevice device, string name)
 	{
@@ -39,11 +41,25 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			samplerCount: 1, uniformBufferCount: 1, entryPoint: "fragment_main", name: name);
 	}
 
+	// surface: metallic, roughness, specular. worldCenter: where the head's center sits in the world, for the lights
+	// and the dither.
 	public void Render(HeadShape shape, float radius, float yaw, float pitch, float roll, float mouthOpen,
-		Color near, Color core, Color far, Color eye)
+		Color near, Color core, Color far, Color eye, BodyShadeMode mode = BodyShadeMode.Banded, Vector4 surface = default,
+		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default)
 	{
+		var size = TextureSize(radius);
+		var textureWorld = (worldCenter - new Vector2(size * 0.5f)).RoundToPoint2();
+		var shading = new HashCode();
+		shading.Add(mode);
+		shading.Add(surface);
+		// The dither only moves with the world grid's 4px cycle; lights change highlights whatever they do.
+		shading.Add(mode == BodyShadeMode.Dithered ? new Point2(textureWorld.X & 3, textureWorld.Y & 3) : Point2.Zero);
+		foreach (var light in lights)
+			shading.Add(light);
+		if (lights.Length > 0)
+			shading.Add(textureWorld);
 		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
-			MathF.Round(mouthOpen * 32) / 32, near, core, far, eye);
+			MathF.Round(mouthOpen * 32) / 32, near, core, far, eye, shading.ToHashCode());
 		if (marched != null && key == last)
 			return;
 		last = key;
@@ -51,18 +67,18 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		lastInputs = (radius, yaw, pitch, roll, mouthOpen);
 #endif
 
-		var size = TextureSize(radius);
 		if (size != Size || marched == null)
 		{
 			DisposeTargets();
 			Size = size;
-			marched = new Target(device, size, size, [TextureFormat.Color, TextureFormat.Color], name: "SculptedHead");
+			marched = new Target(device, size, size, [TextureFormat.Color, TextureFormat.Color, TextureFormat.Color], name: "SculptedHead");
 			dilated = new Target(device, size, size, [TextureFormat.Color, TextureFormat.Color], name: "SculptedHeadMask");
 		}
 
 		var (toView, toHead) = Rotations(yaw, pitch, roll);
 		var s = shape;
-		headMaterial.Fragment.SetUniformBuffer(new HeadUniforms
+		var lightCount = Math.Min(lights.Length, MaxLights);
+		var uniforms = new HeadUniforms
 		{
 			ToHead0 = new(toHead.M11, toHead.M12, toHead.M13, 0),
 			ToHead1 = new(toHead.M21, toHead.M22, toHead.M23, 0),
@@ -83,7 +99,16 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			Core = (Vector4)core,
 			Far = (Vector4)far,
 			Eye = (Vector4)eye,
-		});
+			Shading = new((int)mode, textureWorld.X, textureWorld.Y, lightCount),
+			Surface = surface,
+		};
+		for (var i = 0; i < lightCount; i++)
+		{
+			var light = lights[i];
+			uniforms.Lights[i * 2] = new(light.Position - textureWorld, light.Height, light.Radius);
+			uniforms.Lights[i * 2 + 1] = new(light.Color, 0);
+		}
+		headMaterial.Fragment.SetUniformBuffer(uniforms);
 		batcher.PushBlend(Overwrite);
 		batcher.PushMaterial(headMaterial);
 		batcher.Rect(new Rect(0, 0, size, size), Color.White);
@@ -92,7 +117,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		batcher.Render(marched);
 		batcher.Clear();
 
-		maskMaterial.Fragment.SetUniformBuffer(new Vector4(size, 0, 0, 0));
+		maskMaterial.Fragment.SetUniformBuffer(new Vector4(size, size, 0, 0));
 		batcher.PushBlend(Overwrite);
 		batcher.PushMaterial(maskMaterial);
 		batcher.PushSampler(Nearest);
@@ -108,8 +133,12 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	struct HeadUniforms
 	{
 		public Vector4 ToHead0, ToHead1, ToHead2, ToView0, ToView1, ToView2, Frame, Cranium, Jaw, Jaw2, Brow, Nose, Eyes,
-			Mouth, Ears, Near, Core, Far, Eye;
+			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface;
+		public LightArray Lights;
 	}
+
+	[System.Runtime.CompilerServices.InlineArray(MaxLights * 2)]
+	struct LightArray { Vector4 first; }
 
 	static float Quantize(float angle) => MathF.Round(angle * 180 / MathF.PI * 2) / 2;
 
@@ -133,9 +162,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		if (marched == null || last.Shape is not { } shape)
 			return "nothing rendered yet";
 		var (radius, yaw, pitch, roll, mouth) = lastInputs;
-		var (colors, normals, mask) = RenderReference(shape, radius, yaw, pitch, roll, mouth, last.Near, last.Core, last.Far, last.Eye);
+		var (normals, mask) = RenderReference(shape, radius, yaw, pitch, roll, mouth);
 		var report = new System.Text.StringBuilder($"{Size}x{Size}");
-		Compare("color", ColorTexture!, colors);
 		Compare("normal", NormalTexture!, normals);
 		Compare("mask", MaskTexture!, mask);
 		return report.ToString();
@@ -168,11 +196,10 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 
 	// The CPU ray-march the shaders mirror, pixel for pixel.
-	static (Color[] Colors, Color[] Normals, Color[] Mask) RenderReference(HeadShape s, float radius, float yaw, float pitch,
-		float roll, float mouth, Color near, Color core, Color far, Color eye)
+	static (Color[] Normals, Color[] Mask) RenderReference(HeadShape s, float radius, float yaw, float pitch, float roll,
+		float mouth)
 	{
 		var size = TextureSize(radius);
-		var colors = new Color[size * size];
 		var normals = new Color[size * size];
 		var mask = new Color[size * size];
 		var hit = new bool[size * size];
@@ -211,11 +238,6 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 				var viewNormal = Vector3.Normalize(Vector3.TransformNormal(normal, toView));
 				// Screen normals: x right, y down, z toward the viewer.
 				normals[i] = new Color(viewNormal.X * 0.5f + 0.5f, -viewNormal.Y * 0.5f + 0.5f, viewNormal.Z * 0.5f + 0.5f, 1f);
-				// Banded form: a fixed key light from above and in front, plus cavity depth, quantized to the palette.
-				var occlusion = Math.Clamp(Distance(position + normal * 0.22f, s, mouth) / 0.22f, 0, 1);
-				var light = Math.Clamp(Vector3.Dot(viewNormal, KeyLight), 0, 1) * 0.65f + occlusion * 0.35f;
-				colors[i] = InEyeGlow(position, s) && eye.A > 0 ? eye
-					: occlusion < 0.4f ? far : light > 0.62f && !OnSnoutFace(position, s) ? near : light > 0.4f ? core : far;
 			}
 
 		// The mask: the shape dilated one pixel, so outlines and silhouettes hug it.
@@ -240,10 +262,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 					normals[i] = RigDraw.ScreenNormalColor(outward);
 				}
 			}
-		return (colors, normals, mask);
+		return (normals, mask);
 	}
-
-	static readonly Vector3 KeyLight = Vector3.Normalize(new Vector3(0, 0.75f, 0.65f));
 
 	static Vector3 Socket(HeadShape s, float side) => new(s.EyeSpacing * side, s.EyeHeight, s.EyeDepth);
 
@@ -287,26 +307,6 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			d = SmoothSubtract(d, Capsule(p, new Vector3(-s.MouthWidth, s.MouthHeight, 0.86f),
 				new Vector3(s.MouthWidth, s.MouthHeight, 0.86f), s.MouthSize + mouthOpen * 0.14f), 0.04f);
 		return d;
-	}
-
-	// A flat snout's end face sits a shade down from the cheeks around it, so it reads as a disc head-on.
-	static bool OnSnoutFace(Vector3 p, HeadShape s)
-	{
-		if (s.NoseFlat < 0.5f || s.NoseSize <= 0)
-			return false;
-		var root = new Vector3(0, s.NoseHeight, 0.88f);
-		var axis = new Vector3(0, -s.NoseDroop, s.NoseLength);
-		var along = Vector3.Dot(p - root, axis) / axis.LengthSquared();
-		return along > 0.97f && (p - root - axis * along).LengthSquared() < s.NoseSize * s.NoseSize * 0.8f;
-	}
-
-	// The accent eye glints at the back of each socket.
-	static bool InEyeGlow(Vector3 p, HeadShape s)
-	{
-		var glow = s.EyeSize * 0.45f;
-		var back = new Vector3(0, -0.02f, s.EyeSize * 0.4f);
-		return s.EyeSize > 0 && (Vector3.DistanceSquared(p, Socket(s, -1) - back) < glow * glow ||
-			Vector3.DistanceSquared(p, Socket(s, 1) - back) < glow * glow);
 	}
 
 	static Vector3 SurfaceNormal(Vector3 p, HeadShape s, float mouthOpen)

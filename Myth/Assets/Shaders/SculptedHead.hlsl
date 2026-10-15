@@ -1,11 +1,14 @@
-// Ray-marches a SculptedHead's signed distance field: one fragment per head-texture pixel, writing palette color
-// (SV_Target0) and screen-space normal (SV_Target1, alpha = hit). SculptedHeadMask.hlsl dilates the result into
-// the mask. SculptedHead.cs keeps a CPU copy of this as the reference it's verified against; keep the two in step.
+// Ray-marches a SculptedHead's signed distance field: one fragment per head-texture pixel, writing color shaded
+// like a SculptedBody (SV_Target0, Include/SculptedShading.hlsl), screen-space normal (SV_Target1, alpha = hit) and
+// scene-light highlights (SV_Target2). SculptedHeadMask.hlsl dilates the result into the mask. SculptedHead.cs keeps
+// a CPU copy of the shape (not the shading) as the reference it's verified against; keep the two in step.
 
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
 };
+
+#define MAX_LIGHTS 4
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
@@ -28,6 +31,9 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Core;
     float4 Far;
     float4 Eye;
+    float4 Shading;  // x = 0 banded, 1 smooth, 2 dithered; yz = the texture's world position; w = light count
+    float4 Surface;  // metallic, roughness, specular
+    float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
 };
 
 Texture2D Texture : register(t0, space2);
@@ -63,7 +69,10 @@ struct HeadOutput
 {
     float4 Color : SV_Target0;
     float4 Normal : SV_Target1;
+    float4 Specular : SV_Target2;
 };
+
+#include "Include/SculptedShading.hlsl"
 
 static const float Extent = 1.45;
 static const int MaxSteps = 40;
@@ -195,6 +204,7 @@ HeadOutput fragment_main(VsOutput input)
     HeadOutput output;
     output.Color = float4(0.0, 0.0, 0.0, 0.0);
     output.Normal = float4(0.0, 0.0, 0.0, 0.0);
+    output.Specular = float4(0.0, 0.0, 0.0, 0.0);
     // Keep the batcher's interpolants alive; D3D12 needs matching signatures.
     if (input.type.x < -1000.0)
         return output;
@@ -229,9 +239,16 @@ HeadOutput fragment_main(VsOutput input)
     float3 viewNormal = normalize(to_view(normal));
     output.Normal = float4(viewNormal.x * 0.5 + 0.5, -viewNormal.y * 0.5 + 0.5, viewNormal.z * 0.5 + 0.5, 1.0);
     float occlusion = clamp(head_distance(position + normal * 0.22) / 0.22, 0.0, 1.0);
-    float3 keyLight = normalize(float3(0.0, 0.75, 0.65));
-    float light = clamp(dot(viewNormal, keyLight), 0.0, 1.0) * 0.65 + occlusion * 0.35;
-    output.Color = in_eye_glow(position) && Eye.a > 0.0 ? Eye
-        : occlusion < 0.4 ? Far : light > 0.62 && !on_snout_face(position) ? Near : light > 0.4 ? Core : Far;
+    // The shared shading works in pixels with y down.
+    float3 screenNormal = float3(viewNormal.x, -viewNormal.y, viewNormal.z);
+    float3 viewPosition = to_view(position) * radius;
+    float3 pixel = float3(half_size + viewPosition.x, half_size - viewPosition.y, viewPosition.z);
+    float threshold = sculpted_threshold(input.position.xy);
+    float light = sculpted_light(screenNormal, occlusion, Surface.x, 0.0);
+    // A flat snout's end face sits a shade down from the cheeks around it.
+    if (on_snout_face(position))
+        light = min(light, 0.6);
+    output.Color = in_eye_glow(position) && Eye.a > 0.0 ? Eye : float4(sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold), 1.0);
+    output.Specular = sculpted_specular(pixel, screenNormal, Near.rgb, Surface, threshold);
     return output;
 }

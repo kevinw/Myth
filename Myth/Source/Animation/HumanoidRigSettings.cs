@@ -57,6 +57,7 @@ public sealed class HumanoidRigSettings
 	[I(0, 2)] public float EyeSize = 1;
 	// A ray-cast 3D head (SculptedHead): jaw, brow, nose, eye sockets, mouth, with real normals. Heads under
 	[I(-0.15f, 0.3f)] public float NeckExtension;
+	[I(-0.1f, 0.15f)] public float ShoulderDrop;
 	[I(0.02f, 0.5f)] public float TorsoSize = 0.2f;
 	[I(0.02f, 0.5f)] public float ChestSize = 0.16f;
 	[I(0.02f, 0.5f)] public float NeckSize = 0.12f;
@@ -66,6 +67,8 @@ public sealed class HumanoidRigSettings
 	[I(0.02f, 0.5f)] public float ShinSize = 0.12f;
 	[I(0.02f, 0.4f)] public float FootSize = 0.08f;
 	[I(0, 0.75f)] public float LimbTaper;
+	[I(0, 0.75f)] public float ChestTaper;
+	[I(0, 0.75f)] public float NeckTaper;
 	// 0 = each limb bone starts at its own width; 1 = it starts at the width its parent ended at.
 	[I(0, 1)] public float JointContinuity = 1;
 	[I(0, 3)] public float DepthColorContrast = 1;
@@ -81,6 +84,40 @@ public sealed class HumanoidRigSettings
 	public bool SculptedHead;
 	// The sculpted head's features (Sources/Heads); setting one turns the sculpted head on.
 	public ContentRef<HeadShapeContent> HeadShapeId = new("");
+
+	// The body as one ray-marched SDF (SculptedBody): fleshy masses over metal joints, instead of drawn bones.
+	[InspectorGroup("Sculpted Body")] public bool SculptedBody;
+	public BodyShadeMode BodyShading;
+	// Each part shades from its own color toward its color times BodyShadow, more so on the side away from the viewer
+	// (BodyDepthShade). Metallic skin shades by what it reflects and tints its highlights, which come from the nearest
+	// scene lights.
+	public Color BodyShadow = new(0x705c8c);
+	[I(0.3f, 3, Knob = true)] public float BodyBulk = 1;
+	[I(0, 0.3f, Knob = true)] public float FleshBlend = 0.06f; // meters of smooth union between fleshy pieces
+	[I(0, 3, Knob = true)] public float ChestMass = 1;
+	[I(0, 3, Knob = true)] public float Abs = 1;
+	[I(0.3f, 2, Knob = true)] public float HipSize = 1;
+	[I(0, 2, Knob = true)] public float Glutes = 1;
+	[I(0, 2, Knob = true)] public float Codpiece = 1;
+	[I(0, 2, Knob = true)] public float Claws = 1; // length; 0 leaves plain hands
+	[I(0, 1, Knob = true)] public float SkinMetallic;
+	[I(0, 1, Knob = true)] public float SkinRoughness = 0.5f;
+	[I(0, 1, Knob = true)] public float MetalRoughness = 0.3f;
+	[I(0, 3, Knob = true)] public float Specular = 1;
+	[I(0, 1, Knob = true)] public float BodyDepthShade = 0.35f;
+	[InspectorGroup("Sculpted Body Colors")] public Color HeadColor = new(0xe3ad98);
+	public Color TorsoColor = new(0xe3ad98);
+	public Color ChestColor = new(0xe3ad98);
+	public Color AbsColor = new(0xe3ad98);
+	public Color ArmColor = new(0xe3ad98);
+	public Color LegColor = new(0xe3ad98);
+	public Color CalfColor = new(0xe3ad98);
+	public Color JointColor = new(0xd8c08a);
+	public Color ForearmColor = new(0xd8c08a);
+	public Color ShinColor = new(0xd8c08a);
+	public Color HandColor = new(0xd8c08a);
+	public Color FootColor = new(0xd8c08a);
+	public Color ClawColor = new(0xe8e0c8);
 
 	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public ContentRef<SurfaceContent> SurfaceId = new("");

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Foster.Framework;
 using static Myth.RigDraw;
 
@@ -213,6 +214,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	NeuralSkinRuntime neuralSkin = null!;
 	Sprite? headSprite;
 	SculptedHead? sculptedHead;
+	SculptedBody? sculptedBody;
+	bool sculptedBodyDirty = true;
+	readonly List<BodyPrimitive> bodyPrimitives = [];
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
 	static float SculptedHeadMinRadius => 5f;
 	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
@@ -241,6 +245,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	int spine2;
 	int spine3;
 	int leftClavicle;
+	int[] leftClaws = [], rightClaws = []; // per clawed finger: its second joint, third joint and tip
 	int rightClavicle;
 	int pelvis;
 	float animationPhase;
@@ -265,6 +270,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	float turnTime;
 	float turnAmount;
 	bool ragdollReady;
+	float appliedShoulderDrop;
 	bool turnReady;
 	bool turning;
 	bool poseDirty;
@@ -469,6 +475,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		spine2 = RequiredJoint("spine_02");
 		spine3 = RequiredJoint("spine_03");
 		leftClavicle = RequiredJoint("clavicle_l");
+		leftClaws = ClawJoints("l");
+		rightClaws = ClawJoints("r");
 		rightClavicle = RequiredJoint("clavicle_r");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
@@ -494,6 +502,19 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		headSprite = string.IsNullOrWhiteSpace(Settings.HeadSpriteName)
 			? null
 			: Assets.GetSprite(Settings.HeadSpriteName);
+	}
+
+	int[] ClawJoints(string side)
+	{
+		string[] fingers = ["index", "middle", "ring", "thumb"];
+		var joints = new int[fingers.Length * 3];
+		for (var i = 0; i < fingers.Length; i++)
+		{
+			joints[i * 3] = RequiredJoint($"{fingers[i]}_02_{side}");
+			joints[i * 3 + 1] = RequiredJoint($"{fingers[i]}_03_{side}");
+			joints[i * 3 + 2] = RequiredJoint($"{fingers[i]}_04_leaf_{side}");
+		}
+		return joints;
 	}
 
 	int RequiredJoint(string name)
@@ -846,6 +867,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
 		ApplyInertialBlend();
+		ApplyShoulderDrop();
 		UpdateLookPose();
 		ApplyTrackingLean();
 		UpdateRagdoll();
@@ -874,6 +896,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		UpdateWires();
 		UpdateHeadLook();
 		UpdateEye();
+		sculptedBodyDirty = true;
 	}
 
 	// Rendered when drawn (it skips itself when nothing changed), so posed and stepped rigs stay current too.
@@ -882,10 +905,21 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (!UsesSculptedHead)
 			return null;
 		sculptedHead ??= new(owner.Game.Manager.GraphicsDevice);
+		// On a sculpted body the head shades from its own color like the body's parts; otherwise from the palette.
+		var (near, core, far) = (Settings.NearColor, Settings.CoreColor, Settings.FarColor);
+		if (Settings.SculptedBody)
+		{
+			near = Settings.HeadColor;
+			far = new Color((Vector4)near * (Vector4)Settings.BodyShadow);
+			core = Color.Lerp(near, far, 0.5f);
+		}
+		var center = owner.RenderPosition + projectedPose[head];
+		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
 		// Head sprites count yaw the other way round.
 		sculptedHead.Render(Assets.GetHeadShape(Settings.HeadShapeId), HeadRadius, -HeadViewYaw(), 0,
-			HeadSpriteRoll(), MouthOpen,
-			Settings.NearColor, Settings.CoreColor, Settings.FarColor, Settings.EyeSize > 0 ? Settings.AccentColor : default);
+			HeadSpriteRoll(), MouthOpen, near, core, far, Settings.EyeSize > 0 ? Settings.AccentColor : default,
+			Settings.BodyShading, new(Settings.SkinMetallic, Settings.SkinRoughness, Settings.Specular, 0),
+			lights[..GatherLights(lights, center, HeadRadius)], center);
 		return sculptedHead;
 	}
 
@@ -911,6 +945,20 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			inertialActive = remaining > 0;
 		}
 		sampledPose.CopyTo(lastSampledPose, 0);
+	}
+
+	// Slides both shoulder chains down the chest, so every clip wears the same proportions.
+	void ApplyShoulderDrop()
+	{
+		// The ragdoll keeps the bone lengths it first saw; a new drop re-measures them.
+		if (appliedShoulderDrop != Settings.ShoulderDrop)
+			ragdollReady = false;
+		appliedShoulderDrop = Settings.ShoulderDrop;
+		if (appliedShoulderDrop == 0)
+			return;
+		var offset = Vector3.Normalize(sampledPose[spine3] - sampledPose[neck]) * appliedShoulderDrop;
+		for (var i = 0; i < sampledPose.Length; i++)
+			sampledPose[i] += offset * (leftArmMask[i] + rightArmMask[i]);
 	}
 
 	void UpdateHeadLook()
@@ -1281,6 +1329,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		animator?.Dispose();
 		neuralSkin?.Dispose();
 		sculptedHead?.Dispose();
+		sculptedBody?.Dispose();
 	}
 
 	void ProjectPose()
@@ -1701,10 +1750,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	float BaseBoneWidth(Bone bone)
 		=> BoneWidth(bone) * (1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * Settings.DepthWidthAmount);
 
-	float TaperedWidth(Bone bone, float width)
-		=> bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand
-			? width * (1 - Math.Clamp(Settings.LimbTaper, 0, 0.75f))
-			: width;
+	float TaperedWidth(Bone bone, float width) => width * (1 - Math.Clamp(
+		bone.Part == Part.Chest ? Settings.ChestTaper :
+		bone.Part == Part.Neck ? Settings.NeckTaper :
+		bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand ? Settings.LimbTaper : 0, 0, 0.75f));
 
 	void CaptureNeuralUVs()
 	{
@@ -1792,6 +1841,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				bounds = bounds.Conflate(point - Vector2.One * radius).Conflate(point + Vector2.One * radius);
 			}
 		}
+		if (CurrentSculptedBody() is { ColorTexture: { } bodyTexture } sculpted)
+			bounds = bounds.Conflate(new Rect(sculpted.Origin, new Vector2(bodyTexture.Width, bodyTexture.Height)));
 		if (Assets.GetCostume(Settings.CostumeId) != null)
 		{
 			BuildDrawList();
@@ -1816,6 +1867,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var accessoryIndex = 0;
 		var headAdded = false;
 		var headDepth = jointDepth[head];
+		if (Settings.SculptedBody)
+		{
+			drawItems.Add(new(RigDrawKind.Body, -1));
+			drawItems.Add(new(RigDrawKind.Head, -1));
+			AddItemsThrough(ref wireIndex, ref accessoryIndex, float.PositiveInfinity);
+			return;
+		}
 		var costume = Assets.GetCostume(Settings.CostumeId);
 		Span<bool> added = stackalloc bool[bones.Length];
 		added.Clear();
@@ -1911,6 +1969,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				case RigDrawKind.Head:
 					DrawHead(batcher, tint, silhouette: false, skin, outlined: !rimmed);
 					break;
+				case RigDrawKind.Body:
+					DrawBody(batcher, tint, silhouette: false, outlined: !rimmed);
+					break;
 				case RigDrawKind.Wire:
 					DrawWire(batcher, item.Index, tint, silhouette: false);
 					break;
@@ -1936,6 +1997,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					HandSpinAmount(bones[item.Index]), 2, tint);
 			else if (item.Kind == RigDrawKind.Bone)
 				DrawBoneSilhouette(batcher, item, tint);
+			else if (item.Kind == RigDrawKind.Body)
+				DrawBody(batcher, tint, silhouette: true);
 		}
 		foreach (var item in drawItems)
 		{
@@ -1954,6 +2017,207 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					break;
 			}
 		}
+	}
+
+	void DrawBody(Batcher batcher, Color tint, bool silhouette, bool outlined = true)
+	{
+		if (CurrentSculptedBody() is not { ColorTexture: { } color } body)
+			return;
+		if (silhouette || outlined)
+			batcher.Image(body.MaskTexture!, body.Origin, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
+		if (!silhouette)
+			batcher.Image(color, body.Origin, tint);
+	}
+
+	// Re-marched once per pose step, however many passes draw it.
+	SculptedBody? CurrentSculptedBody()
+	{
+		if (!Settings.SculptedBody)
+			return null;
+		sculptedBody ??= new(owner.Game.Manager.GraphicsDevice);
+		if (!sculptedBodyDirty)
+			return sculptedBody;
+		sculptedBodyDirty = false;
+		BuildBodyPrimitives();
+		var ppm = Settings.PixelsPerMeter;
+		var shading = new BodyShading(Settings.BodyShading, Settings.BodyShadow,
+			new(Settings.SkinMetallic, Settings.SkinRoughness, Settings.Specular, 0), new(1, Settings.MetalRoughness, Settings.Specular, 0),
+			0.05f * ppm, jointDepth[pelvis] * ppm, 0.25f * ppm, Settings.BodyDepthShade);
+		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
+		sculptedBody.Render(CollectionsMarshal.AsSpan(bodyPrimitives), shading,
+			lights[..GatherLights(lights, owner.RenderPosition + TorsoCenter, ppm)], owner.RenderPosition);
+		return sculptedBody;
+	}
+
+	// The scene lights that reach most strongly into `reach` pixels around a world point, strongest first.
+	int GatherLights(Span<BodyLight> into, Vector2 center, float reach)
+	{
+		if (owner.Game.View is not { } view)
+			return 0;
+		Span<float> scores = stackalloc float[into.Length];
+		var count = 0;
+		foreach (var light in view.SceneLights)
+		{
+			var score = light.ColorIntensity.W * Math.Clamp(1 - (Vector2.Distance(light.Position, center) - reach) / light.Radius, 0, 1);
+			if (score <= 0 || count == into.Length && score <= scores[count - 1])
+				continue;
+			var at = Math.Min(count, into.Length - 1);
+			for (; at > 0 && scores[at - 1] < score; at--)
+			{
+				scores[at] = scores[at - 1];
+				into[at] = into[at - 1];
+			}
+			scores[at] = score;
+			var color = light.ColorIntensity;
+			into[at] = new(light.Position, light.Height, light.Radius, new Vector3(color.X, color.Y, color.Z) * color.W);
+			count = Math.Min(count + 1, into.Length);
+		}
+		return count;
+	}
+
+	public void DrawEmissive(Batcher batcher)
+	{
+		if (CurrentSculptedBody() is { SpecularTexture: { } specular } body)
+			batcher.Image(specular, body.Origin, Color.White);
+		if (CurrentSculptedHead() is { SpecularTexture: { } headSpecular } sculpt)
+			batcher.Image(headSpecular, projectedPose[head], new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
+	}
+
+	// The fleshy robot: soft masses smooth-unioned over a torso, hard metal joints, forearms, shins, hands and feet.
+	// Sizes are meters; positions come from the projected pose (so leans, IK and squish carry over) plus its depth,
+	// which mirrors rather than rotates on a turn, so the front always faces the camera.
+	void BuildBodyPrimitives()
+	{
+		const int Flesh = 0, Metal = 1;
+		var ppm = Settings.PixelsPerMeter;
+		var bulk = ppm * Settings.BodyBulk;
+		var blend = Settings.FleshBlend * ppm;
+		var machined = 0.01f * ppm;
+		var muscle = 0.02f * ppm; // a tight blend, so each muscle keeps a crease where it meets the limb
+		var list = bodyPrimitives;
+		list.Clear();
+
+		var side = Vector3.Normalize(V(rightClavicle) - V(leftClavicle));
+		var up = Vector3.Normalize(V(neck) - V(pelvis));
+		var forward = Vector3.Normalize(Vector3.Cross(up, side));
+		var toes = V(leftLeg.Toe) - V(leftLeg.Ankle) + V(rightLeg.Toe) - V(rightLeg.Ankle);
+		if (Vector3.Dot(forward, toes) < 0)
+			forward = -forward;
+
+		var (torso, joints) = (Settings.TorsoColor, Settings.JointColor);
+		var hips = Settings.HipSize;
+		Add(V(leftLeg.Hip), V(rightLeg.Hip), 0.1f * hips, 0.1f * hips, 0, joints, Metal);
+		Add(V(spine1), V(spine2), 0.13f, 0.14f, blend, torso);
+		Add(V(spine2), V(spine3), 0.15f, 0.17f, blend, torso);
+		Add(V(leftClavicle) - up * 0.06f * bulk, V(rightClavicle) - up * 0.06f * bulk, 0.12f, 0.12f, blend, torso);
+		// Pecs are flat plates from the sternum up to the armpit, not balls: they barely stand off the ribcage. A shallow
+		// groove along each one's underside gives it the crisp lower edge.
+		var chest = Vector3.Lerp(V(spine2), V(spine3), 0.8f);
+		var pecs = Settings.ChestMass;
+		if (pecs > 0)
+		{
+			for (var s = -1; s <= 1; s += 2)
+			{
+				var (inner, outer) = Pec(s);
+				Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, Settings.ChestColor);
+			}
+			for (var s = -1; s <= 1; s += 2)
+			{
+				var (inner, outer) = Pec(s);
+				var under = forward * 0.02f * bulk;
+				list.Add(new(inner - up * 0.055f * bulk * pecs + under, 0.012f * bulk,
+					outer - up * 0.045f * bulk * pecs + under, 0.012f * bulk, 0.01f * ppm, default, Carve: true));
+			}
+		}
+		if (Settings.Abs > 0)
+			for (var row = 0; row < 3; row++)
+			{
+				var center = Vector3.Lerp(V(pelvis), V(spine2), 0.35f + row * 0.25f) + forward * 0.12f * bulk;
+				for (var s = -1; s <= 1; s += 2)
+				{
+					var ab = center + side * s * 0.045f * bulk;
+					Add(ab, ab, 0.04f * Settings.Abs, 0.04f * Settings.Abs, 0.015f * ppm, Settings.AbsColor);
+				}
+			}
+		Add(V(neck), V(head), 0.075f, 0.07f, blend, torso);
+		var (arms, forearms, hands) = (Settings.ArmColor, Settings.ForearmColor, Settings.HandColor);
+		var (legs, shins, feet) = (Settings.LegColor, Settings.ShinColor, Settings.FootColor);
+		Limb(leftUpperArm, leftLowerArm, leftHand, leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
+		Limb(rightUpperArm, rightLowerArm, rightHand, rightPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
+		Limb(leftLeg.Hip, leftLeg.Knee, leftLeg.Ankle, leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, feet);
+		Limb(rightLeg.Hip, rightLeg.Knee, rightLeg.Ankle, rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, feet);
+		// The codpiece: a rounded mass below the hip joints, pushed forward and smoothed into the hips and thighs.
+		if (Settings.Codpiece > 0)
+		{
+			var crotch = Vector3.Lerp(V(leftLeg.Hip), V(rightLeg.Hip), 0.5f) + (forward * 0.07f - up * 0.06f) * bulk;
+			Add(crotch + up * 0.03f * bulk, crotch + (forward * 0.02f - up * 0.04f) * bulk,
+				0.065f * Settings.Codpiece, 0.055f * Settings.Codpiece, blend, legs);
+		}
+		for (var s = -1; s <= 1; s += 2)
+		{
+			var (upperArm, lowerArm) = s < 0 ? (leftUpperArm, leftLowerArm) : (rightUpperArm, rightLowerArm);
+			Muscle(V(upperArm), V(lowerArm), 0.3f, 0.7f, forward, 0.03f, 0.06f, 0.05f, arms); // biceps
+			Muscle(V(upperArm), V(lowerArm), 0.15f, 0.6f, -forward, 0.03f, 0.06f, 0.045f, arms); // triceps
+			var leg = s < 0 ? leftLeg : rightLeg;
+			var (hip, knee, ankle) = (V(leg.Hip), V(leg.Knee), V(leg.Ankle));
+			var front = Vector3.Normalize(V(leg.Toe) - ankle);
+			Muscle(hip, knee, 0.25f, 0.8f, front, 0.04f, 0.085f * hips, 0.065f, legs); // quads
+			Muscle(hip, knee, 0.72f, 0.9f, front * 0.5f - side * s, 0.05f, 0.045f, 0.04f, legs); // the teardrop above the knee
+			Muscle(hip, knee, 0.2f, 0.75f, -front, 0.04f, 0.08f * hips, 0.06f, legs); // hamstrings
+			// Each glute's inner edge rides just past the midline, so the two meet in a crease at any size.
+			if (Settings.Glutes > 0)
+			{
+				var radius = 0.085f * Settings.Glutes;
+				var midline = Vector3.Lerp(V(leftLeg.Hip), V(rightLeg.Hip), 0.5f);
+				var glute = midline + (side * s * radius * 0.85f - forward * 0.07f - up * 0.03f) * bulk;
+				Add(glute + up * 0.02f * bulk, glute - (up * 0.06f + forward * 0.01f) * bulk, radius, radius * 0.88f, muscle, legs);
+			}
+			Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, Settings.CalfColor); // calf, fleshed over the metal shin
+		}
+		// Claws ride the finger joints, so they curl with the animation's grip, and run on past the fingertips.
+		if (Settings.Claws > 0)
+			foreach (var claws in (ReadOnlySpan<int[]>)[leftClaws, rightClaws])
+				for (var i = 0; i < claws.Length; i += 3)
+				{
+					var (knuckle, middle, tip) = (V(claws[i]), V(claws[i + 1]), V(claws[i + 2]));
+					Add(knuckle, middle, 0.022f, 0.016f, machined, Settings.ClawColor, Metal);
+					Add(middle, middle + (tip - middle) * (1 + Settings.Claws * 1.5f), 0.016f, 0.003f, machined, Settings.ClawColor, Metal);
+				}
+		Add(V(leftLeg.Toe), V(leftLeg.Tip), 0.05f, 0.04f, machined, feet, Metal);
+		Add(V(rightLeg.Toe), V(rightLeg.Tip), 0.05f, 0.04f, machined, feet, Metal);
+		for (var s = -1; s <= 1; s += 2)
+		{
+			var clavicle = s < 0 ? leftClavicle : rightClavicle;
+			Add(V(neck), V(clavicle), 0.08f, 0.07f, blend, torso);
+		}
+
+		// A fleshy upper segment with its mass at the root, a metal joint, a machined lower segment and end.
+		void Limb(int root, int joint, int end, int tip, float mass, float upper, float lower, float jointRadius, float endRadius,
+			Color upperColor, Color lowerColor, Color endColor)
+		{
+			Add(V(root), V(root), mass, mass, blend, upperColor);
+			Add(V(root), V(joint), upper, lower, blend, upperColor);
+			Add(V(joint), V(joint), jointRadius, jointRadius, 0, joints, Metal);
+			Add(V(joint), V(end), jointRadius, endRadius, machined, lowerColor, Metal);
+			Add(V(end), V(tip), endRadius, endRadius * 1.1f, machined, endColor, Metal);
+		}
+
+		(Vector3 Inner, Vector3 Outer) Pec(int s) => (chest + (side * s * 0.045f + forward * 0.12f) * bulk,
+			Vector3.Lerp(chest, V(s < 0 ? leftUpperArm : rightUpperArm), 0.65f) + forward * 0.08f * bulk);
+
+		// A mass along part of a segment, pushed off its axis toward a side of the limb.
+		void Muscle(Vector3 a, Vector3 b, float from, float to, Vector3 toward, float offset, float radiusA, float radiusB, Color color)
+		{
+			var axis = Vector3.Normalize(b - a);
+			var push = toward - axis * Vector3.Dot(toward, axis);
+			push = push.LengthSquared() > 0.000001f ? Vector3.Normalize(push) * offset * bulk : Vector3.Zero;
+			Add(Vector3.Lerp(a, b, from) + push, Vector3.Lerp(a, b, to) + push, radiusA, radiusB, muscle, color);
+		}
+
+		void Add(Vector3 a, Vector3 b, float radiusA, float radiusB, float k, Color color, int material = Flesh)
+			=> list.Add(new(a, radiusA * bulk, b, radiusB * bulk, k, color, material));
+
+		Vector3 V(int joint) => new(projectedPose[joint], jointDepth[joint] * ppm);
 	}
 
 	bool InFrontOfBody(Bone bone)
@@ -2027,6 +2291,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					break;
 				case RigDrawKind.Head:
 					DrawHeadNormals(batcher, flat, skin);
+					break;
+				case RigDrawKind.Body:
+					if (CurrentSculptedBody() is { NormalTexture: { } bodyNormals } body)
+						batcher.Image(bodyNormals, body.Origin, Color.White);
 					break;
 				case RigDrawKind.Wire:
 					DrawWireNormals(batcher, item.Index);

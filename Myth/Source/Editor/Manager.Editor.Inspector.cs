@@ -58,6 +58,7 @@ public partial class Manager
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
 			PopID();
 		}
+		EndKnobFlow();
 
 		if (changed)
 		{
@@ -142,6 +143,9 @@ public partial class Manager
 
 	bool DrawActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
+		if (property.Inspector is { Knob: true } dial && property.Type == typeof(float))
+			return DrawActorKnob(specId, room, actor, property, dial);
+		EndKnobFlow();
 		var row = BeginPropertyRow(property.DisplayName, property.HasLocalValue,
 			additionalTrailingButtons: property.Inspector != null ? 1 : 0);
 		if (BeginPopupContextItem("##PropertyContext"))
@@ -189,6 +193,33 @@ public partial class Manager
 		}
 
 		return changed;
+	}
+
+	bool knobFlow;
+
+	// One dial cell; a run of them flows into a grid until the next ordinary row (or EndKnobFlow).
+	bool DrawActorKnob(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, IAttribute dial)
+	{
+		if (!knobFlow)
+			Knobs.BeginFlow();
+		knobFlow = true;
+		var value = property.Value?.GetValue<float>() ?? 0;
+		var reset = property.ResetValue?.GetValue<float>() ?? value;
+		var changed = Knobs.Knob(property.DisplayName, ref value, dial.Min, dial.Max, reset);
+		if (changed && property.HasLocalValue && value == reset)
+			ResetActorProperty(specId, room, actor, property);
+		else if (changed)
+			SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+		if (specId != null && undo.HasPending(PrefabUndoSlot, specId) && !IsAnyItemActive())
+			CommitPrefabUndo();
+		return changed;
+	}
+
+	void EndKnobFlow()
+	{
+		if (knobFlow)
+			Knobs.EndFlow();
+		knobFlow = false;
 	}
 
 	bool DrawActorPropertyValue(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, float controlWidth)
@@ -782,6 +813,7 @@ public partial class Manager
 			changed |= DrawActorInstanceProperty(room, actor, property);
 			PopID();
 		}
+		EndKnobFlow();
 
 		if (changed)
 		{
@@ -876,6 +908,7 @@ public partial class Manager
 			DrawActorProperty(null, null, authored, property);
 			PopID();
 		}
+		EndKnobFlow();
 		livePropertyTarget = null;
 		EndChild();
 

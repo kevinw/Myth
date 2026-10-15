@@ -517,6 +517,8 @@ public abstract partial class Pawn
 	{
 		if (rigVisual == null)
 			base.RenderEmissive(batcher);
+		else
+			rigVisual.DrawEmissive(batcher);
 	}
 
 	public override Rect GetVisualBounds() => rigVisual?.GetVisualBounds() ?? base.GetVisualBounds();
