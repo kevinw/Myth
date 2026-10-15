@@ -182,10 +182,10 @@ bool on_snout_face(float3 p)
 float3 surface_normal(float3 p)
 {
     const float e = 0.01;
-    float3 a = float3(1.0, -1.0, -1.0);
-    float3 b = float3(-1.0, -1.0, 1.0);
-    float3 c = float3(-1.0, 1.0, -1.0);
-    float3 d = float3(1.0, 1.0, 1.0);
+    const float3 a = float3(1.0, -1.0, -1.0);
+    const float3 b = float3(-1.0, -1.0, 1.0);
+    const float3 c = float3(-1.0, 1.0, -1.0);
+    const float3 d = float3(1.0, 1.0, 1.0);
     return normalize(a * head_distance(p + a * e) + b * head_distance(p + b * e) +
         c * head_distance(p + c * e) + d * head_distance(p + d * e));
 }

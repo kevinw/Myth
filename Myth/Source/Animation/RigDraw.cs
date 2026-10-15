@@ -19,9 +19,10 @@ readonly record struct RigDrawItem(RigDrawKind Kind, int Index, bool BehindPlaye
 	Color Color = default, JointRings Rings = JointRings.None, bool JoinsParent = false, CostumePiece? Piece = null);
 
 // The texture a pass paints over rig fills: a surface, an NCA texture, or nothing. Skin UVs address the rig's
-// Size-by-Origin reference box; surfaces sample world space anchored at MaterialOrigin.
+// Size-by-Origin reference box; surfaces sample world space anchored at MaterialOrigin. NoSurfaces also keeps costume
+// pieces to their fills: surfaces draw with their own material, which would escape a material the owner pushed.
 readonly record struct RigSkin(Surface? Surface, Texture? Texture, float Amount, bool Normals,
-	Point2 Size, Point2 Origin, Vector2 MaterialOrigin, float Time, Color? Tint = null)
+	Point2 Size, Point2 Origin, Vector2 MaterialOrigin, float Time, Color? Tint = null, bool NoSurfaces = false)
 {
 	public void Push(Batcher batcher)
 	{
@@ -150,7 +151,7 @@ static class RigDraw
 		var flat = new Color(0x8080ff);
 		var fill = silhouette ? tint : baseSkin.Normals ? flat : Multiply(piece.Fill, tint);
 		outline = silhouette ? tint : baseSkin.Normals ? flat : Multiply(outline, tint);
-		var surface = !silhouette && piece.Surface != "" ? Assets.GetSurface(piece.Surface) : null;
+		var surface = !silhouette && !baseSkin.NoSurfaces && piece.Surface != "" ? Assets.GetSurface(piece.Surface) : null;
 		var skin = baseSkin with
 		{
 			Surface = baseSkin.Normals && surface?.HasNormal != true ? null : surface,

@@ -20,10 +20,10 @@
   "ForearmSize": 0.101,
   "TorsoSize": 0.141,
   "ChestSize": 0.116,
-  "HeadSize": 0.122,
   "PixelsPerMeter": 14,
   "InertialBlendTime": 0.1,
   "LandingHold": 0.06,
   "PixelSnap": true,
-  "KeyEvents": true
+  "KeyEvents": true,
+  "HeadSize": 0.074
 }

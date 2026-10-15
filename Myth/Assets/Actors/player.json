@@ -3,5 +3,7 @@
   "From": "Humanoid",
   "Type": "Player",
   "CostumeId": "brass-wanderer",
-  "NeckExtension": 0.054
+  "NeckExtension": 0.054,
+  "SculptedHead": true,
+  "HeadSpriteScale": 0.999
 }

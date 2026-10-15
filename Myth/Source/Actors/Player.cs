@@ -2805,7 +2805,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 			var clipped = PushRigSinkClip(batcher);
 			batcher.Image(subtexture, at, hatSpriteOrigin, new Vector2((int)Facing, 1), angle, color);
 			if (clipped)
-				batcher.PopScissor();
+				PopRigSinkClip(batcher);
 			return;
 		}
 		if (CurrentSpriteFrame is not { } playerFrame || Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)

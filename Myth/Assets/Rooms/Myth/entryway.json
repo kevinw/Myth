@@ -146,7 +146,7 @@
     {
       "Id": "38ff3a65d0305e38",
       "Type": "FleshWall",
-      "Position": [0, 4],
+      "Position": [0, 2],
       "Specular": 0.753,
       "DetailScale": 2.769,
       "MembraneDensity": 2.043,

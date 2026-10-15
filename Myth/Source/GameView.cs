@@ -35,6 +35,7 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		backgroundDecalMaskMaterials = loadVisualShaders ? CreatePhasedMaterials("DecalMask", samplerCount: 2) : null;
 		foregroundDecalMaskMaterials = loadVisualShaders ? CreatePhasedMaterials("DecalMask", samplerCount: 2) : null;
+		terrainCutMaterials = loadVisualShaders ? CreatePhasedMaterials("DecalMask", samplerCount: 2) : null;
 		backgroundColorFieldDecalMaterials = loadVisualShaders ? CreatePhasedMaterials("ColorFieldDecalMask", samplerCount: 3) : null;
 		foregroundColorFieldDecalMaterials = loadVisualShaders ? CreatePhasedMaterials("ColorFieldDecalMask", samplerCount: 3) : null;
 		coverageMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("CoverageMask", samplerCount: 1) : null;

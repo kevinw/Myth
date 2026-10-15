@@ -7,7 +7,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
-    float4 CoverageSize; // xy = size, z = world_output phase
+    float4 CoverageSize; // xy = size, z = world_output phase, w = 1: cut away solid terrain instead
 };
 
 Texture2D Texture : register(t0, space2);
@@ -50,6 +50,8 @@ WorldOutput fragment_main(VsOutput input)
         input.Type.z * input.Color;
 
     float2 pixel = screen_pixel(input.Position, CoverageSize.y);
-    float coverage = Coverage.Sample(CoverageSampler, target_uv(pixel / CoverageSize.xy)).r;
+    float2 mask = Coverage.Sample(CoverageSampler, target_uv(pixel / CoverageSize.xy)).rg;
+    // r: everything particles hit; g: terrain alone (collision rects and slopes).
+    float coverage = CoverageSize.w > 0.5 ? 1 - mask.g : mask.r;
     return world_output(color * coverage, CoverageSize.z);
 }

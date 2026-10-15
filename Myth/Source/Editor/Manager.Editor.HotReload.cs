@@ -84,16 +84,24 @@ public partial class Manager
 			RequestAudioBankReload();
 		else if (extension.Equals(".ozzpack", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Rigs"))
 			RequestRigReload();
+		else if (path.EndsWith(".takes.json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Rigs"))
+			takesReloadRequested = true;
 		else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sources", "Costumes")))
 			costumeReloadRequested = true;
 		else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sources", "RibbonStyles")))
 			ribbonStyleReloadRequested = true;
 	}
 
-	volatile bool costumeReloadRequested, ribbonStyleReloadRequested;
+	volatile bool costumeReloadRequested, ribbonStyleReloadRequested, takesReloadRequested;
 
 	void UpdateJsonLibraryReload()
 	{
+		if (takesReloadRequested)
+		{
+			takesReloadRequested = false;
+			RigTakes.Reload();
+			Game.NotifyHotReload("Reloaded rig takes");
+		}
 		if (costumeReloadRequested)
 		{
 			costumeReloadRequested = false;

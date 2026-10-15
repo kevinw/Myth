@@ -71,6 +71,8 @@ static class RigTakes
 	}
 
 #if EDITOR
+	public static void Reload() => loaded = false;
+
 	// Live, unsaved: whatever plays this take picks it up next frame.
 	public static void Set(RigTake take)
 	{

@@ -1,5 +1,5 @@
 {
-  "position": [1040, 1000],
+  "position": [400, 109],
   "size": [80, 36],
   "ambientColor": "333335",
   "legend": {
@@ -87,13 +87,22 @@
       "Id": "9190000000000110",
       "Type": "RigPuppetProp",
       "Position": [150, 264],
-      "Layer": "Foreground",
-      "PoseAnimationName": "Yes",
       "ProjectionYaw": 45,
       "SculptedHead": true,
-      "HeadShapeId": "pig",
       "PixelsPerMeter": 60,
-      "HeadSize": 0.3
+      "NeckExtension": 0.19,
+      "HeadSize": 0.206,
+      "HeadShapeId": "pig",
+      "NeuralWeightsFile": "spiralled_0040_circular.bin",
+      "NeuralColorAmount": 0.637,
+      "NeuralNormalAmount": 0.661,
+      "NeuralContrast": 1.433,
+      "NeuralSaturation": 1.691,
+      "NeuralBrightness": 0.264,
+      "PoseAnimationName": "Consume",
+      "PoseProgress": 0.027,
+      "Layer": "Foreground",
+      "Reactive": true
     },
     {
       "Id": "9190000000000120",

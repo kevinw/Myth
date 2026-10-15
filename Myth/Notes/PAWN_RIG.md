@@ -22,20 +22,21 @@
 ## Takes (`Assets/Rigs/ual2.takes.json`)
 
 - Named clip ranges plus Speed/Loop/FootIK/lean. The `Player*` takes are the pawn's vocabulary. Deleting a transition take simply disables that transition (`TryGet` fails, so it's skipped).
-- **Tune live:** play, double-click the Player, open Rig Animations. You get "Playing: X → Edit", plus "Preview on pawn". Edits go to `RigTakes.Set` (in memory) and the pawn picks them up the next frame. **Save take** writes the JSON. Hand edits to the JSON need a restart (takes load once).
+- **Tune live:** play, double-click the Player, open Rig Animations. You get "Playing: X → Edit", plus "Preview on pawn". Edits go to `RigTakes.Set` (in memory) and the pawn picks them up the next frame. **Save take** writes the JSON. Hand edits to the JSON hot-reload too (editor builds).
 - The viewer's puppet branch (`RigPuppet`) and pawn branch share the take controls. `rig == null` means "set live" instead of "preview on puppet".
 
 ## Adding a Mixamo clip
 
-1. `tools/rig-baker/retarget-mixamo.sh ~/Downloads/"Clip Name.fbx"` writes `tools/rig-baker/mixamo/Clip_Name.glb`. It prints "Loop delta": pelvis cm plus the worst bone rotation between the first and last frames.
-2. Strip root motion in `retarget-mixamo.json` (the game's physics moves the body):
+0. On Mixamo, download FBX. For locomotion (runs, walks), tick **In Place** and step 2 is usually unnecessary.
+1. `tools/rig-baker/retarget-mixamo.sh ~/Downloads/"Clip Name.fbx"` writes `tools/rig-baker/mixamo/Clip_Name.glb` (spaces and dashes become `_`; that's the clip name). It takes several files at once. It prints "Loop delta": pelvis cm plus the worst bone rotation between the first and last frames. Near 0 cm and 0°: skip step 2.
+2. Strip root motion in `retarget-mixamo.json`, then rerun step 1 (the game's physics moves the body):
    - `"InPlace": "Linear"`: removes net horizontal drift and keeps surges (use for loops).
    - `"InPlace": "Lock"`: pins horizontal.
    - `"InPlaceVertical": "Linear" | "Lock"`: the same for height (climbs, leaps).
    - `"StripYaw": true`: removes the whole-body turn (turn clips; the game owns facing).
    - `"Ground": true`: aligns the toes to the reference ground.
-3. `tools/rig-baker/bake-ual2.sh` rebuilds `Assets/Rigs/ual2.ozzpack`. Check the clip count in the last line.
-4. Add a take, and map the sprite state in `RigClipFor`. Names without `_Loop` need a take with `Loop: true` to loop.
+3. `tools/rig-baker/bake-ual2.sh` rebuilds `Assets/Rigs/ual2.ozzpack` from every `.glb` in `mixamo/` (delete one and rebake to drop it). Check the clip count in the last line. The running game reloads the pack, but only while it's awake: an unfocused window parks it, so click in (or `--dev-command wake`).
+4. Add a take, and map the sprite state in `RigClipFor`. Names without `_Loop` need a take with `Loop: true` to loop. Idle fidgets are one-shot takes listed in `RigFidgets`.
 - Finding ranges: parse the `.glb` directly with small Python scripts (struct + JSON chunk). Look at pelvis pitch over time to find rolls, dives and horizontal moments. Compare joint rotations frame-to-frame to find clean loop points.
 - Mixamo speeds rarely match the game's (climb would need 23×, crawl about 3×). Pick a readable rate rather than an exact distance match.
 

@@ -32,6 +32,22 @@ public abstract partial class Pawn
 	// A dive that ends in a burrow keeps its momentum into the surface, cut off where it meets it (PushRigSinkClip).
 	bool rigSinking;
 	Vector2 rigSinkVelocity;
+	bool rigSinkCutMaterial; // what PushRigSinkClip pushed: the terrain-cut material, else a scissor
+	// Left alone, the idle breaks into a one-shot fidget now and then; any input hands straight back.
+	static readonly string[] RigFidgets =
+		["PlayerFidgetHolding", "PlayerFidgetOffensive", "PlayerFidgetWarrior", "PlayerFidgetDwarf", "PlayerFidgetHappy"];
+	static float RigFidgetFirstDelay => 5f;
+	static float RigFidgetMinGap => 4f;
+	static float RigFidgetMaxGap => 9f;
+	float rigFidgetTimer = RigFidgetFirstDelay;
+	int rigFidgetLast = -1;
+	string? rigFidget;
+	// Starting a run leans into it, peaking after RigRunLeanPeak seconds, then settles back over the next half second
+	// or so to the take's own lean (PlayerRun sits more upright than the clip).
+	static float RigRunLeanIn => 39f; // degrees
+	static float RigRunLeanPeak => 0.19f;
+	float rigRunLeanTime = 10;
+	bool rigWasRunning;
 
 	// Locomotion clips play at this rate at full ground speed, slowing with the pawn.
 	static float RigGaitRate => 2.2f;
@@ -84,7 +100,7 @@ public abstract partial class Pawn
 		"climb" or "climb_idle" or "climb_down" or "climb_fall" => "PlayerClimb",
 		"wall_slide" => "PlayerWallSlide",
 		"walk" => "Walk_Loop",
-		"run" or "run_start" => "Jog_Fwd_Loop",
+		"run" or "run_start" => "PlayerRun",
 		"duck" or "burrow" => "Crouch_Idle_Loop",
 		"crawl" => "PlayerCrawl",
 		"roll" => "PlayerRoll",
@@ -164,22 +180,25 @@ public abstract partial class Pawn
 			// Ducking out of a run slides at run speed, which the sprite plays as "crawl". The rig crouches through
 			// the slide and only goes prone once it's really crawling.
 			rigClip == "PlayerCrawl" && (input.MoveX == 0 || speed > Player.CrawlSpeed * RigCrawlSpeedSlack) ? "Crouch_Idle_Loop" :
-			rigClip is "Jog_Fwd_Loop" && speed > MaxGroundSpeed * RigSprintSpeed ? "Sprint_Loop" : rigClip;
+			// Dash-running gets the full run, and the sprint once it's really moving.
+			rigClip is "PlayerRun" && IsDashRunning() ? speed > MaxGroundSpeed * RigSprintSpeed ? "Sprint_Loop" : "Jog_Fwd_Loop" :
+			rigClip;
 		rigVisual.CeilingClearance = RigCeilingClearance();
 		if (rigVisual.CeilingClearance < RigCrouchClearance)
 			clip = clip switch
 			{
 				"PlayerIdle" => "Crouch_Idle_Loop",
-				"Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop" => "Crouch_Fwd_Loop",
+				"Walk_Loop" or "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop" => "Crouch_Fwd_Loop",
 				_ => clip,
 			};
+		clip = RigFidget(clip);
 		rigVisual.ArmAim = new((int)Facing * MathF.Cos(rigDiveAngle), MathF.Sin(rigDiveAngle));
 		rigVisual.ArmAimWeight = rigDiveWeight;
 		if (clip != rigRequested)
 		{
 			// Once the sim has turned around, the skid finishes before the run resumes.
 			var skidHolds = rigPlaying == "PlayerSkid" && Facing != rigSkidFacing &&
-				clip is "PlayerIdle" or "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop";
+				clip is "PlayerIdle" or "Walk_Loop" or "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop";
 			rigLead = skidHolds ? "PlayerSkid" :
 				RigLeadFor(rigRequested, clip, Velocity.Y) is { } lead && RigTakes.TryGet(lead, out var leadTake) &&
 				rigVisual.TryGetClip(leadTake.Clip, out _) ? lead : null; // a take whose clip isn't baked yet is skipped
@@ -200,7 +219,15 @@ public abstract partial class Pawn
 		}
 		rigRestart = false;
 
-		var gait = shown is "Walk_Loop" or "Jog_Fwd_Loop" or "Sprint_Loop" or "PlayerCrawl" or "Crouch_Fwd_Loop";
+		var running = shown is "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop";
+		if (running && !rigWasRunning)
+			rigRunLeanTime = 0;
+		rigWasRunning = running;
+		rigRunLeanTime += Time.Delta;
+		var leanT = rigRunLeanTime / RigRunLeanPeak;
+		rigVisual.ExtraLeanDegrees = RigRunLeanIn * leanT * MathF.Exp(1 - leanT);
+
+		var gait = shown is "Walk_Loop" or "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop" or "PlayerCrawl" or "Crouch_Fwd_Loop";
 		rigVisual.GaitActive = gait;
 		rigVisual.PlaybackSpeed = (rigTake?.Speed ?? 1) * (
 			gait ? MathF.Max(RigGaitMinRate, speed / MaxGroundSpeed * RigGaitRate *
@@ -259,7 +286,7 @@ public abstract partial class Pawn
 	bool RigPushing()
 	{
 		if (!grounded || State != States.Normal || input.MoveX == 0 || Math.Sign(input.MoveX) != (int)Facing ||
-			rigClip is not ("PlayerIdle" or "Walk_Loop" or "Jog_Fwd_Loop"))
+			rigClip is not ("PlayerIdle" or "Walk_Loop" or "PlayerRun"))
 			return false;
 		var rect = Hitbox.Rect;
 		return Game.OverlapsSolid(this, new RectInt(Position.X + (Facing > 0 ? rect.Right : rect.Left - 1), Position.Y + rect.Top, 1, 3));
@@ -276,7 +303,9 @@ public abstract partial class Pawn
 			// Held through the burrow's entry window even once buried (the clip hides it all): BurrowHidesSprite
 			// waits on that window, and an early end would draw the pose, unclipped, on the surface.
 			rigSinking = State == States.Burrow && (burrowEnterTimer > 0 || !RigSubmerged(visual.GetVisualBounds()));
-			if (!rigSinking)
+			if (rigSinking)
+				Game.View?.RequestTerrainCut();
+			else
 				visual.Offset = Vector2.Zero; // hidden by now, or popped straight back out
 			return;
 		}
@@ -308,12 +337,19 @@ public abstract partial class Pawn
 			Vector2.Dot(worldBounds.BottomLeft - surface, toward) > 0 && Vector2.Dot(worldBounds.BottomRight - surface, toward) > 0;
 	}
 
-	// Sinking, scissors away everything past the burrow surface -- a real cut, so a thin jumpthru doesn't show the
-	// body below it. Surfaces are cut along their dominant axis. Pop the scissor when this returns true.
+	// Sinking, cuts away the body wherever terrain is, so it dives into slopes too. A jumpthru, and passes other than
+	// the world draw, scissor away everything past the burrow surface instead -- a real cut, so a thin jumpthru doesn't
+	// show the body below it; surfaces are cut along their dominant axis. Call PopRigSinkClip when this returns true.
 	protected bool PushRigSinkClip(Batcher batcher)
 	{
 		if (!rigSinking)
 			return false;
+		rigSinkCutMaterial = !burrowOnJumpthru && Game.View?.PushTerrainCutMaterial() == true;
+		if (rigSinkCutMaterial)
+		{
+			rigVisual!.SkipSurfaces = true;
+			return true;
+		}
 		const float Far = 100000;
 		var toward = burrow.Toward;
 		var axis = MathF.Abs(toward.X) > MathF.Abs(toward.Y) ? new Vector2(MathF.Sign(toward.X), 0) : new Vector2(0, MathF.Sign(toward.Y));
@@ -325,6 +361,17 @@ public abstract partial class Pawn
 		return true;
 	}
 
+	protected void PopRigSinkClip(Batcher batcher)
+	{
+		if (rigSinkCutMaterial)
+		{
+			batcher.PopMaterial();
+			rigVisual!.SkipSurfaces = false;
+		}
+		else
+			batcher.PopScissor();
+	}
+
 	void DrawRigClipped(Batcher batcher, Color color, bool silhouette)
 	{
 		if (BurrowHidesSprite)
@@ -332,7 +379,7 @@ public abstract partial class Pawn
 		var clipped = PushRigSinkClip(batcher);
 		rigVisual!.Draw(batcher, color, silhouette);
 		if (clipped)
-			batcher.PopScissor();
+			PopRigSinkClip(batcher);
 	}
 
 	void UpdateRigSkidYaw()
@@ -349,6 +396,29 @@ public abstract partial class Pawn
 		visual.YawOverrideWeight = rigSkidYawWeight;
 		if (rigSkidYawWeight <= 0)
 			visual.YawOverride = null;
+	}
+
+	string RigFidget(string clip)
+	{
+		if (clip != "PlayerIdle" || input.MoveX != 0 || input.MoveY != 0 || input.JumpDown || input.DashDown || input.AttackPressed)
+		{
+			rigFidget = null;
+			rigFidgetTimer = RigFidgetFirstDelay;
+			return clip;
+		}
+		if (rigFidget != null && rigPlaying == rigFidget && rigVisual!.AnimationFinished)
+		{
+			rigFidget = null;
+			rigFidgetTimer = rng.Float(RigFidgetMinGap, RigFidgetMaxGap);
+		}
+		if (rigFidget == null && (rigFidgetTimer -= Time.Delta) <= 0)
+		{
+			// Never the same one twice running.
+			rigFidgetLast = rigFidgetLast < 0 ? rng.Int(RigFidgets.Length)
+				: (rigFidgetLast + 1 + rng.Int(RigFidgets.Length - 1)) % RigFidgets.Length;
+			rigFidget = RigFidgets[rigFidgetLast];
+		}
+		return rigFidget ?? clip;
 	}
 
 	void PlayRig(string name, bool restart)
@@ -422,7 +492,7 @@ public abstract partial class Pawn
 			var clipped = PushRigSinkClip(batcher);
 			rigVisual.DrawNormals(batcher);
 			if (clipped)
-				batcher.PopScissor();
+				PopRigSinkClip(batcher);
 		}
 	}
 

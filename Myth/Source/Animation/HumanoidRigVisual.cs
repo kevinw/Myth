@@ -166,6 +166,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public float PoseRoll { get; private set; } // radians, clockwise on screen
 	// Swings the whole figure about its left hand (the grip), radians clockwise on screen; folded into PoseRoll.
 	public float GripRoll;
+	// Set by the owner: degrees of forward lean on top of the take's, e.g. a run's lean-in that settles.
+	public float ExtraLeanDegrees;
+	// Set by the owner around a draw under its own material (a burrow's terrain cut): surfaces would escape it.
+	public bool SkipSurfaces;
 	public float YawOverrideWeight;
 	// Set by the owner: pixels above its feet to the lowest ceiling over it; the head ducks beneath. Null: open above.
 	public float? CeilingClearance;
@@ -320,7 +324,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float FootPlantedSlack => 0.5f;
 	// Foot constants are tuned in pixels at 25 px/m; smaller rigs shrink them so tiny legs keep the same knee bend.
 	float FootScale => MathF.Min(1, Settings.PixelsPerMeter / 25);
-	Vector2 FootSink => new(0, 2.5f * FootScale);
+	Vector2 FootSink => new(0, 0f * FootScale);
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
@@ -350,6 +354,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float DuckMaxHunch => 1.15f; // radians of forward stoop before the knees take the rest
 	static float DuckMaxKneeDrop => 0.5f; // × pelvis height
 	static float PlantShoulderLift => 1.1f;
+	static bool DrawSpineToClavicle => false;
 	static float GaitHeadOffset => 1.1f;
 	static float GaitShoulderOffset => 0.8f;
 	static float GaitStrideOffset => 1.25f;
@@ -935,7 +940,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	void ApplyUpperBodyLean()
 	{
-		var angle = upperBodyLeanDegrees * MathF.PI / 180 * (int)visualFacing + velocityLean;
+		var angle = (upperBodyLeanDegrees + ExtraLeanDegrees) * MathF.PI / 180 * (int)visualFacing + velocityLean;
 		if (MathF.Abs(angle) < 0.0001f)
 			return;
 		var pivot = projectedPose[pelvis];
@@ -1817,6 +1822,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		foreach (var boneIndex in boneOrder)
 		{
 			var bone = bones[boneIndex];
+			if (!DrawSpineToClavicle && bone.From == spine3 && bone.Arm != Side.None)
+				continue;
 			var boneDepth = BoneDepth(bone);
 			if (Accessory != null && !headAdded && headDepth <= boneDepth)
 			{
@@ -1858,7 +1865,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	};
 
 	RigSkin Skin(Surface? surface, Texture? texture, float amount, bool normals)
-		=> new(surface, texture, amount, normals, NeuralSize, NeuralOrigin, surfaceMaterialOrigin, owner.Time.SecondsF);
+		=> new(SkipSurfaces ? null : surface, texture, amount, normals, NeuralSize, NeuralOrigin, surfaceMaterialOrigin,
+			owner.Time.SecondsF, NoSurfaces: SkipSurfaces);
 
 	void DrawItems(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
 	{

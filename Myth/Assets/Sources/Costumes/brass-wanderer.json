@@ -9,9 +9,8 @@
     { "Bones": "Foot", "Width": 1.5, "Color": "72563b", "Surface": "crawler-metal" },
     { "Kind": "Stud", "Bones": "Shin", "From": 0.45, "To": 0.95, "Count": 3, "Width": 0.5, "Color": "ffcf70" },
     { "Kind": "Stud", "Bones": "Shoulder", "From": 0.7, "Width": 1.5, "Color": "e6aa51", "Surface": "crawler-metal" },
-    { "Bones": "Forearm", "From": 0.55, "Width": 1.4, "Color": "e6aa51" },
-    { "Kind": "Stud", "Bones": "Forearm", "From": 0.65, "To": 0.9, "Width": 0.5, "Color": "ffcf70" },
-    { "Bones": "Hand", "To": 0.5, "Width": 1.1, "Color": "5a3b2a" },
-    { "Bones": "Neck", "To": 0.6, "Width": 1.6, "Color": "c8463c" }
+    //{ "Bones": "Forearm", "From": 0.55, "Width": 1.4, "Color": "e6aa51" },
+    //{ "Kind": "Stud", "Bones": "Forearm", "From": 0.65, "To": 0.9, "Width": 0.5, "Color": "ffcf70" },
+    { "Bones": "Hand", "To": 0.5, "Width": 1.1, "Color": "5a3b2a" }
   ]
 }

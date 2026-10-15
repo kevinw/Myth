@@ -41,8 +41,9 @@ public sealed partial class GameView
 #endif
 			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion &&
 			Manager.Visuals.AmbientOcclusionStrength > 0 && blurMaterial != null;
-		if (hasForegroundDecals)
+		if (hasForegroundDecals || terrainCutRequested)
 			DrawParticleSolidMask();
+		terrainCutRequested = false;
 		if (hasBackgroundDecals || buildAo)
 			DrawBackgroundCoverage();
 
@@ -416,6 +417,7 @@ public sealed partial class GameView
 		var baseMaterial = PushWorldBaseMaterial(drawEmissive, out var atlasWander);
 
 		// draw actors
+		terrainCutPass = !background;
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible || actor is HiddenCoverGrid)
@@ -425,6 +427,7 @@ public sealed partial class GameView
 
 			DrawWorldActor(actor, background, atlasWander, drawEmissive);
 		}
+		terrainCutPass = false;
 
 		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
@@ -506,7 +509,7 @@ public sealed partial class GameView
 	}
 
 	ReloadableMaterial[]?[] PhasedMaterials => [worldMaterials, colorFieldMaterials, backgroundDecalMaskMaterials,
-		foregroundDecalMaskMaterials, backgroundColorFieldDecalMaterials, foregroundColorFieldDecalMaterials];
+		foregroundDecalMaskMaterials, backgroundColorFieldDecalMaterials, foregroundColorFieldDecalMaterials, terrainCutMaterials];
 
 	void BindPhasedMaterials()
 	{
@@ -519,6 +522,9 @@ public sealed partial class GameView
 		Bind(foregroundDecalMaskMaterials, foregroundCoverage);
 		Bind(backgroundColorFieldDecalMaterials, backgroundCoverage, field);
 		Bind(foregroundColorFieldDecalMaterials, foregroundCoverage, field);
+		Bind(terrainCutMaterials, foregroundCoverage);
+		for (var phase = 0; phase < (terrainCutMaterials?.Length ?? 0); phase++)
+			terrainCutMaterials![phase].Material.Fragment.SetUniformBuffer([Screen.Width, Screen.Height, phase, 1]);
 
 		void Bind(ReloadableMaterial[]? materials, params ReadOnlySpan<BoundSampler> samplers)
 		{
@@ -709,6 +715,15 @@ public sealed partial class GameView
 				return;
 		}
 	}
+
+	// A pawn sinking into a burrow cuts its body away wherever terrain is, slopes included. Passes opt in with
+	// terrainCutPass: the world, normal, dither and sprite shadow actor draws, which all take world_output (single
+	// targets ignore SV_Target1) under premultiplied blends. Never the solid mask's own build, which it reads; passes
+	// without it fall back to a scissor.
+	internal void RequestTerrainCut() => terrainCutRequested = true;
+	internal bool PushTerrainCutMaterial() => terrainCutPass && PushPhasedMaterial(terrainCutMaterials);
+	bool terrainCutRequested;
+	bool terrainCutPass;
 
 	bool PushPropDecalMaterial(Actor actor)
 		=> actor is Prop { Decal: true } prop &&
@@ -1409,6 +1424,7 @@ public sealed partial class GameView
 	{
 		Batcher.PushBlend(DitherBufferBlend);
 		PushWorldMatrix();
+		terrainCutPass = true;
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -1422,6 +1438,7 @@ public sealed partial class GameView
 			actor.RenderShadow(Batcher, new Color(amount, amount, amount, 1.0f));
 			Batcher.PopMatrix();
 		}
+		terrainCutPass = false;
 		Batcher.PopMatrix();
 		Batcher.PopBlend();
 		Batcher.Render(NormalBuffer);
@@ -1723,6 +1740,7 @@ public sealed partial class GameView
 	{
 		SpriteShadowMask.Clear(Color.Transparent);
 		PushWorldMatrix();
+		terrainCutPass = true;
 		foreach (var actor in Actors)
 			if (actor.Visible && actor.CastsSpriteShadow && actor is not Grid && !gpuLightEmitters.Contains(actor))
 			{
@@ -1730,6 +1748,7 @@ public sealed partial class GameView
 				actor.RenderShadow(Batcher, Color.White);
 				Batcher.PopMatrix();
 			}
+		terrainCutPass = false;
 		Batcher.PopMatrix();
 		Batcher.Render(SpriteShadowMask);
 		Batcher.Clear();
@@ -1925,6 +1944,7 @@ public sealed partial class GameView
 				DrawCachedRoomNormals(nextRoomNormalCache);
 		}
 
+		terrainCutPass = true;
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible || actor is Grid or DualGrid { Layer: Factory.TileLayer.Background }) // drawn above
@@ -1939,6 +1959,7 @@ public sealed partial class GameView
 				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
+		terrainCutPass = false;
 
 		Batcher.PopMatrix();
 		Batcher.PopBlend();
@@ -2669,6 +2690,7 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial[]? backgroundDecalMaskMaterials;
 	readonly ReloadableMaterial[]? foregroundDecalMaskMaterials;
+	readonly ReloadableMaterial[]? terrainCutMaterials;
 	readonly ReloadableMaterial[]? backgroundColorFieldDecalMaterials;
 	readonly ReloadableMaterial[]? foregroundColorFieldDecalMaterials;
 	readonly ReloadableMaterial? coverageMaskMaterial;

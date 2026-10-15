@@ -164,8 +164,63 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "PlayerFidgetDwarf": {
+    "Clip": "Dwarf_Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerFidgetHappy": {
+    "Clip": "Happy_Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerFidgetHolding": {
+    "Clip": "Holding_Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerFidgetOffensive": {
+    "Clip": "Offensive_Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerFidgetWarrior": {
+    "Clip": "Warrior_Idle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "PlayerIdle": {
-    "Clip": "Idle",
+    "Clip": "Neutral_Idle",
     "Start": 0,
     "End": 3.4028235E+38,
     "Loop": true,
@@ -227,6 +282,17 @@
     "Speed": 2.65,
     "FootIK": false,
     "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerRun": {
+    "Clip": "Standard_Run",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": true,
+    "Speed": 0.68,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": -20,
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },

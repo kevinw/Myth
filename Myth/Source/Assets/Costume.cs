@@ -61,7 +61,8 @@ public sealed class Costume
 	}
 }
 
-[JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true, UseStringEnumConverter = true)]
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true, UseStringEnumConverter = true,
+	ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]
 [JsonSerializable(typeof(Costume))]
 internal partial class CostumeJsonContext : JsonSerializerContext;
 
