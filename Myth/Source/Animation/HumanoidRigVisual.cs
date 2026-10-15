@@ -1064,7 +1064,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			if (upperBodyMask[i] > 0)
 				projectedPose[i] = Vector2.Lerp(projectedPose[i], Vector2.Transform(projectedPose[i], rotation), upperBodyMask[i]);
 
-		var crouch = Math.Clamp(duckDepth - (projectedPose[head].Y - headBefore), 0, (FootSink.Y - pivot.Y) * DuckMaxKneeDrop);
+		var crouch = Math.Clamp(duckDepth - (projectedPose[head].Y - headBefore), 0, MathF.Max(0, (FootSink.Y - pivot.Y) * DuckMaxKneeDrop));
 		if (crouch <= 0)
 			return;
 		var left = CaptureLeg(leftLeg);
