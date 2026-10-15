@@ -118,6 +118,7 @@ public abstract partial class Pawn
 		("PlayerAir" or "PlayerDive", "PlayerIdle") => "PlayerJumpLand",
 		("PlayerCrawl", "Crouch_Idle_Loop") => "PlayerCrawlToCrouch",
 		("Crouch_Idle_Loop", "PlayerCrawl") => "PlayerCrouchToCrawl",
+		("Crouch_Idle_Loop", "PlayerIdle") => "PlayerCrouchToStand",
 		(not "PlayerRoll", "PlayerRoll") => "PlayerRollStart",
 		_ => null,
 	};

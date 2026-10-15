@@ -153,6 +153,17 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "PlayerCrouchToStand": {
+    "Clip": "Crouch_To_Stand",
+    "Start": 0.7,
+    "End": 2.3,
+    "Loop": false,
+    "Speed": 6.5,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": -5,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "PlayerDive": {
     "Clip": "Run_To_Dive",
     "Start": 0.72,
