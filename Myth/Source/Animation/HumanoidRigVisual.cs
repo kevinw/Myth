@@ -16,9 +16,7 @@ interface IHumanoidRigAccessoryVisual
 }
 
 internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
-	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null,
-	HumanoidRigWireSettings? configuredWires = null,
-	IReadOnlyList<HumanoidRigWireSpec>? configuredWireLayout = null) : IDisposable
+	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
 {
 	public readonly record struct RuffProjection(Vector3 Pivot, float PivotX, float Mirror,
 		float TurnCos, float TurnSin, float CameraCos, float CameraSin, float PixelsPerMeter,
@@ -79,15 +77,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		public bool Ready;
 	}
 
-	readonly record struct RigWire(int From, int To, float Bend, float DepthOffset, float WidthScale, uint Seed);
-
-	struct WireMotion
-	{
-		public Vector2 Control;
-		public Vector2 Velocity;
-		public bool Ready;
-	}
-
 	enum ImpulseGroup { Head, Torso, LeftArm, RightArm, LeftHand, RightHand, LeftLeg, RightLeg }
 
 	struct PendingImpulse
@@ -130,7 +119,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public readonly HumanoidRigSettings Settings = configuredSettings ?? new();
 	public readonly NeuralSurfaceSettings Neural = configuredNeural ?? new();
 	public readonly HumanoidNeuralReactionSettings NeuralReactions = configuredReactions ?? new();
-	public readonly HumanoidRigWireSettings Wires = configuredWires ?? new();
 	public float PlaybackSpeed = 1;
 	public float PoseModifierWeight = 1;
 	public Color HeadTint = Color.White;
@@ -199,9 +187,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Bone[] bones = [];
-	RigWire[] wires = [];
-	WireMotion[] wireMotion = [];
-	int[] wireOrder = [];
 	BoneUV[] neuralBoneUVs = [];
 	Vector2 neuralHeadUV;
 	Vector2 neuralHeadUVRadius;
@@ -389,7 +374,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float EyeSaccadeInterval => 0.55f;
 	static float EyeSaccadeAmount => 0.12f;
 	static float EyeReactionDuration => 0.18f;
-	static int WireSegments => 8;
 	static Point2 NeuralSize => new(64, 80);
 	static Point2 NeuralOrigin => new(-32, -72);
 
@@ -466,20 +450,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			var bone = bones[i];
 			if (bone.Part != Part.Hand && (bone.Arm != Side.None || bone.Leg != Side.None))
 				bones[i] = bone with { Parent = Array.FindIndex(bones, it => it.To == bone.From && it.Arm == bone.Arm && it.Leg == bone.Leg) };
-		}
-		if (configuredWireLayout is { Count: > 0 })
-		{
-			wires = new RigWire[configuredWireLayout.Count];
-			wireMotion = new WireMotion[wires.Length];
-			wireOrder = new int[wires.Length];
-			for (var i = 0; i < wires.Length; i++)
-			{
-				var spec = configuredWireLayout[i];
-				wires[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Bend,
-					spec.DepthOffset, spec.WidthScale,
-					Hash32.Mix((uint)(animationPhase * uint.MaxValue) ^ (uint)i * 0x9e3779b9u));
-				wireOrder[i] = i;
-			}
 		}
 		head = RequiredJoint("Head");
 		neck = RequiredJoint("neck_01");
@@ -751,7 +721,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	{
 		ragdollReady = false;
 		headMotion = leftHandMotion = rightHandMotion = default;
-		Array.Clear(wireMotion);
 		Array.Clear(pendingImpulses);
 		pendingLandingSpeed = 0;
 		ResetFeet();
@@ -928,7 +897,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			for (var i = 0; i < projectedPose.Length; i++)
 				projectedPose[i] = projectedPose[i].Round();
 		SortBones();
-		UpdateWires();
 		UpdateHeadLook();
 		UpdateEye();
 		UpdateDents();
@@ -1771,53 +1739,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 	}
 
-	void UpdateWires()
-	{
-		var scale = Settings.PixelsPerMeter / 25f;
-		var maxOffset = 10 * scale;
-		var teleportDistance = SecondaryTeleportDistance * scale;
-		for (var i = 0; i < wires.Length; i++)
-		{
-			var wire = wires[i];
-			var from = projectedPose[wire.From];
-			var to = projectedPose[wire.To];
-			var control = (from + to) * 0.5f + (to - from).Normalized(Vector2.UnitY).TurnLeft() *
-				(wire.Bend * Wires.WireBendScale * scale * PresentationMirror());
-			ref var motion = ref wireMotion[i];
-			if (!motion.Ready || Vector2.DistanceSquared(motion.Control, control) > teleportDistance * teleportDistance)
-			{
-				motion.Control = control;
-				motion.Velocity = Vector2.Zero;
-				motion.Ready = true;
-				continue;
-			}
-			Spring.Step(ref motion.Control, ref motion.Velocity, control,
-				Wires.WireSpring, Wires.WireDamping, MathF.Min(visualDelta, 1 / 30f));
-			var offset = motion.Control - control;
-			if (offset.LengthSquared() > maxOffset * maxOffset)
-			{
-				var direction = Vector2.Normalize(offset);
-				motion.Control = control + direction * maxOffset;
-				motion.Velocity -= direction * MathF.Max(0, Vector2.Dot(motion.Velocity, direction));
-			}
-		}
-
-		for (var i = 1; i < wireOrder.Length; i++)
-		{
-			var value = wireOrder[i];
-			var depth = WireDepth(wires[value]);
-			var at = i;
-			while (at > 0 && WireDepth(wires[wireOrder[at - 1]]) > depth)
-			{
-				wireOrder[at] = wireOrder[at - 1];
-				at--;
-			}
-			wireOrder[at] = value;
-		}
-	}
-
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
-	float WireDepth(RigWire wire) => (jointDepth[wire.From] + jointDepth[wire.To]) * 0.5f + wire.DepthOffset;
 
 	Color BoneColor(Bone bone, float depth)
 		=> bone.From == pelvis || bone.To == pelvis
@@ -2022,15 +1944,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				out var a, out var b, out var c, out var d);
 			bounds = bounds.Conflate(a).Conflate(b).Conflate(c).Conflate(d);
 		}
-		for (var i = 0; i < wires.Length; i++)
-		{
-			var radius = Wires.WireWidth * wires[i].WidthScale + Wires.WireOutlineWidth + 1;
-			for (var segment = 0; segment <= WireSegments; segment++)
-			{
-				var point = WirePoint(i, segment / (float)WireSegments);
-				bounds = bounds.Conflate(point - Vector2.One * radius).Conflate(point + Vector2.One * radius);
-			}
-		}
 		if (CurrentSculptedBody() is { ColorTexture: { } bodyTexture } sculpted)
 			bounds = bounds.Conflate(new Rect(sculpted.Origin, new Vector2(bodyTexture.Width, bodyTexture.Height)));
 		if (Assets.GetCostume(Settings.CostumeId) != null)
@@ -2053,7 +1966,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	void BuildDrawList()
 	{
 		drawItems.Clear();
-		var wireIndex = 0;
 		var accessoryIndex = 0;
 		var headAdded = false;
 		var headDepth = jointDepth[head];
@@ -2061,7 +1973,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		{
 			drawItems.Add(new(RigDrawKind.Body, -1));
 			drawItems.Add(new(RigDrawKind.Head, -1));
-			AddItemsThrough(ref wireIndex, ref accessoryIndex, float.PositiveInfinity);
+			AddItemsThrough(ref accessoryIndex, float.PositiveInfinity);
 			return;
 		}
 		var costume = Assets.GetCostume(Settings.CostumeId);
@@ -2075,11 +1987,11 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			var boneDepth = BoneDepth(bone);
 			if (Accessory != null && !headAdded && headDepth <= boneDepth)
 			{
-				AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
+				AddItemsThrough(ref accessoryIndex, headDepth);
 				drawItems.Add(new(RigDrawKind.Head, -1, false));
 				headAdded = true;
 			}
-			AddItemsThrough(ref wireIndex, ref accessoryIndex, boneDepth);
+			AddItemsThrough(ref accessoryIndex, boneDepth);
 			BoneWidths(bone, out var fromWidth, out var toWidth);
 			var rings = bone.Part == Part.Hand ? JointRings.None : Rings<Bone>(bones, boneIndex, added);
 			added[boneIndex] = true;
@@ -2090,16 +2002,14 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		}
 		if (!headAdded)
 		{
-			AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
+			AddItemsThrough(ref accessoryIndex, headDepth);
 			drawItems.Add(new(RigDrawKind.Head, -1, false));
 		}
-		AddItemsThrough(ref wireIndex, ref accessoryIndex, float.PositiveInfinity);
+		AddItemsThrough(ref accessoryIndex, float.PositiveInfinity);
 	}
 
-	void AddItemsThrough(ref int wireIndex, ref int accessoryIndex, float depth)
+	void AddItemsThrough(ref int accessoryIndex, float depth)
 	{
-		while (wireIndex < wireOrder.Length && WireDepth(wires[wireOrder[wireIndex]]) <= depth)
-			drawItems.Add(new(RigDrawKind.Wire, wireOrder[wireIndex++], false));
 		while (Accessory != null && accessoryIndex < Accessory.DrawItemCount &&
 			Accessory.GetDrawItemDepth(accessoryIndex) <= depth)
 			drawItems.Add(new(RigDrawKind.Accessory, accessoryIndex++, false));
@@ -2162,9 +2072,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				case RigDrawKind.Body:
 					DrawBody(batcher, tint, silhouette: false, outlined: !rimmed);
 					break;
-				case RigDrawKind.Wire:
-					DrawWire(batcher, item.Index, tint, silhouette: false);
-					break;
 				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, null);
 					break;
@@ -2198,9 +2105,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			{
 				case RigDrawKind.Head:
 					DrawHead(batcher, tint, silhouette: true, default);
-					break;
-				case RigDrawKind.Wire:
-					DrawWire(batcher, item.Index, tint, silhouette: true);
 					break;
 				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, tint);
@@ -2521,9 +2425,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					if (CurrentSculptedBody() is { NormalTexture: { } bodyNormals } body)
 						batcher.Image(bodyNormals, body.Origin, Color.White);
 					break;
-				case RigDrawKind.Wire:
-					DrawWireNormals(batcher, item.Index);
-					break;
 				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, flat);
 					break;
@@ -2609,65 +2510,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var local = (socket.Position - origin) * Settings.HeadSpriteScale;
 		position = projectedPose[head] + Vector2.Transform(local, Matrix3x2.CreateRotation(HeadSpriteRoll()));
 		return true;
-	}
-
-	void DrawWire(Batcher batcher, int index, Color tint, bool silhouette)
-	{
-		var wire = wires[index];
-		var width = Wires.WireWidth * wire.WidthScale * MathF.Sqrt(Settings.PixelsPerMeter / 25f);
-		var previous = WirePoint(index, 0);
-		for (var segment = 1; segment <= WireSegments; segment++)
-		{
-			var next = WirePoint(index, segment / (float)WireSegments);
-			var variation = 1 + HashSigned(wire.Seed ^ (uint)segment * 0x85ebca6bu) *
-				Wires.WireIrregularity * 0.18f;
-			var segmentWidth = width * variation;
-			if (silhouette)
-				batcher.Line(previous, next, segmentWidth + Wires.WireOutlineWidth * 2, tint);
-			else
-			{
-				batcher.Line(previous, next, segmentWidth + Wires.WireOutlineWidth * 2,
-					Multiply(Wires.WireOutlineColor, tint));
-				batcher.Line(previous, next, segmentWidth, Multiply(Wires.WireColor, tint));
-			}
-			previous = next;
-		}
-	}
-
-	void DrawWireNormals(Batcher batcher, int index)
-	{
-		var wire = wires[index];
-		var width = Wires.WireWidth * wire.WidthScale * MathF.Sqrt(Settings.PixelsPerMeter / 25f) +
-			Wires.WireOutlineWidth * 2;
-		var previous = WirePoint(index, 0);
-		for (var segment = 1; segment <= WireSegments; segment++)
-		{
-			var next = WirePoint(index, segment / (float)WireSegments);
-			var variation = 1 + HashSigned(wire.Seed ^ (uint)segment * 0x85ebca6bu) *
-				Wires.WireIrregularity * 0.18f;
-			DrawCylinderNormals(batcher, previous, next, width * variation,
-				Wires.WireNormalRoundness, Wires.WireIrregularity * 0.35f,
-				wire.Seed ^ (uint)segment * 0xc2b2ae35u);
-			previous = next;
-		}
-	}
-
-	Vector2 WirePoint(int index, float progress)
-	{
-		var wire = wires[index];
-		var from = projectedPose[wire.From];
-		var to = projectedPose[wire.To];
-		var along = (to - from).Normalized(Vector2.UnitY);
-		var targetControl = (from + to) * 0.5f + along.TurnLeft() *
-			(wire.Bend * Wires.WireBendScale * Settings.PixelsPerMeter / 25f * PresentationMirror());
-		var control = Vector2.Lerp(targetControl, wireMotion[index].Control, Math.Clamp(Wires.WireMotion, 0, 1));
-		var inverse = 1 - progress;
-		var point = from * (inverse * inverse) + control * (2 * inverse * progress) + to * (progress * progress);
-		var phase = (wire.Seed & 0xffff) / 65535f * MathF.Tau;
-		var noise = MathF.Sin(progress * MathF.Tau * 2 + phase) * 0.65f +
-			MathF.Sin(progress * MathF.Tau * 5 + phase * 1.7f) * 0.35f;
-		return point + along.TurnLeft() * (noise * MathF.Sin(progress * MathF.PI) *
-			Wires.WireIrregularity * Wires.WireWidth * 0.55f);
 	}
 
 	float HandSpinAmount(Bone bone)

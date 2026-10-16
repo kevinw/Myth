@@ -14,16 +14,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
 	public override RumbleEffect? AttackHitRumble => new(0.70f, 0.85f, 0.14f);
 	public override float HitKnockback => 100f;
-	static readonly HumanoidRigWireSpec[] WireLayout =
-	[
-		new("Head", "spine_03", -8, -0.06f, 1.05f),
-		new("Head", "spine_03", 11, 0.05f),
-		new("neck_01", "clavicle_l", -8, -0.04f, 0.9f),
-		new("neck_01", "clavicle_r", 10, 0.04f, 0.9f),
-		new("spine_03", "pelvis", 8, 0.06f, 1.1f),
-	];
-
-	//protected override IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => WireLayout;
 
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 	enum Decision { FloatingFlash, Stomp, Walk, EyeLaser, Swipe }
