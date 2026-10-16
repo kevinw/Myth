@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Foster.Framework;
 using static Myth.RigDraw;
 
@@ -15,7 +14,7 @@ interface IHumanoidRigAccessoryVisual
 	void DrawItem(Batcher batcher, int index, Color? tint);
 }
 
-internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
+internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
 	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
 {
 	public readonly record struct RuffProjection(Vector3 Pivot, float PivotX, float Mirror,
@@ -53,8 +52,41 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	enum Side { None, Left, Right }
 	internal enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
 
+	readonly Actor owner = owner; // a field, so the bodies can reach it
 	public IHumanoidRigAccessoryVisual? Accessory;
-	readonly List<RigDrawItem> drawItems = [];
+
+	// How the posed skeleton becomes pixels and combat bounds: drawn bones (BoneBody) or one ray-marched SDF (SculptBody).
+	// Everything here is rig-local; the head is drawn by the visual, in the body's palette.
+	interface IBody : IDisposable
+	{
+		(Color Near, Color Core, Color Far) HeadPalette { get; }
+		void Update() { }
+		void Posed() { }
+		void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts);
+		void DrawNormals(Batcher batcher, DrawParts parts);
+		void DrawEmissive(Batcher batcher) { }
+		bool Overlaps(in Rect bounds, CombatRole role);
+		void DrawCombatBounds(Batcher batcher, Color color);
+		Rect Bounds(Rect head);
+		void Dent(in RectInt attack, float strength) { }
+		void Dent(Vector2 worldPoint, float strength) { }
+		void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context) { }
+	}
+
+	IBody? body;
+	// Swapped when the style is toggled live.
+	IBody Body
+	{
+		get
+		{
+			if (body == null || body is SculptBody != Settings.SculptedBody)
+			{
+				body?.Dispose();
+				body = Settings.SculptedBody ? new SculptBody(this) : new BoneBody(this);
+			}
+			return body;
+		}
+	}
 
 	readonly record struct BoneSpec(string From, string To, Part Part, bool Combat = false,
 		Side Leg = Side.None, Side Arm = Side.None, RigTags Tags = RigTags.None);
@@ -187,10 +219,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Bone[] bones = [];
-	BoneUV[] neuralBoneUVs = [];
-	Vector2 neuralHeadUV;
-	Vector2 neuralHeadUVRadius;
-	Vector2 surfaceMaterialOrigin;
 	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[16];
 	OzzJointMask upperBodyMask = null!;
 	OzzJointMask leftArmMask = null!;
@@ -199,29 +227,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	int[] ragdollCarriers = [];
 	OzzJointMask rightArmMask = null!;
 	OzzRig.Clip upperBodyHitClip = null!;
-	NeuralSkinRuntime neuralSkin = null!;
 	Sprite? headSprite;
 	SculptedHead? sculptedHead;
-	SculptedBody? sculptedBody;
-	bool sculptedBodyDirty = true;
-	readonly List<BodyPrimitive> bodyPrimitives = [];
-	// A dent stays where it landed on a bone: its surface point and normal in that bone's frame (meters along, across,
-	// out), so it rides the limb and keeps its side through a turn. Depth springs back to flush on flesh.
-	struct BodyDent
-	{
-		public int Bone;
-		public Vector3 Surface, Normal;
-		public float Radius, Depth, Velocity, Age;
-		public bool Flesh;
-		public Color Color;
-	}
-	readonly List<BodyDent> dents = [];
-	const int MaxDents = 8;
-	static float DentRadius => 0.07f; // meters, at strength 1
-	static float FleshDentDepth => 0.035f;
-	static float MetalDentDepth => 0.025f;
-	static float FleshDentSpring => 140f;
-	static float FleshDentDamping => 5f;
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
 	static float SculptedHeadMinRadius => 5f;
 	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
@@ -265,8 +272,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	float pendingLandingSpeed;
 	float layeredHitTime = -1;
 	float neuralHitRemaining;
-	float neuralJostleAt;
-	float neuralJostlePhase;
 	Signs visualFacing;
 	Signs targetFacing;
 	float visualYaw;
@@ -306,15 +311,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	static float ClipBlendDuration => 0.2f;
 	static float TakeModifierResponse => 12;
-	static float HandPalmRatio => 0.5f;
-	static float HandFingerExtension => 0.38f;
-	static float HandFingerRootSpread => 0.2f;
-	static float HandFingerTipSpread => 0.38f;
-	static float HandFingerWidth => 0.44f;
-	static float HandFingerTipWidth => 0.22f;
 	static float FingerSpinTargetSpeed => MathF.Tau * 7;
 	static float FingerSpinAcceleration => MathF.Tau * 28;
-	static float FingerSpinBlendSpeed => MathF.Tau;
 	static float HitPoseKick => 4.5f;
 	static float HitPoseSpread => 2.2f;
 	static float RagdollSpring => 160f;
@@ -365,7 +363,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float DuckMaxHunch => 1.15f; // radians of forward stoop before the knees take the rest
 	static float DuckMaxKneeDrop => 0.5f; // × pelvis height
 	static float PlantShoulderLift => 1.1f;
-	static bool DrawSpineToClavicle => false;
 	static float GaitHeadOffset => 1.1f;
 	static float GaitShoulderOffset => 0.8f;
 	static float GaitStrideOffset => 1.25f;
@@ -374,8 +371,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float EyeSaccadeInterval => 0.55f;
 	static float EyeSaccadeAmount => 0.12f;
 	static float EyeReactionDuration => 0.18f;
-	static Point2 NeuralSize => new(64, 80);
-	static Point2 NeuralOrigin => new(-32, -72);
 
 	public IReadOnlyList<OzzRig.Clip> Clips => rig.Clips;
 	public OzzRig.Clip ActiveClip => animator.ActiveClip;
@@ -434,7 +429,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		projectedPose = new Vector2[rig.JointCount];
 		jointDepth = new float[rig.JointCount];
 		bones = new Bone[BoneSpecs.Length];
-		neuralBoneUVs = new BoneUV[BoneSpecs.Length];
 		boneOrder = new int[bones.Length];
 		for (var i = 0; i < bones.Length; i++)
 		{
@@ -495,12 +489,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		ResetTurn();
 		visualDelta = 1 / Settings.VisualFPS;
 		UpdatePose(grounded: false, footIK: false);
-		CaptureNeuralUVs();
-		surfaceMaterialOrigin = owner.Position;
-		neuralJostlePhase = (owner.ActorId?.GetHashCode() ?? owner.Position.GetHashCode()) * 0.0001f;
-		neuralJostleAt = owner.Time.SecondsF + NeuralReactions.NeuralJostleInterval * 0.5f;
-		neuralSkin = new(owner, Neural, NeuralSize, NeuralOrigin, 65);
-		neuralSkin.Initialize(Settings.SkinMode);
 		headSprite = string.IsNullOrWhiteSpace(Settings.HeadSpriteName)
 			? null
 			: Assets.GetSprite(Settings.HeadSpriteName);
@@ -608,7 +596,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		ExtraHeadSpriteRollLerped = Calc.Approach(ExtraHeadSpriteRollLerped, ExtraHeadSpriteRoll, owner.Time.Delta);
 
 		EnsureState();
-		neuralSkin.Update(Settings.SkinMode);
+		Body.Update();
 		UpdateFingerSpin(owner.Time.Delta);
 		if (freezeRemaining > 0)
 		{
@@ -899,88 +887,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		SortBones();
 		UpdateHeadLook();
 		UpdateEye();
-		UpdateDents();
-		sculptedBodyDirty = true;
-	}
-
-	void UpdateDents()
-	{
-		var span = CollectionsMarshal.AsSpan(dents);
-		for (var i = 0; i < span.Length; i++)
-			if (span[i].Flesh)
-			{
-				ref var dent = ref span[i];
-				Spring.Step(ref dent.Depth, ref dent.Velocity, 0, FleshDentSpring, FleshDentDamping, visualDelta);
-				dent.Age += visualDelta;
-			}
-		dents.RemoveAll(static dent => dent.Flesh && dent.Age > 1 && MathF.Abs(dent.Depth) < 0.002f);
-	}
-
-	// Dents the sculpted body where an attack's world rect touches it.
-	public void Dent(in RectInt attack, float strength = 1)
-	{
-		if (UsesBodyCombat && BodyContact((Rect)(attack - owner.Position), CombatRole.Vulnerable, out var contact))
-			Dent(owner.Position + contact, strength);
-	}
-
-	// Dents the sculpted body at a world point: on the surface under it, or, if it misses the silhouette, the nearest
-	// surface toward the torso.
-	public void Dent(Vector2 worldPoint, float strength = 1)
-	{
-		if (!Settings.SculptedBody || bodyPrimitives.Count == 0)
-			return;
-		var pieces = CollectionsMarshal.AsSpan(bodyPrimitives);
-		var local = worldPoint - owner.Position;
-		Vector3 hit = default;
-		var found = false;
-		for (var i = 0; i <= 12 && !found; i++)
-			found = SculptedBody.Raycast(pieces, Vector2.Lerp(local, TorsoCenter, i / 12f), out hit);
-		if (!found)
-			return;
-		var normal = SculptedBody.Normal(pieces, hit);
-		var piece = SculptedBody.NearestPiece(pieces, hit);
-		var bone = 0;
-		var closest = float.MaxValue;
-		for (var i = 0; i < bones.Length; i++)
-		{
-			var (from, to) = (ViewJoint(bones[i].From), ViewJoint(bones[i].To));
-			var along = to - from;
-			var t = Math.Clamp(Vector3.Dot(hit - from, along) / MathF.Max(along.LengthSquared(), 0.0001f), 0, 1);
-			var distance = Vector3.DistanceSquared(hit, from + along * t);
-			if (distance < closest)
-				(bone, closest) = (i, distance);
-		}
-		var (origin, axis, across, outward) = DentFrame(bone);
-		var ppm = Settings.PixelsPerMeter;
-		var offset = hit - origin;
-		var flesh = piece >= 0 && pieces[piece].Material == 0;
-		if (dents.Count == MaxDents)
-			dents.RemoveAt(0);
-		dents.Add(new()
-		{
-			Bone = bone,
-			Surface = new Vector3(Vector3.Dot(offset, axis), Vector3.Dot(offset, across), Vector3.Dot(offset, outward)) / ppm,
-			Normal = new(Vector3.Dot(normal, axis), Vector3.Dot(normal, across), Vector3.Dot(normal, outward)),
-			Radius = DentRadius * strength,
-			Depth = (flesh ? FleshDentDepth : MetalDentDepth) * strength,
-			Flesh = flesh,
-			Color = piece >= 0 ? pieces[piece].Color : default,
-		});
-		sculptedBodyDirty = true;
-	}
-
-	// A bone's frame in view pixels. Across and outward flip with the facing mirror, so what's on a limb's front stays
-	// on its front when the figure turns.
-	(Vector3 Origin, Vector3 Axis, Vector3 Across, Vector3 Outward) DentFrame(int bone)
-	{
-		var from = ViewJoint(bones[bone].From);
-		var axis = Vector3.Normalize(ViewJoint(bones[bone].To) - from);
-		if (!float.IsFinite(axis.X))
-			axis = Vector3.UnitY;
-		var mirror = PresentationMirror() < 0 ? -1 : 1;
-		var across = Vector3.Cross(axis, Vector3.UnitZ);
-		across = across.LengthSquared() > 0.0001f ? Vector3.Normalize(across) * mirror : Vector3.UnitX;
-		return (from, axis, across, Vector3.Cross(across, axis) * mirror);
+		Body.Posed();
 	}
 
 	Vector3 ViewJoint(int joint) => new(projectedPose[joint], jointDepth[joint] * Settings.PixelsPerMeter);
@@ -991,14 +898,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (!UsesSculptedHead)
 			return null;
 		sculptedHead ??= new(owner.Game.Manager.GraphicsDevice);
-		// On a sculpted body the head shades from its own color like the body's parts; otherwise from the palette.
-		var (near, core, far) = (Settings.NearColor, Settings.CoreColor, Settings.FarColor);
-		if (Settings.SculptedBody)
-		{
-			near = Settings.HeadColor;
-			far = new Color((Vector4)near * (Vector4)Settings.BodyShadow);
-			core = Color.Lerp(near, far, 0.5f);
-		}
+		var (near, core, far) = Body.HeadPalette;
 		var center = owner.RenderPosition + projectedPose[head];
 		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
 		// Head sprites count yaw the other way round.
@@ -1313,36 +1213,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			MathF.Sin(progress * MathF.PI) * Settings.UpperBodyHitStrength, upperBodyMask);
 	}
 
-	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
-	{
-		if (Settings.SkinMode != RigSkinMode.NCA || context.Texture != neuralSkin.Texture)
-			return;
-		var center = (Vector2)owner.Position + (projectedPose[pelvis] + projectedPose[head]) * 0.5f;
-		if (neuralHitRemaining > 0)
-			context.AddStamp(center, center, 7, NeuralReactions.NeuralHitStrength);
-		AddFootContactStamp(context, leftFoot);
-		AddFootContactStamp(context, rightFoot);
-
-		var now = owner.Time.SecondsF;
-		if (NeuralReactions.NeuralJostleInterval <= 0 || NeuralReactions.NeuralJostleStrength <= 0 ||
-			NeuralReactions.NeuralJostleRadius <= 0 || now < neuralJostleAt)
-			return;
-		neuralJostleAt = now + NeuralReactions.NeuralJostleInterval;
-		var phase = now * 2.3f + neuralJostlePhase;
-		var offset = new Vector2(MathF.Sin(phase) * 8, MathF.Cos(phase * 0.73f) * 14);
-		context.AddStamp(center + offset, center + offset, NeuralReactions.NeuralJostleRadius,
-			NeuralReactions.NeuralJostleStrength);
-	}
-
-	void AddFootContactStamp(NeuralTextureActor.PerturbContext context, FootIK foot)
-	{
-		if (foot.ContactRemaining > 0 && NeuralReactions.NeuralFootContactStrength > 0 &&
-			NeuralReactions.NeuralFootContactRadius > 0)
-			context.AddStamp(foot.ContactPosition, foot.ContactPosition, NeuralReactions.NeuralFootContactRadius,
-				NeuralReactions.NeuralFootContactStrength *
-				Math.Clamp(foot.ContactRemaining / NeuralFootContactDuration, 0, 1));
-	}
-
 	void ApplyTrackingLean()
 	{
 		var amount = Settings.TrackingLean * PoseModifierWeight;
@@ -1411,9 +1281,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	public void Dispose()
 	{
 		animator?.Dispose();
-		neuralSkin?.Dispose();
+		body?.Dispose();
 		sculptedHead?.Dispose();
-		sculptedBody?.Dispose();
 	}
 
 	void ProjectPose()
@@ -1741,190 +1610,17 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
 
-	Color BoneColor(Bone bone, float depth)
-		=> bone.From == pelvis || bone.To == pelvis
-			? Settings.CoreColor
-			: Color.Lerp(Settings.FarColor, Settings.NearColor, depth);
-
-	// Costume shades with depth like the bone under it: the palette's far/near ratio at that depth, so far-side
-	// clothing darkens and shifts hue as much as the limb does. Bones on the pelvis take the flat core color.
-	Color CostumeShade(Bone bone)
-	{
-		if (bone.From == pelvis || bone.To == pelvis)
-			return Color.White;
-		static float Ratio(byte far, byte near) => near == 0 ? 1 : MathF.Min(1, far / (float)near);
-		var near = Settings.NearColor;
-		var far = Settings.FarColor;
-		return Color.Lerp(new Color(Ratio(far.R, near.R), Ratio(far.G, near.G), Ratio(far.B, near.B), 1f), Color.White,
-			BoneRenderDepth(bone));
-	}
-
-	float BoneWidth(Bone bone) => Settings.PixelsPerMeter * bone.Part switch
-	{
-		Part.Torso => Settings.TorsoSize,
-		Part.Chest => Settings.ChestSize,
-		Part.Neck => Settings.NeckSize,
-		Part.Bicep => Settings.BicepSize * armWidthScale,
-		Part.Forearm => Settings.ForearmSize * armWidthScale,
-		Part.Hand => Settings.ForearmSize * handWidthScale *
-			(!scaleLeftHandOnly || bone.Arm == Side.Left ? runtimeHandWidthScale : 1),
-		Part.Thigh => Settings.ThighSize,
-		Part.Shin => Settings.ShinSize,
-		_ => Settings.FootSize,
-	};
-
-	float BoneRenderDepth(Bone bone)
-		=> Math.Clamp(BoneDepth(bone) * MathF.Max(0, Settings.DepthColorContrast) + 0.5f, 0, 1);
-
-	void BoneWidths(Bone bone, out float fromWidth, out float toWidth)
-	{
-		fromWidth = BaseBoneWidth(bone);
-		toWidth = TaperedWidth(bone, fromWidth);
-		if (bone.Parent >= 0)
-		{
-			var parent = bones[bone.Parent];
-			fromWidth = float.Lerp(fromWidth, TaperedWidth(parent, BaseBoneWidth(parent)),
-				Math.Clamp(Settings.JointContinuity, 0, 1));
-		}
-	}
-
-	float BaseBoneWidth(Bone bone)
-		=> BoneWidth(bone) * (1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * Settings.DepthWidthAmount);
-
-	float TaperedWidth(Bone bone, float width) => width * (1 - Math.Clamp(
-		bone.Part == Part.Chest ? Settings.ChestTaper :
-		bone.Part == Part.Neck ? Settings.NeckTaper :
-		bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand ? Settings.LimbTaper : 0, 0, 0.75f));
-
-	void CaptureNeuralUVs()
-	{
-		for (var i = 0; i < bones.Length; i++)
-		{
-			var bone = bones[i];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], fromWidth, toWidth,
-				out var a, out var b, out var c, out var d);
-			neuralBoneUVs[i] = new(NeuralUV(a), NeuralUV(b), NeuralUV(c), NeuralUV(d));
-		}
-		neuralHeadUV = NeuralUV(projectedPose[head]);
-		neuralHeadUVRadius = new Vector2(HeadRadius) / (Vector2)NeuralSize;
-	}
-
 	public bool OverlapsCombatBounds(in RectInt worldBounds, CombatRole role = CombatRole.Vulnerable)
 	{
 		var bounds = (Rect)(worldBounds - owner.Position);
-		if (UsesBodyCombat)
-			return BodyContact(bounds, role, out _) ||
-				bounds.Overlaps(new Circle(projectedPose[head], HeadRadius + Settings.CombatBoundsPadding), out _);
-		for (var i = 0; i < bones.Length; i++)
-		{
-			var bone = bones[i];
-			if (!BackArmCombatEnabled && bone.Arm == backArm)
-				continue;
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			if (bone.Combat && CapsuleOverlaps(bounds, projectedPose[bone.From], projectedPose[bone.To],
-				MathF.Max(fromWidth, toWidth) * 0.5f + Settings.CombatBoundsPadding))
-				return true;
-		}
-		return bounds.Overlaps(new Circle(projectedPose[head], HeadRadius + Settings.CombatBoundsPadding), out _);
-	}
-
-	static bool CapsuleOverlaps(in Rect bounds, Vector2 from, Vector2 to, float radius)
-	{
-		var segment = new Line(from, to);
-		if (bounds.Overlaps(segment))
-			return true;
-		var radiusSquared = radius * radius;
-		return segment.ClosestDistanceSquared(bounds.TopLine) <= radiusSquared ||
-			segment.ClosestDistanceSquared(bounds.RightLine) <= radiusSquared ||
-			segment.ClosestDistanceSquared(bounds.BottomLine) <= radiusSquared ||
-			segment.ClosestDistanceSquared(bounds.LeftLine) <= radiusSquared;
-	}
-
-	// A sculpted body fights with what's drawn: each piece's screen footprint, flagged per piece.
-	bool UsesBodyCombat => Settings.SculptedBody && bodyPrimitives.Count > 0;
-
-	// Whether rig-local bounds touch a piece that plays `role`; contact is the point of the body nearest the bounds'
-	// center (the center itself when it's inside), where a hit lands.
-	bool BodyContact(in Rect bounds, CombatRole role, out Vector2 contact)
-	{
-		var need = role == CombatRole.Harmful ? BodyCombat.Harmful : BodyCombat.Vulnerable;
-		var center = bounds.Center;
-		var (touched, nearest) = (false, float.MaxValue);
-		contact = center;
-		foreach (var piece in bodyPrimitives)
-		{
-			if (piece.Carve || (piece.Combat & need) == 0)
-				continue;
-			var (a, b) = (new Vector2(piece.A.X, piece.A.Y), new Vector2(piece.B.X, piece.B.Y));
-			if (!FootprintOverlaps(bounds, a, b, piece.RadiusA, piece.RadiusB))
-				continue;
-			touched = true;
-			var along = b - a;
-			var t = Math.Clamp(Vector2.Dot(center - a, along) / MathF.Max(along.LengthSquared(), 0.0001f), 0, 1);
-			var axis = a + along * t;
-			var radius = float.Lerp(piece.RadiusA, piece.RadiusB, t);
-			var outward = center - axis;
-			var distance = outward.Length();
-			if (distance - radius < nearest)
-			{
-				nearest = distance - radius;
-				contact = distance <= radius ? center : axis + outward / distance * radius;
-			}
-		}
-		return touched;
-	}
-
-	// A round cone seen from the front is a tapered capsule; the gap to a rect along it is convex in t.
-	static bool FootprintOverlaps(in Rect bounds, Vector2 a, Vector2 b, float radiusA, float radiusB)
-	{
-		var (center, half) = (bounds.Center, bounds.Size * 0.5f);
-		float Gap(float t) => Vector2.Max(Vector2.Abs(Vector2.Lerp(a, b, t) - center) - half, Vector2.Zero).Length() -
-			float.Lerp(radiusA, radiusB, t);
-		var (low, high) = (0f, 1f);
-		for (var i = 0; i < 12; i++)
-		{
-			var (left, right) = (float.Lerp(low, high, 1 / 3f), float.Lerp(low, high, 2 / 3f));
-			if (Gap(left) < Gap(right))
-				high = right;
-			else
-				low = left;
-		}
-		return Gap((low + high) * 0.5f) <= 0;
+		return Body.Overlaps(bounds, role) ||
+			bounds.Overlaps(new Circle(projectedPose[head], HeadRadius + Settings.CombatBoundsPadding), out _);
 	}
 
 	public void DrawCombatBounds(Batcher batcher)
 	{
 		var color = new Color(0x39e6c5);
-		if (UsesBodyCombat)
-		{
-			foreach (var piece in bodyPrimitives)
-			{
-				if (piece.Carve || piece.Combat == BodyCombat.None)
-					continue;
-				var tint = piece.Combat == BodyCombat.Harmful ? new Color(0xe64a39) : piece.Combat == BodyCombat.Vulnerable ? new Color(0xe6d739) : color;
-				var from = owner.Position + new Vector2(piece.A.X, piece.A.Y);
-				var to = owner.Position + new Vector2(piece.B.X, piece.B.Y);
-				batcher.CircleLine(from, piece.RadiusA, 1, 12, tint);
-				batcher.CircleLine(to, piece.RadiusB, 1, 12, tint);
-				batcher.Line(from, to, 1, tint * 0.5f);
-			}
-			batcher.CircleLine(owner.Position + projectedPose[head], HeadRadius + Settings.CombatBoundsPadding, 1, 14, color);
-			return;
-		}
-		for (var i = 0; i < bones.Length; i++)
-		{
-			var bone = bones[i];
-			if (!bone.Combat || !BackArmCombatEnabled && bone.Arm == backArm)
-				continue;
-			var from = owner.Position + projectedPose[bone.From];
-			var to = owner.Position + projectedPose[bone.To];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			var radius = MathF.Max(fromWidth, toWidth) * 0.5f + Settings.CombatBoundsPadding;
-			batcher.Line(from, to, radius * 2, color * 0.2f);
-			batcher.CircleLine(from, radius, 1, 10, color);
-			batcher.CircleLine(to, radius, 1, 10, color);
-		}
+		Body.DrawCombatBounds(batcher, color);
 		batcher.CircleLine(owner.Position + projectedPose[head], HeadRadius + Settings.CombatBoundsPadding,
 			1, 14, color);
 	}
@@ -1935,84 +1631,35 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 			headRadius = new Vector2(frame.Subtexture.Width, frame.Subtexture.Height).Length() *
 				Settings.HeadSpriteScale * 0.5f;
-		var bounds = new Rect(projectedPose[head] - Vector2.One * headRadius, Vector2.One * headRadius * 2);
-		for (var i = 0; i < bones.Length; i++)
-		{
-			var bone = bones[i];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], fromWidth + 2, toWidth + 2,
-				out var a, out var b, out var c, out var d);
-			bounds = bounds.Conflate(a).Conflate(b).Conflate(c).Conflate(d);
-		}
-		if (CurrentSculptedBody() is { ColorTexture: { } bodyTexture } sculpted)
-			bounds = bounds.Conflate(new Rect(sculpted.Origin, new Vector2(bodyTexture.Width, bodyTexture.Height)));
-		if (Assets.GetCostume(Settings.CostumeId) != null)
-		{
-			BuildDrawList();
-			foreach (var item in drawItems)
-				if (item.Kind == RigDrawKind.Costume)
-					bounds = bounds.Conflate(CostumeBounds(item));
-		}
-		return bounds + owner.Position;
+		return Body.Bounds(new Rect(projectedPose[head] - Vector2.One * headRadius, Vector2.One * headRadius * 2)) +
+			owner.Position;
 	}
 
-	// Each pass rebuilds the rig's depth-ordered item list, then draws from it.
 	public void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts = DrawParts.All)
-	{
-		BuildDrawList();
-		DrawItems(batcher, tint, silhouette, parts);
-	}
+		=> Body.Draw(batcher, tint, silhouette, parts);
 
-	void BuildDrawList()
-	{
-		drawItems.Clear();
-		var accessoryIndex = 0;
-		var headAdded = false;
-		var headDepth = jointDepth[head];
-		if (Settings.SculptedBody)
-		{
-			drawItems.Add(new(RigDrawKind.Body, -1));
-			drawItems.Add(new(RigDrawKind.Head, -1));
-			AddItemsThrough(ref accessoryIndex, float.PositiveInfinity);
-			return;
-		}
-		var costume = Assets.GetCostume(Settings.CostumeId);
-		Span<bool> added = stackalloc bool[bones.Length];
-		added.Clear();
-		foreach (var boneIndex in boneOrder)
-		{
-			var bone = bones[boneIndex];
-			if (!DrawSpineToClavicle && bone.From == spine3 && bone.Arm != Side.None)
-				continue;
-			var boneDepth = BoneDepth(bone);
-			if (Accessory != null && !headAdded && headDepth <= boneDepth)
-			{
-				AddItemsThrough(ref accessoryIndex, headDepth);
-				drawItems.Add(new(RigDrawKind.Head, -1, false));
-				headAdded = true;
-			}
-			AddItemsThrough(ref accessoryIndex, boneDepth);
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			var rings = bone.Part == Part.Hand ? JointRings.None : Rings<Bone>(bones, boneIndex, added);
-			added[boneIndex] = true;
-			drawItems.Add(new(bone.Part == Part.Hand ? RigDrawKind.Hand : RigDrawKind.Bone, boneIndex,
-				bone.Leg == backLeg || bone.Arm == backArm, projectedPose[bone.From], projectedPose[bone.To],
-				fromWidth, toWidth, BoneColor(bone, BoneRenderDepth(bone)), rings, bone.Parent >= 0));
-			AddCostumeItems(drawItems, costume, bone.Tags);
-		}
-		if (!headAdded)
-		{
-			AddItemsThrough(ref accessoryIndex, headDepth);
-			drawItems.Add(new(RigDrawKind.Head, -1, false));
-		}
-		AddItemsThrough(ref accessoryIndex, float.PositiveInfinity);
-	}
+	public void DrawNormals(Batcher batcher, DrawParts parts = DrawParts.All) => Body.DrawNormals(batcher, parts);
 
-	void AddItemsThrough(ref int accessoryIndex, float depth)
+	// Dents a sculpted body where an attack's world rect touches it.
+	public void Dent(in RectInt attack, float strength = 1) => Body.Dent(attack, strength);
+
+	// Dents a sculpted body at a world point: on the surface under it, or, if it misses the silhouette, the nearest
+	// surface toward the torso.
+	public void Dent(Vector2 worldPoint, float strength = 1) => Body.Dent(worldPoint, strength);
+
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context) => Body.PerturbNeuralTexture(context);
+
+	void AddItemsThrough(List<RigDrawItem> items, ref int accessoryIndex, float depth)
 	{
 		while (Accessory != null && accessoryIndex < Accessory.DrawItemCount &&
 			Accessory.GetDrawItemDepth(accessoryIndex) <= depth)
-			drawItems.Add(new(RigDrawKind.Accessory, accessoryIndex++, false));
+			items.Add(new(RigDrawKind.Accessory, accessoryIndex++, false));
+	}
+
+	void DrawAccessories(Batcher batcher, Color? tint)
+	{
+		for (var i = 0; i < (Accessory?.DrawItemCount ?? 0); i++)
+			Accessory!.DrawItem(batcher, i, tint);
 	}
 
 	static bool Includes(RigDrawItem item, DrawParts parts) => parts switch
@@ -2021,127 +1668,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		DrawParts.BehindPlayer => item.BehindPlayer,
 		_ => !item.BehindPlayer,
 	};
-
-	RigSkin Skin(Surface? surface, Texture? texture, float amount, bool normals)
-		=> new(SkipSurfaces ? null : surface, texture, amount, normals, NeuralSize, NeuralOrigin, surfaceMaterialOrigin,
-			owner.Time.SecondsF, NoSurfaces: SkipSurfaces);
-
-	void DrawItems(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
-	{
-		if (silhouette)
-		{
-			DrawSilhouette(batcher, tint, parts);
-			return;
-		}
-
-		var skin = Skin(Settings.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(Settings.SurfaceId) : null,
-			Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralColorAmount > 0 ? neuralSkin.OutputTexture : null,
-			Neural.NeuralColorAmount, normals: false);
-		skin.Push(batcher);
-		var outline = Multiply(Settings.OutlineColor, tint);
-		var rimmed = Settings.OutlineMode == RigOutlineMode.Silhouette;
-		if (rimmed)
-			DrawSilhouette(batcher, outline, parts);
-		var frontLimbOutline = Color.Black * Settings.FrontLimbOutline * (tint.A / 255f);
-		foreach (var item in drawItems)
-		{
-			if (!Includes(item, parts))
-				continue;
-			var pieceOutline = !rimmed ? outline
-				: item.Kind is RigDrawKind.Bone or RigDrawKind.Hand && InFrontOfBody(bones[item.Index]) ? frontLimbOutline
-				: Color.Transparent;
-			switch (item.Kind)
-			{
-				case RigDrawKind.Costume:
-					DrawCostume(batcher, item, neuralBoneUVs[item.Index], Multiply(tint, CostumeShade(bones[item.Index])),
-						rimmed ? Color.Transparent : Settings.OutlineColor, skin);
-					break;
-				case RigDrawKind.Bone:
-					DrawBone(batcher, item, neuralBoneUVs[item.Index], Multiply(item.Color, tint), pieceOutline, skin);
-					break;
-				case RigDrawKind.Hand:
-					var color = Multiply(item.Color, tint);
-					var spinAmount = HandSpinAmount(bones[item.Index]);
-					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 2, pieceOutline);
-					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 0, color);
-					DrawHandPalmSkin(batcher, item, color, skin);
-					break;
-				case RigDrawKind.Head:
-					DrawHead(batcher, tint, silhouette: false, skin, outlined: !rimmed);
-					break;
-				case RigDrawKind.Body:
-					DrawBody(batcher, tint, silhouette: false, outlined: !rimmed);
-					break;
-				case RigDrawKind.Accessory:
-					Accessory!.DrawItem(batcher, item.Index, null);
-					break;
-			}
-		}
-		skin.Pop(batcher);
-	}
-
-	// Bone and hand outline shapes go down first so the silhouette is their union; the other items follow in order.
-	void DrawSilhouette(Batcher batcher, Color tint, DrawParts parts)
-	{
-		foreach (var item in drawItems)
-		{
-			if (!Includes(item, parts))
-				continue;
-			if (item.Kind == RigDrawKind.Costume)
-				DrawCostume(batcher, item, default, tint, tint, default, silhouette: true);
-			else if (item.Kind == RigDrawKind.Hand)
-				DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
-					HandSpinAmount(bones[item.Index]), 2, tint);
-			else if (item.Kind == RigDrawKind.Bone)
-				DrawBoneSilhouette(batcher, item, tint);
-			else if (item.Kind == RigDrawKind.Body)
-				DrawBody(batcher, tint, silhouette: true);
-		}
-		foreach (var item in drawItems)
-		{
-			if (!Includes(item, parts))
-				continue;
-			switch (item.Kind)
-			{
-				case RigDrawKind.Head:
-					DrawHead(batcher, tint, silhouette: true, default);
-					break;
-				case RigDrawKind.Accessory:
-					Accessory!.DrawItem(batcher, item.Index, tint);
-					break;
-			}
-		}
-	}
-
-	void DrawBody(Batcher batcher, Color tint, bool silhouette, bool outlined = true)
-	{
-		if (CurrentSculptedBody() is not { ColorTexture: { } color } body)
-			return;
-		if (silhouette || outlined)
-			batcher.Image(body.MaskTexture!, body.Origin, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
-		if (!silhouette)
-			batcher.Image(color, body.Origin, tint);
-	}
-
-	// Re-marched once per pose step, however many passes draw it.
-	SculptedBody? CurrentSculptedBody()
-	{
-		if (!Settings.SculptedBody)
-			return null;
-		sculptedBody ??= new(owner.Game.Manager.GraphicsDevice);
-		if (!sculptedBodyDirty)
-			return sculptedBody;
-		sculptedBodyDirty = false;
-		BuildBodyPrimitives();
-		var ppm = Settings.PixelsPerMeter;
-		var shading = new BodyShading(Settings.BodyShading, Settings.BodyShadow,
-			new(Settings.SkinMetallic, Settings.SkinRoughness, Settings.Specular, 0), new(1, Settings.MetalRoughness, Settings.Specular, 0),
-			0.05f * ppm, jointDepth[pelvis] * ppm, 0.25f * ppm, Settings.BodyDepthShade);
-		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
-		sculptedBody.Render(CollectionsMarshal.AsSpan(bodyPrimitives), shading,
-			lights[..GatherLights(lights, owner.RenderPosition + TorsoCenter, ppm)], owner.RenderPosition);
-		return sculptedBody;
-	}
 
 	// The scene lights that reach most strongly into `reach` pixels around a world point, strongest first.
 	int GatherLights(Span<BodyLight> into, Vector2 center, float reach)
@@ -2171,189 +1697,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	public void DrawEmissive(Batcher batcher)
 	{
-		if (CurrentSculptedBody() is { SpecularTexture: { } specular } body)
-			batcher.Image(specular, body.Origin, Color.White);
+		Body.DrawEmissive(batcher);
 		if (CurrentSculptedHead() is { SpecularTexture: { } headSpecular } sculpt)
 			batcher.Image(headSpecular, projectedPose[head], new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
 	}
 
-	// The fleshy robot: soft masses smooth-unioned over a torso, hard metal joints, forearms, shins, hands and feet.
-	// Sizes are meters; positions come from the projected pose (so leans, IK and squish carry over) plus its depth,
-	// which mirrors rather than rotates on a turn, so the front always faces the camera.
-	void BuildBodyPrimitives()
-	{
-		const int Flesh = 0, Metal = 1;
-		var ppm = Settings.PixelsPerMeter;
-		var bulk = ppm * Settings.BodyBulk;
-		var blend = Settings.FleshBlend * ppm;
-		var machined = 0.01f * ppm;
-		var muscle = 0.02f * ppm; // a tight blend, so each muscle keeps a crease where it meets the limb
-		var list = bodyPrimitives;
-		list.Clear();
-
-		var side = Vector3.Normalize(V(rightClavicle) - V(leftClavicle));
-		var up = Vector3.Normalize(V(neck) - V(pelvis));
-		var forward = Vector3.Normalize(Vector3.Cross(up, side));
-		var toes = V(leftLeg.Toe) - V(leftLeg.Ankle) + V(rightLeg.Toe) - V(rightLeg.Ankle);
-		if (Vector3.Dot(forward, toes) < 0)
-			forward = -forward;
-
-		var (torso, joints) = (Settings.TorsoColor, Settings.JointColor);
-		var hips = Settings.HipSize;
-		Add(V(leftLeg.Hip), V(rightLeg.Hip), 0.1f * hips, 0.1f * hips, 0, joints, Metal);
-		Add(V(spine1), V(spine2), 0.13f, 0.14f, blend, torso);
-		Add(V(spine2), V(spine3), 0.15f, 0.17f, blend, torso);
-		Add(V(leftClavicle) - up * 0.06f * bulk, V(rightClavicle) - up * 0.06f * bulk, 0.12f, 0.12f, blend, torso);
-		// Pecs are flat plates from the sternum up to the armpit, not balls: they barely stand off the ribcage. A shallow
-		// groove along each one's underside gives it the crisp lower edge.
-		var chest = Vector3.Lerp(V(spine2), V(spine3), 0.8f);
-		var pecs = Settings.ChestMass;
-		if (pecs > 0)
-		{
-			for (var s = -1; s <= 1; s += 2)
-			{
-				var (inner, outer) = Pec(s);
-				Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, Settings.ChestColor);
-			}
-			for (var s = -1; s <= 1; s += 2)
-			{
-				var (inner, outer) = Pec(s);
-				var under = forward * 0.02f * bulk;
-				list.Add(new(inner - up * 0.055f * bulk * pecs + under, 0.012f * bulk,
-					outer - up * 0.045f * bulk * pecs + under, 0.012f * bulk, 0.01f * ppm, default, Carve: true));
-			}
-		}
-		if (Settings.Abs > 0)
-			for (var row = 0; row < 3; row++)
-			{
-				var center = Vector3.Lerp(V(pelvis), V(spine2), 0.35f + row * 0.25f) + forward * 0.12f * bulk;
-				for (var s = -1; s <= 1; s += 2)
-				{
-					var ab = center + side * s * 0.045f * bulk;
-					Add(ab, ab, 0.04f * Settings.Abs, 0.04f * Settings.Abs, 0.015f * ppm, Settings.AbsColor);
-				}
-			}
-		Add(V(neck), V(head), 0.075f, 0.07f, blend, torso);
-		var (arms, forearms, hands) = (Settings.ArmColor, Settings.ForearmColor, Settings.HandColor);
-		var (legs, shins, feet) = (Settings.LegColor, Settings.ShinColor, Settings.FootColor);
-		Limb(leftUpperArm, leftLowerArm, leftHand, leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
-		Limb(rightUpperArm, rightLowerArm, rightHand, rightPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
-		Limb(leftLeg.Hip, leftLeg.Knee, leftLeg.Ankle, leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
-		Limb(rightLeg.Hip, rightLeg.Knee, rightLeg.Ankle, rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
-		Boot(leftLeg);
-		Boot(rightLeg);
-		// The codpiece: a rounded mass below the hip joints, pushed forward and smoothed into the hips and thighs.
-		if (Settings.Codpiece > 0)
-		{
-			var crotch = Vector3.Lerp(V(leftLeg.Hip), V(rightLeg.Hip), 0.5f) + (forward * 0.07f - up * 0.06f) * bulk;
-			Add(crotch + up * 0.03f * bulk, crotch + (forward * 0.02f - up * 0.04f) * bulk,
-				0.065f * Settings.Codpiece, 0.055f * Settings.Codpiece, blend, legs);
-		}
-		for (var s = -1; s <= 1; s += 2)
-		{
-			var (upperArm, lowerArm) = s < 0 ? (leftUpperArm, leftLowerArm) : (rightUpperArm, rightLowerArm);
-			Muscle(V(upperArm), V(lowerArm), 0.3f, 0.7f, forward, 0.03f, 0.06f, 0.05f, arms); // biceps
-			Muscle(V(upperArm), V(lowerArm), 0.15f, 0.6f, -forward, 0.03f, 0.06f, 0.045f, arms); // triceps
-			var leg = s < 0 ? leftLeg : rightLeg;
-			var (hip, knee, ankle) = (V(leg.Hip), V(leg.Knee), V(leg.Ankle));
-			var front = Vector3.Normalize(V(leg.Toe) - ankle);
-			Muscle(hip, knee, 0.25f, 0.8f, front, 0.04f, 0.085f * hips, 0.065f, legs); // quads
-			Muscle(hip, knee, 0.72f, 0.9f, front * 0.5f - side * s, 0.05f, 0.045f, 0.04f, legs); // the teardrop above the knee
-			Muscle(hip, knee, 0.2f, 0.75f, -front, 0.04f, 0.08f * hips, 0.06f, legs); // hamstrings
-			// Each glute's inner edge rides just past the midline, so the two meet in a crease at any size.
-			if (Settings.Glutes > 0)
-			{
-				var radius = 0.085f * Settings.Glutes;
-				var midline = Vector3.Lerp(V(leftLeg.Hip), V(rightLeg.Hip), 0.5f);
-				var glute = midline + (side * s * radius * 0.85f - forward * 0.07f - up * 0.03f) * bulk;
-				Add(glute + up * 0.02f * bulk, glute - (up * 0.06f + forward * 0.01f) * bulk, radius, radius * 0.88f, muscle, legs);
-			}
-			Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, Settings.CalfColor); // calf, fleshed over the metal shin
-		}
-		// Claws ride the finger joints, so they curl with the animation's grip, and run on past the fingertips.
-		if (Settings.Claws > 0)
-			foreach (var claws in (ReadOnlySpan<int[]>)[leftClaws, rightClaws])
-				for (var i = 0; i < claws.Length; i += 3)
-				{
-					var (knuckle, middle, tip) = (V(claws[i]), V(claws[i + 1]), V(claws[i + 2]));
-					Add(knuckle, middle, 0.022f, 0.016f, machined, Settings.ClawColor, Metal);
-					Add(middle, middle + (tip - middle) * (1 + Settings.Claws * 1.5f), 0.016f, 0.003f, machined, Settings.ClawColor, Metal);
-				}
-		for (var s = -1; s <= 1; s += 2)
-		{
-			var clavicle = s < 0 ? leftClavicle : rightClavicle;
-			Add(V(neck), V(clavicle), 0.08f, 0.07f, blend, torso);
-		}
-		// Dents carve in last; a flesh dent springing back past flush bulges out for a moment instead.
-		foreach (var dent in dents)
-		{
-			var (origin, axis, across, outward) = DentFrame(dent.Bone);
-			var surface = origin + (axis * dent.Surface.X + across * dent.Surface.Y + outward * dent.Surface.Z) * ppm;
-			var normal = axis * dent.Normal.X + across * dent.Normal.Y + outward * dent.Normal.Z;
-			var (radius, depth) = (dent.Radius * ppm, dent.Depth * ppm);
-			var center = depth >= 0 ? surface + normal * (radius - depth) : surface - normal * (radius + depth);
-			list.Add(new(center, radius, center, radius, (dent.Flesh ? 0.02f : 0.004f) * ppm, dent.Color, dent.Flesh ? Flesh : Metal,
-				Carve: depth >= 0));
-		}
-
-		// A fleshy upper segment with its mass at the root, a metal joint, a machined lower segment and end.
-		void Limb(int root, int joint, int end, int tip, float mass, float upper, float lower, float jointRadius, float endRadius,
-			Color upperColor, Color lowerColor, Color? endColor)
-		{
-			Add(V(root), V(root), mass, mass, blend, upperColor);
-			Add(V(root), V(joint), upper, lower, blend, upperColor);
-			Add(V(joint), V(joint), jointRadius, jointRadius, 0, joints, Metal);
-			Add(V(joint), V(end), jointRadius, endRadius, machined, lowerColor, Metal);
-			if (endColor is { } color)
-				Add(V(end), V(tip), endRadius, endRadius * 1.1f, machined, color, Metal);
-		}
-
-		// A flat boot in the foot's own frame: the ball and toe tip lie along the sole, the heel sits on that line under
-		// the ankle (pushed back by HeelLength), and a shaft runs from partway up the shin down into the heel. Each
-		// piece rests its underside on the floor, a sole's thickness below the line, so it rolls and lifts with the foot.
-		void Boot(Leg leg)
-		{
-			var (knee, ankle, ball, tip) = (V(leg.Knee), V(leg.Ankle), V(leg.Toe), V(leg.Tip));
-			var sole = Vector3.Normalize(tip - ball);
-			if (!float.IsFinite(sole.X))
-				sole = forward;
-			var under = ball + sole * Vector3.Dot(ankle - ball, sole);
-			var down = Vector3.Normalize(under - ankle);
-			if (!float.IsFinite(down.X))
-				down = Vector3.UnitY;
-			var size = Settings.BootSize;
-			var floor = 0.015f * ppm;
-			Vector3 OnFloor(Vector3 point, float radius) => point - down * (radius * size * bulk - floor);
-			var heel = OnFloor(under - sole * Settings.HeelLength * ppm, 0.055f);
-			var ballCenter = OnFloor(ball, 0.05f);
-			Add(Vector3.Lerp(knee, ankle, 1 - Settings.BootHeight), heel, 0.06f * size, 0.055f * size, 0.02f * ppm, feet, Metal);
-			Add(heel, ballCenter, 0.055f * size, 0.05f * size, machined, feet, Metal);
-			Add(ballCenter, OnFloor(tip, 0.035f), 0.05f * size, 0.035f * size, machined, feet, Metal);
-		}
-
-		(Vector3 Inner, Vector3 Outer) Pec(int s) => (chest + (side * s * 0.045f + forward * 0.12f) * bulk,
-			Vector3.Lerp(chest, V(s < 0 ? leftUpperArm : rightUpperArm), 0.65f) + forward * 0.08f * bulk);
-
-		// A mass along part of a segment, pushed off its axis toward a side of the limb.
-		void Muscle(Vector3 a, Vector3 b, float from, float to, Vector3 toward, float offset, float radiusA, float radiusB, Color color)
-		{
-			var axis = Vector3.Normalize(b - a);
-			var push = toward - axis * Vector3.Dot(toward, axis);
-			push = push.LengthSquared() > 0.000001f ? Vector3.Normalize(push) * offset * bulk : Vector3.Zero;
-			Add(Vector3.Lerp(a, b, from) + push, Vector3.Lerp(a, b, to) + push, radiusA, radiusB, muscle, color);
-		}
-
-		void Add(Vector3 a, Vector3 b, float radiusA, float radiusB, float k, Color color, int material = Flesh)
-			=> list.Add(new(a, radiusA * bulk, b, radiusB * bulk, k, color, material));
-
-		Vector3 V(int joint) => new(projectedPose[joint], jointDepth[joint] * ppm);
-	}
-
-	bool InFrontOfBody(Bone bone)
-		=> (bone.Arm != Side.None || bone.Leg != Side.None) && (bone.Tags & (RigTags.Shoulder | RigTags.Hip)) == 0 &&
-			BoneDepth(bone) - jointDepth[pelvis] > Settings.FrontLimbDepth;
-
-	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin, bool outlined = true)
+	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin, bool outlined = true,
+		(Vector2 Center, Vector2 Radius) skinUV = default)
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
@@ -2378,62 +1728,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		if (outlined)
 			batcher.Circle(position, HeadRadius + 1.4f, 14, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
 		batcher.Circle(position, HeadRadius, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
-		skin.Circle(batcher, position, HeadRadius, neuralHeadUV, neuralHeadUVRadius,
-			Multiply(Settings.NearColor, tint));
+		skin.Circle(batcher, position, HeadRadius, skinUV.Center, skinUV.Radius, Multiply(Settings.NearColor, tint));
 		if (!silhouette && Settings.EyeSize > 0)
 			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
 				Multiply(Settings.AccentColor, tint));
 	}
 
-	public void DrawNormals(Batcher batcher, DrawParts parts = DrawParts.All)
-	{
-		BuildDrawList();
-		DrawItemNormals(batcher, parts);
-	}
-
-	void DrawItemNormals(Batcher batcher, DrawParts parts)
-	{
-		var flat = new Color(0x8080ff);
-		var skin = Skin(Settings.SkinMode == RigSkinMode.Surface &&
-			Assets.GetSurface(Settings.SurfaceId) is { HasNormal: true } foundSurface ? foundSurface : null,
-			Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralNormalAmount > 0 ? neuralSkin.OutputNormalTexture : null,
-			Neural.NeuralNormalAmount, normals: true);
-		skin.Push(batcher);
-		var phaseSeed = (uint)(animationPhase * uint.MaxValue);
-		foreach (var item in drawItems)
-		{
-			if (!Includes(item, parts))
-				continue;
-			switch (item.Kind)
-			{
-				case RigDrawKind.Costume:
-					DrawCostume(batcher, item, neuralBoneUVs[item.Index], Color.White, Settings.OutlineColor, skin);
-					break;
-				case RigDrawKind.Bone:
-					DrawBoneNormals(batcher, item, neuralBoneUVs[item.Index], Settings.NormalRoundness,
-						Settings.NormalIrregularity, phaseSeed, skin);
-					break;
-				case RigDrawKind.Hand:
-					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
-						HandSpinAmount(bones[item.Index]), 2, flat);
-					DrawHandPalmSkin(batcher, item, flat, skin);
-					break;
-				case RigDrawKind.Head:
-					DrawHeadNormals(batcher, flat, skin);
-					break;
-				case RigDrawKind.Body:
-					if (CurrentSculptedBody() is { NormalTexture: { } bodyNormals } body)
-						batcher.Image(bodyNormals, body.Origin, Color.White);
-					break;
-				case RigDrawKind.Accessory:
-					Accessory!.DrawItem(batcher, item.Index, flat);
-					break;
-			}
-		}
-		skin.Pop(batcher);
-	}
-
-	void DrawHeadNormals(Batcher batcher, Color flat, in RigSkin skin)
+	void DrawHeadNormals(Batcher batcher, Color flat, in RigSkin skin, (Vector2 Center, Vector2 Radius) skinUV = default)
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
@@ -2452,7 +1753,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
 		else
 			batcher.Circle(position, HeadRadius + 1.4f, 14, flat);
-		skin.Circle(batcher, position, HeadRadius, neuralHeadUV, neuralHeadUVRadius, Color.White);
+		skin.Circle(batcher, position, HeadRadius, skinUV.Center, skinUV.Radius, Color.White);
 	}
 
 	bool TryGetHeadSpriteFrame(out Sprite.Frame frame, out int frameIndex)
@@ -2512,51 +1813,4 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		return true;
 	}
 
-	float HandSpinAmount(Bone bone)
-		=> !spinLeftHandOnly || bone.Arm == Side.Left ? Math.Clamp(fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
-
-	void DrawHand(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,
-		float spinAmount, float inflate, Color color)
-	{
-		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft();
-		var width = MathF.Max(fromWidth, toWidth);
-		var palmEnd = Vector2.Lerp(from, to, HandPalmRatio);
-		var fingerTip = to + along * (width * HandFingerExtension);
-		var spin = fingerSpinAngle;
-		var fingerRootWidth = width * HandFingerWidth;
-		var fingerTipWidth = width * HandFingerTipWidth;
-		DrawBoneQuad(batcher, from, palmEnd, fromWidth * 0.72f + inflate, width + inflate, color);
-		for (var side = -1; side <= 1; side += 2)
-		{
-			var rootOffset = across * (width * HandFingerRootSpread * side);
-			var tipOffset = fingerTip - palmEnd + across * (width * HandFingerTipSpread * side);
-			if (spinAmount > 0)
-			{
-				rootOffset = Vector2.Lerp(rootOffset, Rotate(rootOffset, spin), spinAmount);
-				tipOffset = Vector2.Lerp(tipOffset, Rotate(tipOffset, spin), spinAmount);
-			}
-			DrawBoneQuad(batcher,
-				palmEnd + rootOffset, palmEnd + tipOffset,
-				fingerRootWidth + inflate, fingerTipWidth + inflate, color);
-		}
-	}
-
-	static Vector2 Rotate(Vector2 value, float radians)
-	{
-		var cos = MathF.Cos(radians);
-		var sin = MathF.Sin(radians);
-		return new(value.X * cos - value.Y * sin, value.X * sin + value.Y * cos);
-	}
-
-	void DrawHandPalmSkin(Batcher batcher, in RigDrawItem item, Color color, in RigSkin skin)
-	{
-		var palmEnd = Vector2.Lerp(item.From, item.To, HandPalmRatio);
-		var uv = neuralBoneUVs[item.Index];
-		var palmUV = new BoneUV(uv.A, uv.B,
-			Vector2.Lerp(uv.B, uv.C, HandPalmRatio), Vector2.Lerp(uv.A, uv.D, HandPalmRatio));
-		skin.Bone(batcher, item.From, palmEnd, item.FromWidth * 0.72f, MathF.Max(item.FromWidth, item.ToWidth), palmUV, color);
-	}
-
-	static Vector2 NeuralUV(Vector2 position) => (position - (Vector2)NeuralOrigin) / (Vector2)NeuralSize;
 }
