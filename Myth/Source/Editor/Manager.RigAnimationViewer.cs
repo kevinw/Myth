@@ -24,6 +24,7 @@ public partial class Manager
 	float rigTakeUpperBodyLeanDegrees;
 	float rigTakeArmWidthScale = 1;
 	float rigTakeHandWidthScale = 1;
+	RigHand rigTakeNearHand;
 	bool rigTakeLoop;
 	bool rigTakeFootIK;
 
@@ -365,6 +366,13 @@ public partial class Manager
 			rigTakeHandWidthScale = handScale;
 			PreviewRigTakeDraft(rig);
 		}
+		// The hand kept toward the viewer: the take plays mirrored whenever it would be the far one.
+		var nearHand = (int)rigTakeNearHand;
+		if (ImGui.Combo("Near hand", ref nearHand, "None\0Left\0Right\0"))
+		{
+			rigTakeNearHand = (RigHand)nearHand;
+			PreviewRigTakeDraft(rig);
+		}
 
 		if (rig != null && ImGui.Button("Preview take"))
 			PreviewRigTakeDraft(rig);
@@ -423,6 +431,7 @@ public partial class Manager
 		rigTakeSpeed = 1;
 		rigTakeUpperBodyLeanDegrees = 0;
 		rigTakeArmWidthScale = rigTakeHandWidthScale = 1;
+		rigTakeNearHand = RigHand.None;
 		rigTakeLoop = clip.Name.EndsWith("_Loop", StringComparison.OrdinalIgnoreCase);
 		rigTakeFootIK = false;
 		rigTakeStatus = "";
@@ -436,6 +445,7 @@ public partial class Manager
 			rigTakeUpperBodyLeanDegrees = saved.UpperBodyLeanDegrees;
 			rigTakeArmWidthScale = saved.ArmWidthScale;
 			rigTakeHandWidthScale = saved.HandWidthScale;
+			rigTakeNearHand = saved.NearHand;
 		}
 	}
 
@@ -449,6 +459,7 @@ public partial class Manager
 		rigTakeUpperBodyLeanDegrees = take.UpperBodyLeanDegrees;
 		rigTakeArmWidthScale = take.ArmWidthScale;
 		rigTakeHandWidthScale = take.HandWidthScale;
+		rigTakeNearHand = take.NearHand;
 		rigTakeLoop = take.Loop;
 		rigTakeFootIK = take.FootIK;
 		rigTakeStatus = "";
@@ -466,6 +477,6 @@ public partial class Manager
 	RigTake RigTakeDraft()
 		=> new(rigTakeName, rigTakeDraftClip!, rigTakeStart, rigTakeEnd,
 			rigTakeLoop, rigTakeSpeed, rigTakeFootIK, rigTakeUpperBodyLeanDegrees,
-			rigTakeArmWidthScale, rigTakeHandWidthScale);
+			rigTakeArmWidthScale, rigTakeHandWidthScale, rigTakeNearHand);
 }
 #endif

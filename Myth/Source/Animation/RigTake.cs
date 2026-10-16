@@ -2,6 +2,10 @@ using System.Text.Json.Nodes;
 
 namespace Myth;
 
+// The hand a take is about (a swipe, a sword cut): the rig plays the take mirrored whenever that hand would be the
+// far one, so it stays toward the viewer whichever way the figure faces.
+public enum RigHand { None, Left, Right }
+
 public readonly record struct RigTake(
 	string Name,
 	string Clip,
@@ -12,7 +16,8 @@ public readonly record struct RigTake(
 	bool FootIK = false,
 	float UpperBodyLeanDegrees = 0,
 	float ArmWidthScale = 1,
-	float HandWidthScale = 1);
+	float HandWidthScale = 1,
+	RigHand NearHand = RigHand.None);
 
 static class RigTakes
 {
@@ -62,7 +67,8 @@ static class RigTakes
 						value["FootIK"]?.GetValue<bool>() ?? false,
 						value["UpperBodyLeanDegrees"]?.GetValue<float>() ?? 0,
 						value["ArmWidthScale"]?.GetValue<float>() ?? 1,
-						value["HandWidthScale"]?.GetValue<float>() ?? 1);
+						value["HandWidthScale"]?.GetValue<float>() ?? 1,
+						Enum.TryParse<RigHand>(value["NearHand"]?.GetValue<string>(), true, out var hand) ? hand : RigHand.None);
 		}
 		catch (Exception e)
 		{
@@ -106,6 +112,8 @@ static class RigTakes
 				["ArmWidthScale"] = item.ArmWidthScale,
 				["HandWidthScale"] = item.HandWidthScale,
 			};
+			if (item.NearHand != RigHand.None)
+				root[name]!["NearHand"] = item.NearHand.ToString();
 		}
 		var path = Path.Join(Assets.AssetsPath, AssetPath);
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);

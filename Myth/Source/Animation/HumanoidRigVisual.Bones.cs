@@ -139,7 +139,7 @@ partial class HumanoidRigVisual
 			Part.Bicep => visual.Settings.Bones.BicepSize * visual.armWidthScale,
 			Part.Forearm => visual.Settings.Bones.ForearmSize * visual.armWidthScale,
 			Part.Hand => visual.Settings.Bones.ForearmSize * visual.handWidthScale *
-				(!visual.scaleLeftHandOnly || bone.Arm == Side.Left ? visual.runtimeHandWidthScale : 1),
+				(!visual.scaleLeftHandOnly || bone.Arm == visual.TakeLeft ? visual.runtimeHandWidthScale : 1),
 			Part.Thigh => visual.Settings.Bones.ThighSize,
 			Part.Shin => visual.Settings.Bones.ShinSize,
 			_ => visual.Settings.Bones.FootSize,
@@ -361,7 +361,7 @@ partial class HumanoidRigVisual
 		}
 
 		float HandSpinAmount(Bone bone)
-			=> !visual.spinLeftHandOnly || bone.Arm == Side.Left ? Math.Clamp(visual.fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
+			=> !visual.spinLeftHandOnly || bone.Arm == visual.TakeLeft ? Math.Clamp(visual.fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
 
 		void DrawHand(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,
 			float spinAmount, float inflate, Color color)

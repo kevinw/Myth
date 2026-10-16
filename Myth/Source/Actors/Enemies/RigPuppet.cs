@@ -482,8 +482,7 @@ public class RigPuppet : RigActor
 		walking = false;
 		Velocity.X = 0;
 		turn.Play(take);
-		visual.Play(take);
-		visual.TurnWithClip();
+		visual.PlayTurn(take);
 	}
 
 	void UpdatePatrol(bool grounded, Player? player)

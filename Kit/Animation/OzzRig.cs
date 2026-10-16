@@ -24,6 +24,7 @@ public sealed partial class OzzRig : IDisposable
 	bool disposed;
 
 	public int JointCount => jointNames.Length;
+	public IReadOnlyList<string> JointNames => jointNames;
 	public int JointParent(int joint) => jointParents[joint]; // -1 at the root
 	public IReadOnlyList<Clip> Clips => clips;
 

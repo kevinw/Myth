@@ -107,7 +107,8 @@
     "FootIK": true,
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
-    "HandWidthScale": 1
+    "HandWidthScale": 1,
+    "NearHand": "Right"
   },
   "PlayerClimb": {
     "Clip": "Rope_Climb",
@@ -371,6 +372,7 @@
     "FootIK": false,
     "UpperBodyLeanDegrees": 11,
     "ArmWidthScale": 1.25,
-    "HandWidthScale": 1
+    "HandWidthScale": 1,
+    "NearHand": "Left"
   }
 }

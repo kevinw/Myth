@@ -271,6 +271,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// facing turn follows it instead of a timed sweep, so the feet stay where the clip planted them.
 	OzzRig.Clip? turnClip;
 	bool clipTurn; // the turn in progress follows turnClip
+	// The playing take is mirrored (left and right swapped across the body's midline) to keep its hand toward the viewer.
+	// Accessors that name a side (LeftHandWorldPosition, leftHandOnly, ...) follow the take's sides, not the bones'.
+	bool mirrored;
+	int[] mirrorJoint = []; // each joint's opposite (itself on the midline)
+	float leftLateral; // +1 or -1: the side of the rig's X axis its left joints lie on
 	bool ragdollReady;
 	float appliedShoulderDrop;
 	bool turnReady;
@@ -386,11 +391,13 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	public Vector2 EyeOffset => TryHeadSpriteEyeOffset(out var position)
 		? position
 		: projectedPose[head] + (headSprite == null ? lookDirection * 2.4f : Vector2.Zero);
-	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[leftLeg.Toe];
-	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
-	public Vector2 LeftHandWorldPosition => owner.Position + projectedPose[leftPalm];
-	public Vector2 RightHandWorldPosition => owner.Position + projectedPose[rightPalm];
-	public Vector2 RightPalm => projectedPose[rightPalm];
+	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[mirrored ? rightLeg.Toe : leftLeg.Toe];
+	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[mirrored ? leftLeg.Toe : rightLeg.Toe];
+	public Vector2 LeftHandWorldPosition => owner.Position + projectedPose[mirrored ? rightPalm : leftPalm];
+	public Vector2 RightHandWorldPosition => owner.Position + projectedPose[mirrored ? leftPalm : rightPalm];
+	public Vector2 RightPalm => projectedPose[mirrored ? leftPalm : rightPalm];
+	// The bones playing the take's left side.
+	Side TakeLeft => mirrored ? Side.Right : Side.Left;
 	public Vector2 TorsoCenter => (projectedPose[pelvis] + projectedPose[neck]) * 0.5f;
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 	public float PoseJostlePixels;
@@ -453,6 +460,13 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		leftClavicle = RequiredJoint("clavicle_l");
 		leftClaws = ClawJoints("l");
 		rightClaws = ClawJoints("r");
+		mirrorJoint = new int[rig.JointCount];
+		for (var i = 0; i < mirrorJoint.Length; i++)
+		{
+			var name = rig.JointNames[i];
+			var opposite = name.EndsWith("_l") ? name[..^1] + "r" : name.EndsWith("_r") ? name[..^1] + "l" : name;
+			mirrorJoint[i] = rig.FindJoint(opposite) is >= 0 and var found ? found : i;
+		}
 		rightClavicle = RequiredJoint("clavicle_r");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
@@ -481,6 +495,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		ResetTurn();
 		visualDelta = 1 / Settings.VisualFPS;
 		UpdatePose(grounded: false, footIK: false);
+		leftLateral = MathF.Sign(sampledPose[leftClavicle].X - sampledPose[rightClavicle].X);
 		headSprite = string.IsNullOrWhiteSpace(Settings.HeadSpriteName)
 			? null
 			: Assets.GetSprite(Settings.HeadSpriteName);
@@ -555,35 +570,37 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		SetTakeModifierTargets(0, 1, 1);
 		var startTime = seededPhase && !string.Equals(animator.ActiveClip.Name, name, StringComparison.OrdinalIgnoreCase)
 			? rig.GetClip(name).Duration * animationPhase : 0;
-		var transition = Transition(blend ? (blendDuration >= 0 ? blendDuration : -1) : 0);
+		var transition = Transition(blend ? (blendDuration >= 0 ? blendDuration : -1) : 0, mirror: false);
 		animator.Play(name, transition, restart, startTime);
 	}
 
 	// The animator's cross-fade for a clip change; with an inertial blend, none, and the switch is eased out here.
-	// requested < 0 means the default. Leaving a turning clip always blends inertially: the animator would cross-fade
-	// its spun pelvis back round, where the pose it showed (spin taken out) is already facing the new way.
-	float Transition(float requested)
+	// requested < 0 means the default. Leaving a turning clip, or changing mirroring, always blends inertially: the
+	// animator would cross-fade the raw clips (a spun pelvis, unswapped sides), not the pose that was shown.
+	float Transition(float requested, bool mirror)
 	{
 		keyPending = true;
-		var leavingTurn = turnClip != null;
+		var inertial = turnClip != null || mirror != mirrored;
 		turnClip = null;
+		mirrored = mirror;
 		if (requested == 0)
 			return 0;
-		if (Settings.InertialBlendTime <= 0 && !leavingTurn)
+		if (Settings.InertialBlendTime <= 0 && !inertial)
 			return requested > 0 ? requested : ClipBlendDuration;
 		inertialPending = true;
 		inertialDuration = requested > 0 ? requested : Settings.InertialBlendTime > 0 ? Settings.InertialBlendTime : ClipBlendDuration;
 		return 0;
 	}
 
-	public void Play(RigTake take, float blendDuration = -1, bool restart = true)
+	public void Play(RigTake take, float blendDuration = -1, bool restart = true, bool? mirror = null)
 	{
 		SetTakeModifierTargets(take.UpperBodyLeanDegrees, take.ArmWidthScale, take.HandWidthScale);
 		var clip = rig.GetClip(take.Clip);
 		var start = Math.Clamp(take.Start, 0, clip.Duration);
 		var end = Math.Clamp(take.End, start, clip.Duration);
 		PlaybackSpeed = Math.Max(0.01f, take.Speed);
-		animator.Play(take.Clip, start, end, Transition(blendDuration), restart);
+		mirror ??= take.NearHand != RigHand.None && (take.NearHand == RigHand.Left) != LeftNear(FacingYaw(owner.Facing));
+		animator.Play(take.Clip, start, end, Transition(blendDuration, mirror.Value), restart);
 	}
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true, bool seekGround = false)
@@ -692,9 +709,18 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		turning = clipTurn = false;
 	}
 
-	// Call right after playing a clip that spins the body round (its pelvis turns): the turn the owner's facing change
-	// starts follows that clip, the way the clip turns, until the clip changes.
-	public void TurnWithClip() => turnClip = animator.ActiveClip;
+	// Plays a take that spins the body round (its pelvis turns) for the turn the owner's facing change starts: mirrored
+	// if need be so it spins the way that passes the viewer, and the turn follows its spin until the clip changes.
+	public void PlayTurn(RigTake take)
+	{
+		var clip = rig.GetClip(take.Clip);
+		var spin = rig.Yaw(clip, pelvis, Math.Min(take.End, clip.Duration)) - rig.Yaw(clip, pelvis, take.Start);
+		Play(take, mirror: spin * (FacingYaw(owner.Facing) - visualYaw) < 0);
+		turnClip = animator.ActiveClip;
+	}
+
+	// Whether the rig's left side is toward the viewer at this yaw.
+	bool LeftNear(float yaw) => leftLateral * MathF.Cos(yaw + Settings.ProjectionYaw * MathF.PI / 180f) > 0;
 
 	// The yaw that faces the viewer.
 	float CameraYaw => MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
@@ -873,8 +899,27 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		turning = clipTurn = false;
 	}
 
+	// Reflects the sampled pose across the body's midline (the rig's X = 0 plane), swapping each joint with its opposite.
+	void ApplyMirror()
+	{
+		if (!mirrored)
+			return;
+		for (var i = 0; i < mirrorJoint.Length; i++)
+		{
+			var j = mirrorJoint[i];
+			if (j < i)
+				continue;
+			var (pose, rotation) = (sampledPose[i], sampledRotations[i]);
+			(sampledPose[i], sampledRotations[i]) = (Across(sampledPose[j]), Across(sampledRotations[j]));
+			(sampledPose[j], sampledRotations[j]) = (Across(pose), Across(rotation));
+		}
+	}
+
+	static Vector3 Across(Vector3 p) => p with { X = -p.X };
+	static Quaternion Across(Quaternion q) => new(q.X, -q.Y, -q.Z, q.W);
+
 	// How far turnClip's pelvis has spun since the start of its range, at a clip time.
-	float ClipSpin(float time) => rig.Yaw(turnClip!, pelvis, time) - rig.Yaw(turnClip!, pelvis, animator.RangeStart);
+	float ClipSpin(float time) => (rig.Yaw(turnClip!, pelvis, time) - rig.Yaw(turnClip!, pelvis, animator.RangeStart)) * (mirrored ? -1 : 1);
 
 	// Takes turnClip's pelvis spin back out of the sampled pose, and moves the facing turn along by it instead, scaled
 	// to the turn the figure actually needs.
@@ -904,6 +949,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	{
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
+		ApplyMirror();
 		ApplyClipTurn();
 		ApplyInertialBlend();
 		ApplyShoulderDrop();
