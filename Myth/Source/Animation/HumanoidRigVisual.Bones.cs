@@ -41,12 +41,12 @@ partial class HumanoidRigVisual
 			neuralJostlePhase = (owner.ActorId?.GetHashCode() ?? owner.Position.GetHashCode()) * 0.0001f;
 			neuralJostleAt = owner.Time.SecondsF + visual.NeuralReactions.NeuralJostleInterval * 0.5f;
 			neuralSkin = new(owner, visual.Neural, NeuralSize, NeuralOrigin, 65);
-			neuralSkin.Initialize(visual.Settings.SkinMode);
+			neuralSkin.Initialize(visual.Settings.Bones.SkinMode);
 		}
 
-		public (Color Near, Color Core, Color Far) HeadPalette => (visual.Settings.NearColor, visual.Settings.CoreColor, visual.Settings.FarColor);
+		public (Color Near, Color Core, Color Far) HeadPalette => (visual.Settings.Bones.NearColor, visual.Settings.Bones.CoreColor, visual.Settings.Bones.FarColor);
 
-		public void Update() => neuralSkin.Update(visual.Settings.SkinMode);
+		public void Update() => neuralSkin.Update(visual.Settings.Bones.SkinMode);
 
 		// Each pass rebuilds the rig's depth-ordered item list, then draws from it.
 		public void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
@@ -103,7 +103,7 @@ partial class HumanoidRigVisual
 					out var a, out var b, out var c, out var d);
 				bounds = bounds.Conflate(a).Conflate(b).Conflate(c).Conflate(d);
 			}
-			if (Assets.GetCostume(visual.Settings.CostumeId) != null)
+			if (Assets.GetCostume(visual.Settings.Bones.CostumeId) != null)
 			{
 				BuildDrawList();
 				foreach (var item in drawItems)
@@ -117,8 +117,8 @@ partial class HumanoidRigVisual
 
 		Color BoneColor(Bone bone, float depth)
 			=> bone.From == visual.pelvis || bone.To == visual.pelvis
-				? visual.Settings.CoreColor
-				: Color.Lerp(visual.Settings.FarColor, visual.Settings.NearColor, depth);
+				? visual.Settings.Bones.CoreColor
+				: Color.Lerp(visual.Settings.Bones.FarColor, visual.Settings.Bones.NearColor, depth);
 
 		// Costume shades with depth like the bone under it: the palette's far/near ratio at that depth, so far-side
 		// clothing darkens and shifts hue as much as the limb does. Bones on the pelvis take the flat core color.
@@ -127,28 +127,28 @@ partial class HumanoidRigVisual
 			if (bone.From == visual.pelvis || bone.To == visual.pelvis)
 				return Color.White;
 			static float Ratio(byte far, byte near) => near == 0 ? 1 : MathF.Min(1, far / (float)near);
-			var near = visual.Settings.NearColor;
-			var far = visual.Settings.FarColor;
+			var near = visual.Settings.Bones.NearColor;
+			var far = visual.Settings.Bones.FarColor;
 			return Color.Lerp(new Color(Ratio(far.R, near.R), Ratio(far.G, near.G), Ratio(far.B, near.B), 1f), Color.White,
 				BoneRenderDepth(bone));
 		}
 
 		float BoneWidth(Bone bone) => visual.Settings.PixelsPerMeter * bone.Part switch
 		{
-			Part.Torso => visual.Settings.TorsoSize,
-			Part.Chest => visual.Settings.ChestSize,
-			Part.Neck => visual.Settings.NeckSize,
-			Part.Bicep => visual.Settings.BicepSize * visual.armWidthScale,
-			Part.Forearm => visual.Settings.ForearmSize * visual.armWidthScale,
-			Part.Hand => visual.Settings.ForearmSize * visual.handWidthScale *
+			Part.Torso => visual.Settings.Bones.TorsoSize,
+			Part.Chest => visual.Settings.Bones.ChestSize,
+			Part.Neck => visual.Settings.Bones.NeckSize,
+			Part.Bicep => visual.Settings.Bones.BicepSize * visual.armWidthScale,
+			Part.Forearm => visual.Settings.Bones.ForearmSize * visual.armWidthScale,
+			Part.Hand => visual.Settings.Bones.ForearmSize * visual.handWidthScale *
 				(!visual.scaleLeftHandOnly || bone.Arm == Side.Left ? visual.runtimeHandWidthScale : 1),
-			Part.Thigh => visual.Settings.ThighSize,
-			Part.Shin => visual.Settings.ShinSize,
-			_ => visual.Settings.FootSize,
+			Part.Thigh => visual.Settings.Bones.ThighSize,
+			Part.Shin => visual.Settings.Bones.ShinSize,
+			_ => visual.Settings.Bones.FootSize,
 		};
 
 		float BoneRenderDepth(Bone bone)
-			=> Math.Clamp(visual.BoneDepth(bone) * MathF.Max(0, visual.Settings.DepthColorContrast) + 0.5f, 0, 1);
+			=> Math.Clamp(visual.BoneDepth(bone) * MathF.Max(0, visual.Settings.Bones.DepthColorContrast) + 0.5f, 0, 1);
 
 		void BoneWidths(Bone bone, out float fromWidth, out float toWidth)
 		{
@@ -158,17 +158,17 @@ partial class HumanoidRigVisual
 			{
 				var parent = visual.bones[bone.Parent];
 				fromWidth = float.Lerp(fromWidth, TaperedWidth(parent, BaseBoneWidth(parent)),
-					Math.Clamp(visual.Settings.JointContinuity, 0, 1));
+					Math.Clamp(visual.Settings.Bones.JointContinuity, 0, 1));
 			}
 		}
 
 		float BaseBoneWidth(Bone bone)
-			=> BoneWidth(bone) * (1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * visual.Settings.DepthWidthAmount);
+			=> BoneWidth(bone) * (1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * visual.Settings.Bones.DepthWidthAmount);
 
 		float TaperedWidth(Bone bone, float width) => width * (1 - Math.Clamp(
-			bone.Part == Part.Chest ? visual.Settings.ChestTaper :
-			bone.Part == Part.Neck ? visual.Settings.NeckTaper :
-			bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand ? visual.Settings.LimbTaper : 0, 0, 0.75f));
+			bone.Part == Part.Chest ? visual.Settings.Bones.ChestTaper :
+			bone.Part == Part.Neck ? visual.Settings.Bones.NeckTaper :
+			bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand ? visual.Settings.Bones.LimbTaper : 0, 0, 0.75f));
 
 		void CaptureNeuralUVs()
 		{
@@ -202,7 +202,7 @@ partial class HumanoidRigVisual
 			var accessoryIndex = 0;
 			var headAdded = false;
 			var headDepth = visual.jointDepth[visual.head];
-			var costume = Assets.GetCostume(visual.Settings.CostumeId);
+			var costume = Assets.GetCostume(visual.Settings.Bones.CostumeId);
 			Span<bool> added = stackalloc bool[visual.bones.Length];
 			added.Clear();
 			foreach (var boneIndex in visual.boneOrder)
@@ -246,15 +246,15 @@ partial class HumanoidRigVisual
 				return;
 			}
 
-			var skin = Skin(visual.Settings.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(visual.Settings.SurfaceId) : null,
-				visual.Settings.SkinMode == RigSkinMode.NCA && visual.Neural.NeuralColorAmount > 0 ? neuralSkin.OutputTexture : null,
+			var skin = Skin(visual.Settings.Bones.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(visual.Settings.Bones.SurfaceId) : null,
+				visual.Settings.Bones.SkinMode == RigSkinMode.NCA && visual.Neural.NeuralColorAmount > 0 ? neuralSkin.OutputTexture : null,
 				visual.Neural.NeuralColorAmount, normals: false);
 			skin.Push(batcher);
 			var outline = Multiply(visual.Settings.OutlineColor, tint);
-			var rimmed = visual.Settings.OutlineMode == RigOutlineMode.Silhouette;
+			var rimmed = visual.Settings.Bones.OutlineMode == RigOutlineMode.Silhouette;
 			if (rimmed)
 				DrawSilhouette(batcher, outline, parts);
-			var frontLimbOutline = Color.Black * visual.Settings.FrontLimbOutline * (tint.A / 255f);
+			var frontLimbOutline = Color.Black * visual.Settings.Bones.FrontLimbOutline * (tint.A / 255f);
 			foreach (var item in drawItems)
 			{
 				if (!Includes(item, parts))
@@ -322,14 +322,14 @@ partial class HumanoidRigVisual
 
 		bool InFrontOfBody(Bone bone)
 			=> (bone.Arm != Side.None || bone.Leg != Side.None) && (bone.Tags & (RigTags.Shoulder | RigTags.Hip)) == 0 &&
-				visual.BoneDepth(bone) - visual.jointDepth[visual.pelvis] > visual.Settings.FrontLimbDepth;
+				visual.BoneDepth(bone) - visual.jointDepth[visual.pelvis] > visual.Settings.Bones.FrontLimbDepth;
 
 		void DrawItemNormals(Batcher batcher, DrawParts parts)
 		{
 			var flat = new Color(0x8080ff);
-			var skin = Skin(visual.Settings.SkinMode == RigSkinMode.Surface &&
-				Assets.GetSurface(visual.Settings.SurfaceId) is { HasNormal: true } foundSurface ? foundSurface : null,
-				visual.Settings.SkinMode == RigSkinMode.NCA && visual.Neural.NeuralNormalAmount > 0 ? neuralSkin.OutputNormalTexture : null,
+			var skin = Skin(visual.Settings.Bones.SkinMode == RigSkinMode.Surface &&
+				Assets.GetSurface(visual.Settings.Bones.SurfaceId) is { HasNormal: true } foundSurface ? foundSurface : null,
+				visual.Settings.Bones.SkinMode == RigSkinMode.NCA && visual.Neural.NeuralNormalAmount > 0 ? neuralSkin.OutputNormalTexture : null,
 				visual.Neural.NeuralNormalAmount, normals: true);
 			skin.Push(batcher);
 			var phaseSeed = (uint)(visual.animationPhase * uint.MaxValue);
@@ -343,8 +343,8 @@ partial class HumanoidRigVisual
 						DrawCostume(batcher, item, neuralBoneUVs[item.Index], Color.White, visual.Settings.OutlineColor, skin);
 						break;
 					case RigDrawKind.Bone:
-						DrawBoneNormals(batcher, item, neuralBoneUVs[item.Index], visual.Settings.NormalRoundness,
-							visual.Settings.NormalIrregularity, phaseSeed, skin);
+						DrawBoneNormals(batcher, item, neuralBoneUVs[item.Index], visual.Settings.Bones.NormalRoundness,
+							visual.Settings.Bones.NormalIrregularity, phaseSeed, skin);
 						break;
 					case RigDrawKind.Hand:
 						DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
@@ -412,7 +412,7 @@ partial class HumanoidRigVisual
 
 		public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
 		{
-			if (visual.Settings.SkinMode != RigSkinMode.NCA || context.Texture != neuralSkin.Texture)
+			if (visual.Settings.Bones.SkinMode != RigSkinMode.NCA || context.Texture != neuralSkin.Texture)
 				return;
 			var center = (Vector2)visual.owner.Position + (visual.projectedPose[visual.pelvis] + visual.projectedPose[visual.head]) * 0.5f;
 			if (visual.neuralHitRemaining > 0)

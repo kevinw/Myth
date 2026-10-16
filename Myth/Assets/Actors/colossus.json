@@ -8,7 +8,7 @@
   "WalkAnimationName": "Walk_Loop",
   "ProjectionYaw": 35,
   "PixelsPerMeter": 95,
-  "SculptedBody": true,
+  "BodyStyle": "Sculpted",
   "SkinMetallic": 1,
   "SculptedHead": true,
   "HeadShapeId": "brute",

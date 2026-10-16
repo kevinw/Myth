@@ -2,12 +2,14 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum RigBodyStyle { Bones, Sculpted }
+
 public sealed class HumanoidRigSettings
 {
 	[InspectorGroup("Animation")] public bool SeedAnimationPhase;
 	[I(0, 2)] public float SecondaryMotion;
 	[I(0, 2)] public float HeadSecondaryMotion = 1;
-	
+
 	[I(1, 240)] public float VisualFPS = 20; // at or above the frame rate, samples once per frame
 	// Stepped below the frame rate, a clip change or a turn still shows on its own frame instead of the next step.
 	public bool KeyEvents;
@@ -34,14 +36,41 @@ public sealed class HumanoidRigSettings
 	[I(0, 1)] public float EyeMotion;
 	[NoSerialize] public bool TurnWhileMoving;
 
-	[I(4, 120), InspectorGroup("Body")] public float PixelsPerMeter = 25;
+	// Bones draws tapered quads (BoneBodySettings); Sculpted ray-marches one SDF body (SculptBodySettings).
+	[InspectorGroup("Body")] public RigBodyStyle BodyStyle;
+	[I(4, 120)] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
 	// Body sizes are meters, so the figure keeps its proportions at any PixelsPerMeter; outlines stay in pixels.
 	[I(0, 2)] public float EyeSize = 1;
-	// A ray-cast 3D head (SculptedHead): jaw, brow, nose, eye sockets, mouth, with real normals. Heads under
 	[I(-0.15f, 0.3f)] public float NeckExtension;
 	[I(-0.1f, 0.15f)] public float ShoulderDrop;
-	[I(0.02f, 0.5f)] public float TorsoSize = 0.2f;
+
+	[InspectorGroup("Head")]
+	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
+	public string HeadSpriteName = "";
+	[I(0.25f, 2)] public float HeadSpriteScale = 1;
+	// A ray-cast 3D head (SculptedHead): jaw, brow, nose, eye sockets, mouth, with real normals. Heads under
+	// SculptedHeadMinRadius pixels, or with a head sprite, keep the simple one.
+	public bool SculptedHead;
+	// The sculpted head's features (Sources/Heads); setting one turns the sculpted head on.
+	public ContentRef<HeadShapeContent> HeadShapeId = new("");
+
+	[ActorSettings(typeof(BoneBodySettings)), VisibleWhen(nameof(BodyStyle), RigBodyStyle.Bones)]
+	public readonly BoneBodySettings Bones = new();
+	// Also shades a sculpted head on a bone body.
+	[ActorSettings(typeof(SculptBodySettings)), VisibleWhen(nameof(BodyStyle), RigBodyStyle.Sculpted)]
+	public readonly SculptBodySettings Sculpt = new();
+
+	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;
+	[NoSerialize] public float UpperBodyHitStrength = 0.8f;
+
+	[InspectorGroup("Palette")] public Color OutlineColor = new(0x171d27);
+	[NoSerialize] public Color AccentColor = new(0xd92240);
+}
+
+public sealed class BoneBodySettings
+{
+	[I(0.02f, 0.5f), InspectorGroup("Bones")] public float TorsoSize = 0.2f;
 	[I(0.02f, 0.5f)] public float ChestSize = 0.16f;
 	[I(0.02f, 0.5f)] public float NeckSize = 0.12f;
 	[I(0.02f, 0.4f)] public float BicepSize = 0.12f;
@@ -59,18 +88,24 @@ public sealed class HumanoidRigSettings
 	[I(0, 1), InspectorGroup("Lighting")] public float NormalRoundness;
 	[I(0, 1)] public float NormalIrregularity;
 
-	[InspectorGroup("Head")]
-	[I(0.02f, 0.5f)] public float HeadSize = 0.156f;
-	public string HeadSpriteName = "";
-	[I(0.25f, 2)] public float HeadSpriteScale = 1;
-	// SculptedHeadMinRadius pixels, or with a head sprite, keep the simple one.
-	public bool SculptedHead;
-	// The sculpted head's features (Sources/Heads); setting one turns the sculpted head on.
-	public ContentRef<HeadShapeContent> HeadShapeId = new("");
+	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
+	[VisibleWhen(nameof(SkinMode), RigSkinMode.Surface)] public ContentRef<SurfaceContent> SurfaceId = new("");
+	[InspectorGroup("Costume")] public ContentRef<CostumeContent> CostumeId = new("");
 
-	// The body as one ray-marched SDF (SculptedBody): fleshy masses over metal joints, instead of drawn bones.
-	[InspectorGroup("Sculpted Body")] public bool SculptedBody;
-	public BodyShadeMode BodyShading;
+	[InspectorGroup("Palette")] public Color FarColor = new(0x435263);
+	public Color NearColor = new(0xb7cdd0);
+	public Color CoreColor = new(0x708b94);
+	// Silhouette: one rim around the whole figure; inside it, only limbs in front of the body get an outline --
+	// translucent black, so it reads as a darker shade of whatever they cross.
+	public RigOutlineMode OutlineMode = RigOutlineMode.PerPiece;
+	[I(0, 1), VisibleWhen(nameof(OutlineMode), RigOutlineMode.Silhouette)] public float FrontLimbOutline = 0.35f;
+	[I(0, 0.3f), VisibleWhen(nameof(OutlineMode), RigOutlineMode.Silhouette)] public float FrontLimbDepth = 0.05f; // meters nearer than the pelvis
+}
+
+// The body as one ray-marched SDF (SculptedBody): fleshy masses over metal joints, instead of drawn bones.
+public sealed class SculptBodySettings
+{
+	[InspectorGroup("Sculpted Body")] public BodyShadeMode BodyShading;
 	// Each part shades from its own color toward its color times BodyShadow, more so on the side away from the viewer
 	// (BodyDepthShade). Metallic skin shades by what it reflects and tints its highlights, which come from the nearest
 	// scene lights.
@@ -104,24 +139,6 @@ public sealed class HumanoidRigSettings
 	public Color HandColor = new(0xd8c08a);
 	public Color FootColor = new(0xd8c08a);
 	public Color ClawColor = new(0xe8e0c8);
-
-	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public ContentRef<SurfaceContent> SurfaceId = new("");
-	[InspectorGroup("Costume")] public ContentRef<CostumeContent> CostumeId = new("");
-
-	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;
-	[NoSerialize] public float UpperBodyHitStrength = 0.8f;
-
-	[InspectorGroup("Palette")] public Color FarColor = new(0x435263);
-	public Color NearColor = new(0xb7cdd0);
-	public Color CoreColor = new(0x708b94);
-	public Color OutlineColor = new(0x171d27);
-	// Silhouette: one rim around the whole figure; inside it, only limbs in front of the body get an outline --
-	// translucent black, so it reads as a darker shade of whatever they cross.
-	public RigOutlineMode OutlineMode = RigOutlineMode.PerPiece;
-	[I(0, 1)] public float FrontLimbOutline = 0.35f;
-	[I(0, 0.3f)] public float FrontLimbDepth = 0.05f; // meters nearer than the pelvis
-	[NoSerialize] public Color AccentColor = new(0xd92240);
 }
 
 public sealed class NeuralSurfaceSettings

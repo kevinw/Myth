@@ -215,8 +215,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	public EyeLaserPuppet()
 	{
-		Rig.NormalRoundness = 0.78f;
-		Rig.NormalIrregularity = 0.16f;
+		Rig.Bones.NormalRoundness = 0.78f;
+		Rig.Bones.NormalIrregularity = 0.16f;
 	}
 
 	public override void Update()

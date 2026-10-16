@@ -1154,7 +1154,7 @@ public partial class Manager
 		// Both are single bits edited by icons in the inspector header, so they don't need a row.
 		if (property.Name is nameof(Actor.editorFlags) or nameof(Actor.Facing) or nameof(Actor.Invert))
 			return true;
-		if (property.VisibleWhen is { } visibleWhen && !visibleWhen.IsVisibleForActor(actor))
+		if (!property.IsVisibleForActor(actor))
 			return true;
 		if (ActorSpecs.GetTypeName(actor) == nameof(CurveRibbon) &&
 			Assets.GetRibbonStyle(ActorSpecs.ReadResolvedString(actor, nameof(CurveRibbon.Style)) ?? CurveRibbon.DefaultStyle.Name) is { } ribbonStyle &&
@@ -1162,33 +1162,13 @@ public partial class Manager
 				property.Name is nameof(CurveRibbon.BranchSpacing) or nameof(CurveRibbon.BranchLength) or nameof(CurveRibbon.BranchWidth)))
 			return true;
 
-		var typeName = ActorSpecs.GetTypeName(actor);
-		if (typeName is nameof(RigPuppet) or nameof(RigPuppetProp) or nameof(Stalker))
-		{
-			var mode = RigSkinMode.NCA;
-			for (var i = 0; i < actorPropertyScratch.Count; i++)
-				if (actorPropertyScratch[i].Name == nameof(HumanoidRigSettings.SkinMode))
-				{
-					Enum.TryParse(ActorSpecs.ReadStringValue(actorPropertyScratch[i].Value), true, out mode);
-					break;
-				}
-			if (property.Name == nameof(HumanoidRigSettings.SurfaceId))
-				return mode != RigSkinMode.Surface;
-			// A head sprite replaces the procedural head; its scale only matters with one.
-			var headSprite = ActorSpecs.ReadResolvedString(actor, nameof(HumanoidRigSettings.HeadSpriteName)) is { Length: > 0 };
-			if (property.Name == nameof(HumanoidRigSettings.HeadSpriteScale))
-				return !headSprite;
-			if (property.Name is nameof(HumanoidRigSettings.SculptedHead) or nameof(HumanoidRigSettings.HeadShapeId))
-				return headSprite;
-			// Front-limb outlines only exist in the silhouette outline mode.
-			if (property.Name is nameof(HumanoidRigSettings.FrontLimbOutline) or nameof(HumanoidRigSettings.FrontLimbDepth))
-				return !string.Equals(ActorSpecs.ReadResolvedString(actor, nameof(HumanoidRigSettings.OutlineMode)),
-					nameof(RigOutlineMode.Silhouette), StringComparison.OrdinalIgnoreCase);
-			if (property.Name.StartsWith("Neural", StringComparison.Ordinal) ||
-				property.Name.StartsWith("RigNeural", StringComparison.Ordinal))
-				return mode != RigSkinMode.NCA;
-		}
+		// A head sprite replaces the procedural head; its scale only matters with one.
+		if (property.DeclaringType == typeof(HumanoidRigSettings) && property.Name is nameof(HumanoidRigSettings.HeadSpriteScale)
+			or nameof(HumanoidRigSettings.SculptedHead) or nameof(HumanoidRigSettings.HeadShapeId))
+			return ActorSpecs.ReadResolvedString(actor, nameof(HumanoidRigSettings.HeadSpriteName)) is { Length: > 0 } ==
+				(property.Name != nameof(HumanoidRigSettings.HeadSpriteScale));
 
+		var typeName = ActorSpecs.GetTypeName(actor);
 		if (typeName == nameof(RigPuppetProp) && property.Name is
 			nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName) or
 			nameof(RigPuppet.Performance) or nameof(RigPuppet.PlaybackSpeed) or nameof(RigPuppet.SyncGaitToSpeed) or

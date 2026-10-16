@@ -79,10 +79,10 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	{
 		get
 		{
-			if (body == null || body is SculptBody != Settings.SculptedBody)
+			if (body == null || body is SculptBody != (Settings.BodyStyle == RigBodyStyle.Sculpted))
 			{
 				body?.Dispose();
-				body = Settings.SculptedBody ? new SculptBody(this) : new BoneBody(this);
+				body = Settings.BodyStyle == RigBodyStyle.Sculpted ? new SculptBody(this) : new BoneBody(this);
 			}
 			return body;
 		}
@@ -904,7 +904,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		// Head sprites count yaw the other way round.
 		sculptedHead.Render(Assets.GetHeadShape(Settings.HeadShapeId), HeadRadius, -HeadViewYaw(), 0,
 			HeadSpriteRoll(), MouthOpen, near, core, far, Settings.EyeSize > 0 ? Settings.AccentColor : default,
-			Settings.BodyShading, new(Settings.SkinMetallic, Settings.SkinRoughness, Settings.Specular, 0),
+			Settings.Sculpt.BodyShading, new(Settings.Sculpt.SkinMetallic, Settings.Sculpt.SkinRoughness, Settings.Sculpt.Specular, 0),
 			lights[..GatherLights(lights, center, HeadRadius)], center);
 		return sculptedHead;
 	}
@@ -1727,8 +1727,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		}
 		if (outlined)
 			batcher.Circle(position, HeadRadius + 1.4f, 14, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
-		batcher.Circle(position, HeadRadius, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
-		skin.Circle(batcher, position, HeadRadius, skinUV.Center, skinUV.Radius, Multiply(Settings.NearColor, tint));
+		batcher.Circle(position, HeadRadius, 14, silhouette ? tint : Multiply(Settings.Bones.NearColor, tint));
+		skin.Circle(batcher, position, HeadRadius, skinUV.Center, skinUV.Radius, Multiply(Settings.Bones.NearColor, tint));
 		if (!silhouette && Settings.EyeSize > 0)
 			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
 				Multiply(Settings.AccentColor, tint));
@@ -1748,9 +1748,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 			batcher.Image(normals, position, new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
 			return;
 		}
-		if (Settings.NormalRoundness > 0)
+		if (Settings.Bones.NormalRoundness > 0)
 			DrawSphereNormals(batcher, position, HeadRadius + 1.4f, 14,
-				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
+				Settings.Bones.NormalRoundness, Settings.Bones.NormalIrregularity, 0x68bc21ebu);
 		else
 			batcher.Circle(position, HeadRadius + 1.4f, 14, flat);
 		skin.Circle(batcher, position, HeadRadius, skinUV.Center, skinUV.Radius, Color.White);

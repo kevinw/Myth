@@ -74,7 +74,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var scale = Owner.Rig.PixelsPerMeter;
 		var innerRadius = InnerRadius / scale;
 		var outerRadius = OuterRadius / scale;
-		var armRadius = MathF.Max(CollisionRadius / scale, Owner.Rig.BicepSize * 0.45f);
+		var armRadius = MathF.Max(CollisionRadius / scale, Owner.Rig.Bones.BicepSize * 0.45f);
 		for (var i = 0; i < FoldCount; i++)
 		{
 			var angle = (i + 0.5f) * MathF.Tau / FoldCount + spin;
@@ -134,11 +134,11 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 			var outerStart = OuterPoint(pose.Neck, side, forward, start, startCompression, breath, scale);
 			var outerEnd = OuterPoint(pose.Neck, side, forward, end, endCompression, breath, scale);
 			var innerEnd = RuffPoint(pose.Neck, side, forward, end, innerRadius);
-			var color = i % 2 == 0 ? Owner.Rig.NearColor :
-				Color.Lerp(Owner.Rig.NearColor, Owner.Rig.FarColor, 0.28f);
-			var underside = Color.Lerp(color, Owner.Rig.FarColor, 0.45f);
-			var outerWall = Color.Lerp(color, Owner.Rig.FarColor, 0.65f);
-			var innerWall = Color.Lerp(Owner.Rig.FarColor, Owner.Rig.OutlineColor, 0.45f);
+			var color = i % 2 == 0 ? Owner.Rig.Bones.NearColor :
+				Color.Lerp(Owner.Rig.Bones.NearColor, Owner.Rig.Bones.FarColor, 0.28f);
+			var underside = Color.Lerp(color, Owner.Rig.Bones.FarColor, 0.45f);
+			var outerWall = Color.Lerp(color, Owner.Rig.Bones.FarColor, 0.65f);
+			var innerWall = Color.Lerp(Owner.Rig.Bones.FarColor, Owner.Rig.OutlineColor, 0.45f);
 			faces[at++] = ProjectFace(innerStart + halfThickness, outerStart + halfThickness,
 				outerEnd + halfThickness, innerEnd + halfThickness, color);
 			faces[at++] = ProjectFace(innerEnd - halfThickness, outerEnd - halfThickness,

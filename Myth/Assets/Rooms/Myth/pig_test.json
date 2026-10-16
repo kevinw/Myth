@@ -58,7 +58,7 @@
       "HeadShapeId": "pig",
       "PixelsPerMeter": 60,
       "HeadSize": 0.3,
-      "SculptedBody": true,
+      "BodyStyle": "Sculpted",
       "FleshBlend": 0.12750003
     },
     {
@@ -80,7 +80,7 @@
       "PoseAnimationName": "Consume",
       "PoseProgress": 0.027,
       "Reactive": true,
-      "SculptedBody": true,
+      "BodyStyle": "Sculpted",
       "FleshBlend": 0.0915,
       "Specular": 0.35499987,
       "BodyDepthShade": 0.525,
@@ -100,7 +100,7 @@
       "ProjectionYaw": 90,
       "SculptedHead": true,
       "PixelsPerMeter": 60,
-      "SculptedBody": true,
+      "BodyStyle": "Sculpted",
       "ChestMass": 1.5699999,
       "HipSize": 0.5155,
       "HeadShapeId": "stock",

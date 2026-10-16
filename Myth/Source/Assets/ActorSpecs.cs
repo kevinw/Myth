@@ -82,19 +82,39 @@ public static class ActorSpecs
 		IAttribute? Inspector,
 		MultilineAttribute? Multiline,
 		ActorRefAttribute? ActorRef,
-		VisibleWhenAttribute? VisibleWhen);
+		VisibleWhenAttribute[] VisibleWhen)
+	{
+		public bool IsVisibleForActor(JsonObject actor)
+		{
+			foreach (var condition in VisibleWhen)
+				if (!condition.IsVisibleForActor(actor))
+					return false;
+			return true;
+		}
+	}
 
-	readonly record struct SerializableMember(MemberInfo Member, MemberInfo? Settings, string DisplayName, string? Group)
+	// Settings is the chain of [ActorSettings] fields from the actor down to the object holding Member, outermost first.
+	readonly record struct SerializableMember(MemberInfo Member, MemberInfo[] Settings, string DisplayName, string? Group)
 	{
 		public string Name => Member.Name;
 		public Type Type => GetMemberType(Member);
 		public Type DeclaringType => Member.DeclaringType ?? throw new InvalidOperationException();
 
-		public object? GetValue(Actor actor)
-			=> ActorSpecs.GetMemberValue(Member, Settings == null ? actor : ActorSpecs.GetMemberValue(Settings, actor)!);
+		public object? GetValue(Actor actor) => ActorSpecs.GetMemberValue(Member, Owner(actor));
 
-		public void SetValue(Actor actor, object? value)
-			=> ActorSpecs.SetMemberValue(Member, Settings == null ? actor : ActorSpecs.GetMemberValue(Settings, actor)!, value);
+		public void SetValue(Actor actor, object? value) => ActorSpecs.SetMemberValue(Member, Owner(actor), value);
+
+		object Owner(Actor actor)
+		{
+			object owner = actor;
+			foreach (var settings in Settings)
+				owner = ActorSpecs.GetMemberValue(settings, owner)!;
+			return owner;
+		}
+
+		// Its own conditions and those on every settings field it sits in.
+		public VisibleWhenAttribute[] VisibleWhen { get; } =
+			[.. Member.GetCustomAttributes<VisibleWhenAttribute>(), .. Settings.SelectMany(it => it.GetCustomAttributes<VisibleWhenAttribute>())];
 	}
 
 	public static void ClearSpecs()
@@ -143,6 +163,15 @@ public static class ActorSpecs
 
 	public static string? ReadResolvedString(JsonObject spec, string key)
 		=> ReadStringValue(GetResolvedProperty(spec, key));
+
+	// A key's own or inherited value, else its type default, as text: strings bare, anything else as JSON.
+	public static string? ReadResolvedOrDefault(JsonObject spec, string key)
+	{
+		var node = GetResolvedProperty(spec, key);
+		if (node == null && GetTypeName(spec) is { } typeName && actorTypes.TryGetValue(typeName, out var type))
+			node = TypeDefaults(type.Type)[key];
+		return node is JsonValue value && value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : node?.ToJsonString();
+	}
 
 	// JSON has no multi-line string, so a string property may also be written as an array of
 	// lines -- what keeps a Script or a Text legible (and editable) in a hand-edited room file.
@@ -357,7 +386,7 @@ public static class ActorSpecs
 				GetMemberAttribute<IAttribute>(member.Member),
 				GetMemberAttribute<MultilineAttribute>(member.Member),
 				GetMemberAttribute<ActorRefAttribute>(member.Member),
-				GetMemberAttribute<VisibleWhenAttribute>(member.Member));
+				member.VisibleWhen);
 		}
 	}
 
@@ -375,7 +404,7 @@ public static class ActorSpecs
 				GetMemberAttribute<IAttribute>(member.Member),
 				GetMemberAttribute<MultilineAttribute>(member.Member),
 				GetMemberAttribute<ActorRefAttribute>(member.Member),
-				GetMemberAttribute<VisibleWhenAttribute>(member.Member));
+				member.VisibleWhen);
 		}
 	}
 
@@ -667,10 +696,10 @@ public static class ActorSpecs
 			if (IsSupportedType(field.FieldType))
 			{
 				if (!field.IsInitOnly)
-					members.Add(new(field, null, field.Name, group));
+					members.Add(new(field, [], field.Name, group));
 			}
 			else if (GetMemberAttribute<ActorSettingsAttribute>(field) is { } settings)
-				AddSettingsMembers(members, field, settings.SettingsType, settings);
+				AddSettingsMembers(members, [field], settings.SettingsType, settings);
 		}
 
 		foreach (var property in type.GetProperties(flags))
@@ -680,26 +709,26 @@ public static class ActorSpecs
 			if (!property.CanRead || !property.CanWrite || property.GetIndexParameters().Length > 0 || property.GetCustomAttribute<NoSerializeAttribute>() != null)
 				continue;
 			if (IsSupportedType(property.PropertyType))
-				members.Add(new(property, null, property.Name, null));
+				members.Add(new(property, [], property.Name, null));
 		}
 	}
 
-	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo settingsMember,
+	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo[] path,
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
 			DynamicallyAccessedMemberTypes.PublicProperties)] Type settingsType, ActorSettingsAttribute settings)
 	{
-		if (GetMemberType(settingsMember) != settingsType)
-			throw new InvalidOperationException($"Actor settings member '{settingsMember.Name}' must be {settingsType.Name}.");
-		AddSettingsMembers(destination, settingsMember, settingsType, settings, settings.Group);
+		if (GetMemberType(path[^1]) != settingsType)
+			throw new InvalidOperationException($"Actor settings member '{path[^1].Name}' must be {settingsType.Name}.");
+		AddSettingsMembers(destination, path, settingsType, settings, settings.Group);
 	}
 
-	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo settingsMember,
+	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo[] path,
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
 			DynamicallyAccessedMemberTypes.PublicProperties)] Type settingsType, ActorSettingsAttribute settings,
 		string? defaultGroup)
 	{
 		if (settingsType.BaseType is { } baseType)
-			AddSettingsMembers(destination, settingsMember, baseType, settings, defaultGroup);
+			AddSettingsMembers(destination, path, baseType, settings, defaultGroup);
 
 		const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
 		var group = defaultGroup;
@@ -707,20 +736,18 @@ public static class ActorSpecs
 		{
 			if (GetMemberAttribute<InspectorGroupAttribute>(field) is { } groupBoundary)
 				group = groupBoundary.Name;
-			if (!field.IsInitOnly && !field.IsStatic && field.GetCustomAttribute<NoSerializeAttribute>() == null &&
-				IsSupportedType(field.FieldType))
-				AddSettingsMember(destination, settingsMember, field, settings, group);
+			if (field.IsStatic || field.GetCustomAttribute<NoSerializeAttribute>() != null)
+				continue;
+			if (!field.IsInitOnly && IsSupportedType(field.FieldType))
+				destination.Add(new(field, path, SettingsDisplayName(field.Name, settings.TrimPrefix), group));
+			// Nested settings flatten into the same JSON object, under their own groups.
+			else if (GetMemberAttribute<ActorSettingsAttribute>(field) is { } nested)
+				AddSettingsMembers(destination, [.. path, field], nested.SettingsType, nested);
 		}
 		foreach (var property in settingsType.GetProperties(flags))
 			if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0 &&
 				property.GetCustomAttribute<NoSerializeAttribute>() == null && IsSupportedType(property.PropertyType))
-				AddSettingsMember(destination, settingsMember, property, settings, defaultGroup);
-	}
-
-	static void AddSettingsMember(List<SerializableMember> destination, MemberInfo settingsMember, MemberInfo member,
-		ActorSettingsAttribute settings, string? group)
-	{
-		destination.Add(new(member, settingsMember, SettingsDisplayName(member.Name, settings.TrimPrefix), group));
+				destination.Add(new(property, path, SettingsDisplayName(property.Name, settings.TrimPrefix), defaultGroup));
 	}
 
 	static string SettingsDisplayName(string name, string? trimPrefix)

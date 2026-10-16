@@ -47,13 +47,15 @@ public sealed class MultilineAttribute(int lines = 4) : Attribute
 	public int Lines => Math.Max(1, lines);
 }
 
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+// Shows a field in the inspector only while another reads as value (its default counts). Several must all hold. On an
+// [ActorSettings] field, it gates every member the settings flatten into.
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class VisibleWhenAttribute(string member, object value) : Attribute
 {
 	public string Member => member;
 	public string Value => value.ToString()!;
 	public bool IsVisibleForActor(JsonObject actor)
-		=> string.Equals(ActorSpecs.ReadResolvedString(actor, member), Value, StringComparison.OrdinalIgnoreCase);
+		=> string.Equals(ActorSpecs.ReadResolvedOrDefault(actor, member), Value, StringComparison.OrdinalIgnoreCase);
 }
 
 // A string field holding another actor's Id: the inspector offers the room's actors by

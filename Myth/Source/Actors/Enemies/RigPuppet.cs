@@ -29,13 +29,14 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		TrackingLean = 0.45f,
 		TurnInertia = 0.6f,
 		EyeMotion = 0.65f,
-		LimbTaper = 0.18f,
-		DepthColorContrast = 1.25f,
-		DepthWidthAmount = 0.08f,
+		Bones = { LimbTaper = 0.18f, DepthColorContrast = 1.25f, DepthWidthAmount = 0.08f },
 	};
+	// The NCA skin only paints bone bodies.
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
+	[VisibleWhen(nameof(HumanoidRigSettings.BodyStyle), RigBodyStyle.Bones), VisibleWhen(nameof(BoneBodySettings.SkinMode), RigSkinMode.NCA)]
 	public readonly NeuralSurfaceSettings Neural = new();
 	[ActorSettings(typeof(HumanoidNeuralReactionSettings), "Neural Reactions", "Neural")]
+	[VisibleWhen(nameof(HumanoidRigSettings.BodyStyle), RigBodyStyle.Bones), VisibleWhen(nameof(BoneBodySettings.SkinMode), RigSkinMode.NCA)]
 	public readonly HumanoidNeuralReactionSettings NeuralReactions = new()
 	{
 		NeuralFootContactStrength = 0.3f,

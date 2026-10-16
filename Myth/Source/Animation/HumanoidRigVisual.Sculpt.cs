@@ -122,9 +122,9 @@ partial class HumanoidRigVisual
 				return sculptedBody;
 			textureDirty = false;
 			var ppm = visual.Settings.PixelsPerMeter;
-			var shading = new BodyShading(visual.Settings.BodyShading, visual.Settings.BodyShadow,
-				new(visual.Settings.SkinMetallic, visual.Settings.SkinRoughness, visual.Settings.Specular, 0), new(1, visual.Settings.MetalRoughness, visual.Settings.Specular, 0),
-				0.05f * ppm, visual.jointDepth[visual.pelvis] * ppm, 0.25f * ppm, visual.Settings.BodyDepthShade);
+			var shading = new BodyShading(visual.Settings.Sculpt.BodyShading, visual.Settings.Sculpt.BodyShadow,
+				new(visual.Settings.Sculpt.SkinMetallic, visual.Settings.Sculpt.SkinRoughness, visual.Settings.Sculpt.Specular, 0), new(1, visual.Settings.Sculpt.MetalRoughness, visual.Settings.Sculpt.Specular, 0),
+				0.05f * ppm, visual.jointDepth[visual.pelvis] * ppm, 0.25f * ppm, visual.Settings.Sculpt.BodyDepthShade);
 			Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
 			sculptedBody.Render(CollectionsMarshal.AsSpan(Primitives), shading,
 				lights[..visual.GatherLights(lights, visual.owner.RenderPosition + visual.TorsoCenter, ppm)], visual.owner.RenderPosition);
@@ -138,8 +138,8 @@ partial class HumanoidRigVisual
 		{
 			const int Flesh = 0, Metal = 1;
 			var ppm = visual.Settings.PixelsPerMeter;
-			var bulk = ppm * visual.Settings.BodyBulk;
-			var blend = visual.Settings.FleshBlend * ppm;
+			var bulk = ppm * visual.Settings.Sculpt.BodyBulk;
+			var blend = visual.Settings.Sculpt.FleshBlend * ppm;
 			var machined = 0.01f * ppm;
 			var muscle = 0.02f * ppm; // a tight blend, so each muscle keeps a crease where it meets the limb
 			var list = bodyPrimitives;
@@ -152,8 +152,8 @@ partial class HumanoidRigVisual
 			if (Vector3.Dot(forward, toes) < 0)
 				forward = -forward;
 
-			var (torso, joints) = (visual.Settings.TorsoColor, visual.Settings.JointColor);
-			var hips = visual.Settings.HipSize;
+			var (torso, joints) = (visual.Settings.Sculpt.TorsoColor, visual.Settings.Sculpt.JointColor);
+			var hips = visual.Settings.Sculpt.HipSize;
 			Add(V(visual.leftLeg.Hip), V(visual.rightLeg.Hip), 0.1f * hips, 0.1f * hips, 0, joints, Metal);
 			Add(V(visual.spine1), V(visual.spine2), 0.13f, 0.14f, blend, torso);
 			Add(V(visual.spine2), V(visual.spine3), 0.15f, 0.17f, blend, torso);
@@ -161,13 +161,13 @@ partial class HumanoidRigVisual
 			// Pecs are flat plates from the sternum up to the armpit, not balls: they barely stand off the ribcage. A shallow
 			// groove along each one's underside gives it the crisp lower edge.
 			var chest = Vector3.Lerp(V(visual.spine2), V(visual.spine3), 0.8f);
-			var pecs = visual.Settings.ChestMass;
+			var pecs = visual.Settings.Sculpt.ChestMass;
 			if (pecs > 0)
 			{
 				for (var s = -1; s <= 1; s += 2)
 				{
 					var (inner, outer) = Pec(s);
-					Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, visual.Settings.ChestColor);
+					Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, visual.Settings.Sculpt.ChestColor);
 				}
 				for (var s = -1; s <= 1; s += 2)
 				{
@@ -177,19 +177,19 @@ partial class HumanoidRigVisual
 						outer - up * 0.045f * bulk * pecs + under, 0.012f * bulk, 0.01f * ppm, default, Carve: true));
 				}
 			}
-			if (visual.Settings.Abs > 0)
+			if (visual.Settings.Sculpt.Abs > 0)
 				for (var row = 0; row < 3; row++)
 				{
 					var center = Vector3.Lerp(V(visual.pelvis), V(visual.spine2), 0.35f + row * 0.25f) + forward * 0.12f * bulk;
 					for (var s = -1; s <= 1; s += 2)
 					{
 						var ab = center + side * s * 0.045f * bulk;
-						Add(ab, ab, 0.04f * visual.Settings.Abs, 0.04f * visual.Settings.Abs, 0.015f * ppm, visual.Settings.AbsColor);
+						Add(ab, ab, 0.04f * visual.Settings.Sculpt.Abs, 0.04f * visual.Settings.Sculpt.Abs, 0.015f * ppm, visual.Settings.Sculpt.AbsColor);
 					}
 				}
 			Add(V(visual.neck), V(visual.head), 0.075f, 0.07f, blend, torso);
-			var (arms, forearms, hands) = (visual.Settings.ArmColor, visual.Settings.ForearmColor, visual.Settings.HandColor);
-			var (legs, shins, feet) = (visual.Settings.LegColor, visual.Settings.ShinColor, visual.Settings.FootColor);
+			var (arms, forearms, hands) = (visual.Settings.Sculpt.ArmColor, visual.Settings.Sculpt.ForearmColor, visual.Settings.Sculpt.HandColor);
+			var (legs, shins, feet) = (visual.Settings.Sculpt.LegColor, visual.Settings.Sculpt.ShinColor, visual.Settings.Sculpt.FootColor);
 			Limb(visual.leftUpperArm, visual.leftLowerArm, visual.leftHand, visual.leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
 			Limb(visual.rightUpperArm, visual.rightLowerArm, visual.rightHand, visual.rightPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
 			Limb(visual.leftLeg.Hip, visual.leftLeg.Knee, visual.leftLeg.Ankle, visual.leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
@@ -197,11 +197,11 @@ partial class HumanoidRigVisual
 			Boot(visual.leftLeg);
 			Boot(visual.rightLeg);
 			// The codpiece: a rounded mass below the hip joints, pushed forward and smoothed into the hips and thighs.
-			if (visual.Settings.Codpiece > 0)
+			if (visual.Settings.Sculpt.Codpiece > 0)
 			{
 				var crotch = Vector3.Lerp(V(visual.leftLeg.Hip), V(visual.rightLeg.Hip), 0.5f) + (forward * 0.07f - up * 0.06f) * bulk;
 				Add(crotch + up * 0.03f * bulk, crotch + (forward * 0.02f - up * 0.04f) * bulk,
-					0.065f * visual.Settings.Codpiece, 0.055f * visual.Settings.Codpiece, blend, legs);
+					0.065f * visual.Settings.Sculpt.Codpiece, 0.055f * visual.Settings.Sculpt.Codpiece, blend, legs);
 			}
 			for (var s = -1; s <= 1; s += 2)
 			{
@@ -215,23 +215,23 @@ partial class HumanoidRigVisual
 				Muscle(hip, knee, 0.72f, 0.9f, front * 0.5f - side * s, 0.05f, 0.045f, 0.04f, legs); // the teardrop above the knee
 				Muscle(hip, knee, 0.2f, 0.75f, -front, 0.04f, 0.08f * hips, 0.06f, legs); // hamstrings
 				// Each glute's inner edge rides just past the midline, so the two meet in a crease at any size.
-				if (visual.Settings.Glutes > 0)
+				if (visual.Settings.Sculpt.Glutes > 0)
 				{
-					var radius = 0.085f * visual.Settings.Glutes;
+					var radius = 0.085f * visual.Settings.Sculpt.Glutes;
 					var midline = Vector3.Lerp(V(visual.leftLeg.Hip), V(visual.rightLeg.Hip), 0.5f);
 					var glute = midline + (side * s * radius * 0.85f - forward * 0.07f - up * 0.03f) * bulk;
 					Add(glute + up * 0.02f * bulk, glute - (up * 0.06f + forward * 0.01f) * bulk, radius, radius * 0.88f, muscle, legs);
 				}
-				Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, visual.Settings.CalfColor); // calf, fleshed over the metal shin
+				Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, visual.Settings.Sculpt.CalfColor); // calf, fleshed over the metal shin
 			}
 			// Claws ride the finger joints, so they curl with the animation's grip, and run on past the fingertips.
-			if (visual.Settings.Claws > 0)
+			if (visual.Settings.Sculpt.Claws > 0)
 				foreach (var claws in (ReadOnlySpan<int[]>)[visual.leftClaws, visual.rightClaws])
 					for (var i = 0; i < claws.Length; i += 3)
 					{
 						var (knuckle, middle, tip) = (V(claws[i]), V(claws[i + 1]), V(claws[i + 2]));
-						Add(knuckle, middle, 0.022f, 0.016f, machined, visual.Settings.ClawColor, Metal);
-						Add(middle, middle + (tip - middle) * (1 + visual.Settings.Claws * 1.5f), 0.016f, 0.003f, machined, visual.Settings.ClawColor, Metal);
+						Add(knuckle, middle, 0.022f, 0.016f, machined, visual.Settings.Sculpt.ClawColor, Metal);
+						Add(middle, middle + (tip - middle) * (1 + visual.Settings.Sculpt.Claws * 1.5f), 0.016f, 0.003f, machined, visual.Settings.Sculpt.ClawColor, Metal);
 					}
 			for (var s = -1; s <= 1; s += 2)
 			{
@@ -275,12 +275,12 @@ partial class HumanoidRigVisual
 				var down = Vector3.Normalize(under - ankle);
 				if (!float.IsFinite(down.X))
 					down = Vector3.UnitY;
-				var size = visual.Settings.BootSize;
+				var size = visual.Settings.Sculpt.BootSize;
 				var floor = 0.015f * ppm;
 				Vector3 OnFloor(Vector3 point, float radius) => point - down * (radius * size * bulk - floor);
-				var heel = OnFloor(under - sole * visual.Settings.HeelLength * ppm, 0.055f);
+				var heel = OnFloor(under - sole * visual.Settings.Sculpt.HeelLength * ppm, 0.055f);
 				var ballCenter = OnFloor(ball, 0.05f);
-				Add(Vector3.Lerp(knee, ankle, 1 - visual.Settings.BootHeight), heel, 0.06f * size, 0.055f * size, 0.02f * ppm, feet, Metal);
+				Add(Vector3.Lerp(knee, ankle, 1 - visual.Settings.Sculpt.BootHeight), heel, 0.06f * size, 0.055f * size, 0.02f * ppm, feet, Metal);
 				Add(heel, ballCenter, 0.055f * size, 0.05f * size, machined, feet, Metal);
 				Add(ballCenter, OnFloor(tip, 0.035f), 0.05f * size, 0.035f * size, machined, feet, Metal);
 			}
@@ -356,8 +356,8 @@ partial class HumanoidRigVisual
 		{
 			get
 			{
-				var near = visual.Settings.HeadColor;
-				var far = new Color((Vector4)near * (Vector4)visual.Settings.BodyShadow);
+				var near = visual.Settings.Sculpt.HeadColor;
+				var far = new Color((Vector4)near * (Vector4)visual.Settings.Sculpt.BodyShadow);
 				return (near, Color.Lerp(near, far, 0.5f), far);
 			}
 		}
