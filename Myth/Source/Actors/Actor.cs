@@ -1014,6 +1014,10 @@ public class Actor
 		if (!DrawWithPen(batcher, PenPass.Silhouette, color))
 			RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 	}
+	// Solid terrain with a shape a rect hitbox can't describe draws it here, in white: particles stop on it and a burrowing
+	// pawn is cut away inside it, like tiles (see Game.DrawParticleSolidMask).
+	public virtual void RenderSolidCoverage(Batcher batcher) { }
+
 	public virtual void RenderReflection(Batcher batcher, Color color)
 	{
 		if (!DrawWithPen(batcher, PenPass.Color, color))

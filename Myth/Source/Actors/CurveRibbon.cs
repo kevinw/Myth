@@ -195,6 +195,16 @@ public class CurveRibbon : PointPathActor, IActivatable
 	public override void RenderEmissive(Batcher batcher) => DrawWalkableEdge(batcher);
 
 	public override void RenderShadow(Batcher batcher, Color color) { }
+
+	// What's drawn, sway and all, so a body diving in vanishes exactly where it meets the root.
+	public override void RenderSolidCoverage(Batcher batcher)
+	{
+		if (Collision != RibbonCollision.Solid)
+			return;
+		EnsureGeometry();
+		for (var i = 0; i + 2 < triangles.Count; i += 3)
+			batcher.Triangle(triangles[i].Pos, triangles[i + 1].Pos, triangles[i + 2].Pos, Color.White);
+	}
 	public override void RenderReflection(Batcher batcher, Color color) { }
 
 	public override Rect GetVisualBounds()

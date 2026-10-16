@@ -1468,6 +1468,13 @@ public sealed partial class GameView
 		}
 		foreach (var actor in Actors)
 		{
+			if (actor.Visible && actor.Hitbox.Shape != Hitbox.Shapes.Rect && actor.Mask.Has(Actor.Masks.Solid))
+			{
+				Batcher.PushMatrix(actor.RenderPosition);
+				actor.RenderSolidCoverage(Batcher);
+				Batcher.PopMatrix();
+				continue;
+			}
 			if (!ParticleCollidesWith(actor))
 				continue;
 			if (actor.Mask.Has(Actor.Masks.Jumpthru))
