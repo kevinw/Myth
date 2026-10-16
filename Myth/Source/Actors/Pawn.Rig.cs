@@ -83,6 +83,17 @@ public abstract partial class Pawn
 	static float RigCrouchGaitRate => 1.5f; // × the gait rate
 	static float RigAirLegsResponse => 25f;
 	static bool RigAirAttackMirrored => true; // swinging in the air, the far hand swings instead
+	// Up and down swipes in the air reach that way: the torso bends a little, the swing arm turns the rest, over these
+	// legs (take names).
+	static float RigAttackTorsoDegrees => 20f;
+	static float RigAttackUpArmDegrees => 60f;
+	static float RigAttackDownArmDegrees => 90f;
+	static float RigAttackArcScale => 1.6f; // × the swing arm's own sweep
+	static float RigAttackPitchResponse => 20f;
+	static string RigAttackDownLegs => "PlayerAir";
+	static string RigAttackUpLegs => "PlayerAir";
+	int rigAttackPitch; // 1 down, -1 up
+	float rigAttackReach; // eased: 1 down, -1 up
 
 	// Where the eyes and head aim; null looks ahead.
 	protected virtual Vector2? RigLookTarget => null;
@@ -132,6 +143,7 @@ public abstract partial class Pawn
 			return;
 		rigRestart |= restart;
 		rigClip = clip;
+		rigAttackPitch = name switch { "attack_down" => 1, "attack_up" => -1, _ => 0 };
 	}
 
 	void UpdateRig()
@@ -386,15 +398,24 @@ public abstract partial class Pawn
 			PopRigSinkClip(batcher);
 	}
 
-	// Swinging in the air, the legs keep the air pose; landing mid-swing hands them back to the swing's stance.
+	// Swinging in the air, the legs keep the air pose and up and down swipes reach; landing mid-swing hands both back to
+	// the swing's stance.
 	void UpdateRigAirLegs(string shown)
 	{
 		var visual = rigVisual!;
-		visual.LegWeight = float.Lerp(visual.LegWeight, shown == "PlayerAttack" && !grounded ? 1 : 0,
-			1 - MathF.Exp(-RigAirLegsResponse * Time.Delta));
+		var airSwing = shown == "PlayerAttack" && !grounded;
+		visual.LegWeight = float.Lerp(visual.LegWeight, airSwing ? 1 : 0, 1 - MathF.Exp(-RigAirLegsResponse * Time.Delta));
 		if (visual.LegWeight < 0.01f)
 			visual.LegWeight = 0;
-		visual.LegTake = RigTakes.TryGet("PlayerAir", out var air) ? air : null;
+		var legs = rigAttackPitch > 0 ? RigAttackDownLegs : rigAttackPitch < 0 ? RigAttackUpLegs : "PlayerAir";
+		visual.LegTake = RigTakes.TryGet(legs, out var legTake) ? legTake : null;
+		rigAttackReach = float.Lerp(rigAttackReach, airSwing ? rigAttackPitch : 0, 1 - MathF.Exp(-RigAttackPitchResponse * Time.Delta));
+		visual.TorsoRoll = rigAttackReach * (int)Facing * RigAttackTorsoDegrees * MathF.PI / 180;
+		// The down swipe is the up swipe flipped top to bottom: up and ahead, then down and back.
+		visual.ArmReachWeight = airSwing ? MathF.Abs(rigAttackReach) : 0;
+		visual.ArmReachRoll = -(rigAttackReach > 0 ? RigAttackDownArmDegrees : RigAttackUpArmDegrees) * MathF.PI / 180;
+		visual.ArmArcScale = RigAttackArcScale;
+		visual.ArmReachFlip = rigAttackReach > 0;
 	}
 
 	void UpdateRigSkidYaw()
@@ -456,9 +477,13 @@ public abstract partial class Pawn
 		else
 			rigVisual!.Play(name, restart: restart, blendDuration: blend);
 		rigPlaying = name;
-		// A swing out of the air starts on the air legs it already had.
+		// A swing out of the air starts on the air legs it already had; a down swipe starts reaching up for the hat.
 		if (name == "PlayerAttack")
+		{
 			rigVisual.LegWeight = grounded ? 0 : 1;
+			if (!grounded && rigAttackPitch > 0)
+				rigAttackReach = 1;
+		}
 	}
 
 	internal HumanoidRigVisual? RigVisual => rigVisual;

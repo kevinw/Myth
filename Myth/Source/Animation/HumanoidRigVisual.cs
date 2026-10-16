@@ -173,6 +173,16 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	public Vector2 ArmAim = Vector2.UnitX;
 	public float ArmAimWeight;
 	public float PoseRoll { get; private set; } // radians, clockwise on screen
+	// Radians clockwise on screen: bends the upper body about the pelvis.
+	public float TorsoRoll;
+	// Swings the take's right arm about its shoulder, by ArmReachWeight: its sweep since the take began is scaled by
+	// ArmArcScale and turned ArmReachRoll radians (positive is down, ahead of the figure), then flipped top to bottom by
+	// ArmReachFlip.
+	public float ArmReachWeight, ArmReachRoll, ArmArcScale = 1;
+	public bool ArmReachFlip;
+	float? armArcFrom;
+	float armReachOffset; // the arm's last turn, which eases back out once the reach lets go
+	static float ArmReachRelease => 15f;
 	// Swings the whole figure about its left hand (the grip), radians clockwise on screen; folded into PoseRoll.
 	public float GripRoll;
 	// Set by the owner: degrees of forward lean on top of the take's, e.g. a run's lean-in that settles.
@@ -610,6 +620,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var end = Math.Clamp(take.End, start, clip.Duration);
 		PlaybackSpeed = Math.Max(0.01f, take.Speed);
 		mirror ??= take.NearHand != RigHand.None && (take.NearHand == RigHand.Left) != LeftNear(FacingYaw(owner.Facing));
+		armArcFrom = null;
 		animator.Play(take.Clip, start, end, Transition(blendDuration, mirror.Value), restart);
 	}
 
@@ -974,6 +985,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		ApplyPlantResponse();
 		ApplySquish();
 		ApplyCeilingDuck();
+		RotateMasked(upperBodyMask, TorsoRoll, projectedPose[pelvis]);
+		ApplyArmReach();
 		ApplyPoseRoll();
 		UpdateSecondaryMotion();
 		UpdateGaitFootstep(grounded && footIK);
@@ -1195,11 +1208,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var lean = MathF.Atan2(reach.X * forward, -reach.Y);
 		var length = reach.Length();
 		var hunch = Math.Clamp(MathF.Acos(Math.Clamp((-reach.Y - duckDepth) / length, -1, 1)) - lean, 0, DuckMaxHunch);
-		var rotation = Matrix3x2.CreateRotation(hunch * forward, pivot);
 		var headBefore = projectedPose[head].Y;
-		for (var i = 0; i < projectedPose.Length; i++)
-			if (upperBodyMask[i] > 0)
-				projectedPose[i] = Vector2.Lerp(projectedPose[i], Vector2.Transform(projectedPose[i], rotation), upperBodyMask[i]);
+		RotateMasked(upperBodyMask, hunch * forward, pivot);
 
 		var crouch = Math.Clamp(duckDepth - (projectedPose[head].Y - headBefore), 0, MathF.Max(0, (FootSink.Y - pivot.Y) * DuckMaxKneeDrop));
 		if (crouch <= 0)
@@ -1220,6 +1230,30 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		RotatePose(PoseRoll, (projectedPose[pelvis] + projectedPose[neck]) * 0.5f);
 		RotatePose(GripRoll, projectedPose[leftPalm]);
 		PoseRoll += GripRoll;
+	}
+
+	void ApplyArmReach()
+	{
+		// Angles ahead of the figure, so a swing reads the same facing either way.
+		var forward = (int)visualFacing;
+		var shoulder = projectedPose[mirrored ? leftUpperArm : rightUpperArm];
+		var arm = projectedPose[mirrored ? leftPalm : rightPalm] - shoulder;
+		var angle = MathF.Atan2(arm.Y, arm.X * forward);
+		armArcFrom ??= angle;
+		var swing = armArcFrom.Value + ArmReachRoll + ArmArcScale * MathF.IEEERemainder(angle - armArcFrom.Value, MathF.Tau);
+		armReachOffset = ArmReachWeight > 0 ? forward * ArmReachWeight * ((ArmReachFlip ? -swing : swing) - angle)
+			: armReachOffset * MathF.Exp(-ArmReachRelease * visualDelta);
+		RotateMasked(mirrored ? leftArmMask : rightArmMask, armReachOffset, shoulder);
+	}
+
+	void RotateMasked(OzzJointMask mask, float angle, Vector2 pivot)
+	{
+		if (MathF.Abs(angle) < 0.0001f)
+			return;
+		var rotation = Matrix3x2.CreateRotation(angle, pivot);
+		for (var i = 0; i < projectedPose.Length; i++)
+			if (mask[i] > 0)
+				projectedPose[i] = Vector2.Lerp(projectedPose[i], Vector2.Transform(projectedPose[i], rotation), mask[i]);
 	}
 
 	void RotatePose(float angle, Vector2 pivot)
