@@ -108,7 +108,7 @@
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1,
-    "NearHand": "Right"
+    "NearHand": "Left"
   },
   "PlayerClimb": {
     "Clip": "Rope_Climb",
