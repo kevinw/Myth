@@ -12,7 +12,7 @@ public partial class Manager
 	bool rigAnimationViewerOpen = false;
 	bool rigAnimationViewerInitialized;
 	string rigAnimationSearch = "";
-	RigPuppet? rigAnimationPreviewActor;
+	RigActor? rigAnimationPreviewActor;
 	Pawn? rigPreviewPawn;
 	string? rigTakeDraftClip;
 	string rigTakeName = "";
@@ -42,7 +42,7 @@ public partial class Manager
 
 		ImGui.SetNextWindowSize(new Vector2(380, 430), ImGuiCond.FirstUseEver);
 		var visible = ImGui.Begin("Rig Animations", ref rigAnimationViewerOpen, ImGuiWindowFlags.NoDocking);
-		var selected = SelectedRigPuppet();
+		var selected = SelectedRigActor();
 		var previewGone = rigAnimationPreviewActor != null &&
 			(game == null || game.destroying.Contains(rigAnimationPreviewActor) || !game.Actors.Contains(rigAnimationPreviewActor));
 		if (previewGone || rigAnimationPreviewActor != null && selected == null)
@@ -67,7 +67,7 @@ public partial class Manager
 				DrawPawnRigTakeControls(pawn);
 			else
 			{
-				ImGui.TextWrapped("Select a RigPuppet in the game view, or a rig-drawn pawn while playing to tune its takes live.");
+				ImGui.TextWrapped("Select a rig puppet or prop in the game view, or a rig-drawn pawn while playing to tune its takes live.");
 				ImGui.Spacing();
 				ImGui.TextDisabled("The preview runs on the live actor so projection, lighting, IK, and blending match the game.");
 			}
@@ -78,17 +78,17 @@ public partial class Manager
 			StopRigAnimationPreview();
 	}
 
-	RigPuppet? SelectedRigPuppet()
+	RigActor? SelectedRigActor()
 	{
 		if (game?.CurrentRoom is not { } room)
 			return null;
 		if (playing)
-			return TryGetSelectedLiveActor(game, room, out var actor, out _, out _) ? actor as RigPuppet : null;
+			return TryGetSelectedLiveActor(game, room, out var actor, out _, out _) ? actor as RigActor : null;
 		if (CurrentRoom is not { } authoredRoom || authoredRoom.Id != room.Id || selectedRoomActorIndex < 0 ||
 			selectedRoomActorIndex >= authoredRoom.Actors.Count ||
 			ActorSpecs.GetActorId(authoredRoom.Actors[selectedRoomActorIndex]) is not { } id)
 			return null;
-		return game.GetActorById(id) as RigPuppet;
+		return game.GetActorById(id) as RigActor;
 	}
 
 	// The player is spawned, not authored, so it's inspected by reference rather than through its room spec.
@@ -158,7 +158,7 @@ public partial class Manager
 		rigPreviewPawn = null;
 	}
 
-	void DrawRigAnimationControls(RigPuppet rig)
+	void DrawRigAnimationControls(RigActor rig)
 	{
 		var clips = rig.AnimationClips;
 		var clip = rig.AnimationPreviewClip;
@@ -226,9 +226,9 @@ public partial class Manager
 		DrawRigTakeControls(rig, clip);
 
 		ImGui.SeparatorText("Playback");
-		var playbackSpeed = rig.PlaybackSpeed;
+		var playbackSpeed = rig.AnimationPreviewSpeed;
 		if (ImGui.SliderFloat("Speed", ref playbackSpeed, 0.1f, 3, "%.2fx"))
-			rig.PlaybackSpeed = playbackSpeed;
+			rig.AnimationPreviewSpeed = playbackSpeed;
 		var visualFps = rig.Rig.VisualFPS;
 		if (ImGui.SliderFloat("Visual FPS", ref visualFps, 1, 240, "%.0f"))
 			rig.Rig.VisualFPS = visualFps;
@@ -295,7 +295,7 @@ public partial class Manager
 		}
 	}
 
-	void DrawSavedTakeCombo(RigPuppet? rig)
+	void DrawSavedTakeCombo(RigActor? rig)
 	{
 		if (!ImGui.BeginCombo("Saved take", rigTakeName))
 			return;
@@ -306,7 +306,7 @@ public partial class Manager
 	}
 
 	// rig == null tunes the take live for whoever plays it (a pawn in gameplay) instead of previewing on a puppet.
-	void DrawRigTakeControls(RigPuppet? rig, OzzRig.Clip clip)
+	void DrawRigTakeControls(RigActor? rig, OzzRig.Clip clip)
 	{
 		ImGui.SeparatorText("Take");
 		DrawSavedTakeCombo(rig);
@@ -327,7 +327,7 @@ public partial class Manager
 		{
 			rigTakeSpeed = speed;
 			if (rig != null)
-				rig.PlaybackSpeed = speed;
+				rig.AnimationPreviewSpeed = speed;
 			else
 				RigTakes.Set(RigTakeDraft());
 		}
@@ -399,6 +399,8 @@ public partial class Manager
 		if (rigTakeStatus.Length > 0)
 			ImGui.TextDisabled(rigTakeStatus);
 
+		if (rig is not RigPuppet puppet)
+			return;
 		ImGui.SeparatorText("Sequence test");
 		ImGui.SetNextItemWidth(-1);
 		ImGui.InputText("Line", ref rigGreetingText, 512);
@@ -406,7 +408,7 @@ public partial class Manager
 		{
 			StopRigAnimationPreview();
 			rigAnimationViewerOpen = false;
-			rig.GreetPlayer(rigGreetingText);
+			puppet.GreetPlayer(rigGreetingText);
 		}
 	}
 
@@ -437,7 +439,7 @@ public partial class Manager
 		}
 	}
 
-	void LoadRigTakeDraft(RigPuppet? rig, RigTake take)
+	void LoadRigTakeDraft(RigActor? rig, RigTake take)
 	{
 		rigTakeDraftClip = take.Clip;
 		rigTakeName = take.Name;
@@ -453,7 +455,7 @@ public partial class Manager
 		rig?.PreviewTake(take);
 	}
 
-	void PreviewRigTakeDraft(RigPuppet? rig)
+	void PreviewRigTakeDraft(RigActor? rig)
 	{
 		if (rig != null)
 			rig.PreviewTake(RigTakeDraft());

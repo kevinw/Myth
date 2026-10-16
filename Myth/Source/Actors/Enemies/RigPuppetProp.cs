@@ -11,7 +11,7 @@ public enum RigPuppetPropLayer
 
 [GameActor(Sprite = "player", Tags = ActorTag.Decoration, BoundsX = -42, BoundsY = -48,
 	BoundsW = 84, BoundsH = 58, LivePositionEditable = true)]
-public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
+public sealed class RigPuppetProp : RigActor, IAttachmentRotation
 {
 	[InspectorGroup("Pose")] public string PoseAnimationName = "Zombie_Idle_Loop";
 	[I(0, 1)] public float PoseProgress;
@@ -19,7 +19,7 @@ public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
 	[InspectorGroup("Placement")] public RigPuppetPropLayer Layer;
 	[VisibleWhen(nameof(Layer), RigPuppetPropLayer.Foreground)]
 	public bool Reactive;
-	[VisibleWhen(nameof(Layer), RigPuppetPropLayer.Foreground)]
+	[VisibleWhen(nameof(Layer), RigPuppetPropLayer.Foreground), VisibleWhen(nameof(Reactive), true)]
 	[I(0, 2)] public float JostleStrength = 1;
 	[VisibleWhen(nameof(Layer), RigPuppetPropLayer.Background)]
 	[I(0, 1)] public float BackgroundBrightness = 0.55f;
@@ -33,13 +33,9 @@ public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
 	[I(5, 90)] public float LookMaxTurn = 50; // degrees the head tilts off the body's facing
 	[I(0.2f, 10)] public float LookSpeed = 1.5f;
 
-	protected override bool UsesFrozenPose => true;
-	protected override string FrozenPoseAnimationName => PoseAnimationName;
-	protected override float FrozenPoseProgress => PoseProgress;
-	protected override bool FrozenPoseFootIK => PoseFootIK;
-	protected override float HitLimbReactionStrength => JostleStrength;
+	// Kept on the idle the props always started from: it fixes the neural skin's UV layout.
+	protected override string InitialClip => "Zombie_Idle_Loop";
 	protected override Color RigTint => Layer == RigPuppetPropLayer.Background ? Darken(Tint, BackgroundBrightness) : Tint;
-	protected override bool TracksPlayer => false;
 	protected override bool ShowsHitBlink => false;
 
 	public override bool CastsSpriteShadow => Layer == RigPuppetPropLayer.Foreground && CastShadow;
@@ -52,8 +48,6 @@ public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
 
 	public RigPuppetProp()
 	{
-		Performance = true;
-		ArticulatedCombatBounds = true;
 		CollidesWithSolids = false;
 		Rig.SeedAnimationPhase = false;
 		Rig.SecondaryMotion = 0;
@@ -75,6 +69,62 @@ public sealed class RigPuppetProp : RigPuppet, IAttachmentRotation
 		visual.HeadLookRate = LookSpeed;
 		base.Update();
 	}
+
+	public override void Added()
+	{
+		base.Added();
+#if EDITOR
+		if (Game.IsEditorPreview)
+			Game.EditorPreviewSync += SyncEditorPreviewPose;
+#endif
+	}
+
+	public override void Destroyed()
+	{
+#if EDITOR
+		if (Game.IsEditorPreview)
+			Game.EditorPreviewSync -= SyncEditorPreviewPose;
+#endif
+		base.Destroyed();
+	}
+
+	protected override void VisualCreated() => SamplePose(resetDynamics: true);
+
+	protected override void UpdateRig()
+	{
+		Velocity = Vector2.Zero;
+		MoveActor();
+		SamplePose();
+	}
+
+	void SamplePose(bool resetDynamics = false)
+	{
+		visual.Play(visual.TryGetClip(PoseAnimationName, out _) ? PoseAnimationName : InitialClip, blend: false);
+		visual.Time = visual.ActiveClip.Duration * Math.Clamp(PoseProgress, 0, 1);
+		if (resetDynamics)
+			visual.ResetPoseDynamics();
+		visual.Update(PoseFootIK, PoseFootIK, advance: false, seekGround: PoseFootIK);
+	}
+
+	internal override void OnWasHit(HitInfo hitInfo)
+	{
+#if EDITOR
+		if (AnimationPreviewEnabled)
+			return;
+#endif
+		var away = Position.X < hitInfo.By.Position.X ? -1f : 1f;
+		visual.Hit(((Vector2)(Position - hitInfo.By.Position)).Normalized(Vector2.UnitX * away), JostleStrength);
+	}
+
+#if EDITOR
+	protected override void ResumeAfterAnimationPreview() => SamplePose(resetDynamics: true);
+
+	void SyncEditorPreviewPose()
+	{
+		if (!AnimationPreviewEnabled)
+			SamplePose(resetDynamics: true);
+	}
+#endif
 
 	void SyncPlacement()
 	{

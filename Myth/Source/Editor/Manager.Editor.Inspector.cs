@@ -701,7 +701,7 @@ public partial class Manager
 		BeginMidiActorInspector($"actor:{room.Id}:{actorId}");
 
 		var inspectorAction = false;
-		if (actorId is not null && game?.GetActorById(actorId) is RigPuppet)
+		if (actorId is not null && game?.GetActorById(actorId) is RigActor)
 		{
 			if (Button("Rig Animations"))
 			{
@@ -1169,15 +1169,6 @@ public partial class Manager
 				(property.Name != nameof(HumanoidRigSettings.HeadSpriteScale));
 
 		var typeName = ActorSpecs.GetTypeName(actor);
-		if (typeName == nameof(RigPuppetProp) && property.Name is
-			nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName) or
-			nameof(RigPuppet.Performance) or nameof(RigPuppet.PlaybackSpeed) or nameof(RigPuppet.SyncGaitToSpeed) or
-			nameof(RigPuppet.StepUp) or nameof(RigPuppet.StepDown) or nameof(RigPuppet.Health) or
-			nameof(RigPuppet.ArticulatedCombatBounds) or nameof(RigPuppet.StraddlesPlayerDepth))
-			return true;
-		if (typeName == nameof(RigPuppetProp) && property.Name == nameof(RigPuppetProp.JostleStrength) &&
-			ActorSpecs.GetResolvedProperty(actor, nameof(RigPuppetProp.Reactive))?.GetValue<bool>() != true)
-			return true;
 
 		if (typeName != nameof(Light))
 			return false;

@@ -1885,7 +1885,7 @@ public partial class Manager
 	RectInt EditorRoomActorBounds(Room room, JsonObject actor)
 	{
 		if (game?.CurrentRoom?.Id == room.Id && ActorSpecs.GetActorId(actor) is { } id &&
-			game.GetActorById(id) is RigPuppet rig)
+			game.GetActorById(id) is RigActor rig)
 		{
 			var bounds = rig.GetVisualBounds();
 			return RectInt.Between(bounds.TopLeft.FloorToPoint2(), -(-bounds.BottomRight).FloorToPoint2());

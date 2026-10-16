@@ -483,7 +483,7 @@ public partial class Manager
 
 	static RectInt LiveActorBounds(Actor runtime, Room authoredRoom, JsonObject authored)
 	{
-		if (runtime is RigPuppet)
+		if (runtime is RigActor)
 		{
 			var bounds = runtime.GetVisualBounds();
 			return RectInt.Between(bounds.TopLeft.FloorToPoint2(), -(-bounds.BottomRight).FloorToPoint2());

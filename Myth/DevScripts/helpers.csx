@@ -20,5 +20,5 @@ IEnumerable<Actor> Near(Actor actor, int count = 5) =>
 // world center of an actor's hitbox
 Vector2 Center(Actor a) => ((Rect)a.Hitbox.Rect + a.Position).Center;
 // each puppet's sculpted head, GPU vs the CPU reference; with a directory, writes side-by-side PNGs
-string VerifyHeads(string? directory = null) => string.Join("\n", All<RigPuppet>().Select((p, i) =>
+string VerifyHeads(string? directory = null) => string.Join("\n", All<RigActor>().Select((p, i) =>
 	$"{i} {p.Position}: {p.visual.sculptedHead?.Verify(directory == null ? null : System.IO.Path.Join(directory, i.ToString())) ?? "no sculpted head"}"));

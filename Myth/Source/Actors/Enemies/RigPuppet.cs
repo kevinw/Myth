@@ -5,7 +5,7 @@ namespace Myth;
 
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40,
 	LivePositionEditable = true)]
-public class RigPuppet : Actor, INeuralTextureAgent
+public class RigPuppet : RigActor
 {
 	enum StepTraversal { None, Up, Down }
 
@@ -20,27 +20,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public bool Performance;
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
 	public bool SyncGaitToSpeed = true;
-	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = new()
-	{
-		SeedAnimationPhase = true,
-		SecondaryMotion = 1,
-		GaitAsymmetry = 0.35f,
-		PlantResponse = 0.65f,
-		TrackingLean = 0.45f,
-		TurnInertia = 0.6f,
-		EyeMotion = 0.65f,
-		Bones = { LimbTaper = 0.18f, DepthColorContrast = 1.25f, DepthWidthAmount = 0.08f },
-	};
-	// The NCA skin only paints bone bodies.
-	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
-	[VisibleWhen(nameof(HumanoidRigSettings.BodyStyle), RigBodyStyle.Bones), VisibleWhen(nameof(BoneBodySettings.SkinMode), RigSkinMode.NCA)]
-	public readonly NeuralSurfaceSettings Neural = new();
-	[ActorSettings(typeof(HumanoidNeuralReactionSettings), "Neural Reactions", "Neural")]
-	[VisibleWhen(nameof(HumanoidRigSettings.BodyStyle), RigBodyStyle.Bones), VisibleWhen(nameof(BoneBodySettings.SkinMode), RigSkinMode.NCA)]
-	public readonly HumanoidNeuralReactionSettings NeuralReactions = new()
-	{
-		NeuralFootContactStrength = 0.3f,
-	};
 	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
 	[I(1, 40)] public int Health = 3;
@@ -57,7 +36,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public bool StraddlesPlayerDepth;
 	[InspectorGroup("Costume")] public bool Ruff;
 
-	internal HumanoidRigVisual visual = null!;
 	RigPuppetBackLegRenderer? backLegRenderer;
 	RigPuppetRuff? ruff;
 	StepTraversal stepTraversal;
@@ -76,7 +54,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	float patrolOriginX;
 	float patrolSightTimer;
 	bool abilityActive;
-	bool visualReady;
 	bool abilityLoop = true;
 	bool abilityFootIK = true;
 	bool abilityFootIKGrounded;
@@ -100,16 +77,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	Actor? scriptedWalkTargetActor;
 	readonly Coroutine scriptedRoutine = new();
 	Game.StorySpeechBubble? scriptedSpeech;
-#if EDITOR
-	internal bool AnimationPreviewEnabled;
-	internal bool AnimationPreviewPaused;
-	internal bool AnimationPreviewLooping = true;
-	internal bool AnimationPreviewBlend = true;
-	internal bool AnimationPreviewIK = true;
-	internal int AnimationPreviewClipIndex;
-#endif
 
-	static float Gravity => 360f;
 	static float GroundFriction => 420f;
 	static float WalkSpeed => 22f;
 	static float WalkAcceleration => 180f;
@@ -132,45 +100,22 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	static float AttackLunge => 45f;               // the step into the swing
 	static float AttackCooldown => 1.4f;
 
-	public RigPuppet()
-	{
-		Sprite = null;
-		Hitbox = new(new RectInt(-6, -31, 12, 31));
-		Mask = Masks.Enemy;
-		Depth = -5;
-		IFrameTime = 0.18f;
-	}
-
-	public override bool CastsSpriteShadow => true;
-	public override bool CastsReflection => true;
-	public override bool LightingDithered => false;
-
 	public override void Added()
 	{
 		base.Added();
-		CreateVisual();
 		patrolOriginX = Position.X;
 		patrolling = IdlePatrol && !Game.IsEditorPreview;
-#if EDITOR
-		if (Game.IsEditorPreview)
-			Game.EditorPreviewSync += SyncEditorPreviewPose;
-#endif
 	}
 
-	void CreateVisual()
+	protected override string InitialClip => IdleAnimationName;
+
+	protected override void VisualCreated()
 	{
-		visual = new(this, Rig, Neural, NeuralReactions);
 		visual.Footstep = OnFootstep;
-		SyncVisual();
-		visual.Initialize(IdleAnimationName);
-		visualReady = true;
-		if (UsesFrozenPose)
-			SampleFrozenPose(resetDynamics: true);
-		else
-			SyncRuff();
+		SyncRuff();
 	}
 
-	void SyncVisual()
+	protected override void SyncVisual()
 	{
 		// The walk plays at whatever rate makes its planted feet keep pace with the ground, at any size.
 		var stride = visual.WalkGroundSpeed(WalkAnimationName) * Rig.PixelsPerMeter;
@@ -182,7 +127,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
-		visual.LookTarget = abilityActive ? abilityLookTarget : !patrolling && TracksPlayer ? Game.GetFirst<Player>()?.Position : null;
+		visual.LookTarget = abilityActive ? abilityLookTarget : !patrolling ? Game.GetFirst<Player>()?.Position : null;
 		visual.LookPoseWeight = abilityActive ? abilityLookPoseWeight : 0;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
@@ -229,27 +174,18 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	string WalkName()
 		=> visual.TryGetClip(WalkAnimationName, out _) ? WalkAnimationName : "Zombie_Walk_Fwd_Loop";
 
-	public override void Update()
+	protected override void UpdateRig()
 	{
-		EnsureState();
-#if EDITOR
-		if (AnimationPreviewEnabled)
-		{
-			UpdateAnimationPreview();
-			return;
-		}
-#endif
-		if (UsesFrozenPose)
-		{
-			UpdateFrozenPose();
-			return;
-		}
+		if (StepUp <= 0)
+			StepUp = 2;
+		if (StepDown <= 0)
+			StepDown = 2;
 		UpdateScriptRoutine();
 		if (stepTraversal == StepTraversal.None && !AbilityControlsMovement)
 			Velocity.Y += Gravity * Time.Delta;
 		else
 			Velocity = Vector2.Zero;
-		base.Update();
+		MoveActor();
 		var grounded = Grounded();
 		if (grounded && Velocity.Y > 0)
 			Velocity.Y = 0;
@@ -317,25 +253,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 				!Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
 			loop: abilityActive ? abilityLoop : scripted ? scriptedLoop : !hitReacting && !recovering,
 			seekGround: abilityActive && abilityFootIKGrounded);
-	}
-
-	void UpdateFrozenPose()
-	{
-		Velocity = Vector2.Zero;
-		base.Update();
-		SampleFrozenPose();
-	}
-
-	void SampleFrozenPose(bool resetDynamics = false)
-	{
-		walking = false;
-		var animation = visual.TryGetClip(FrozenPoseAnimationName, out _) ? FrozenPoseAnimationName : IdleName();
-		visual.Play(animation, blend: false);
-		visual.Time = visual.ActiveClip.Duration * Math.Clamp(FrozenPoseProgress, 0, 1);
-		if (resetDynamics)
-			visual.ResetPoseDynamics();
-		SyncVisual();
-		visual.Update(FrozenPoseFootIK, FrozenPoseFootIK, advance: false, seekGround: FrozenPoseFootIK);
 	}
 
 	// The plain puppet's abilities: the startle on spotting you, then arm swings. Subclasses with their own
@@ -410,13 +327,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual float WalkSpeedMultiplier => 1;
 	protected virtual float AnimationSpeedMultiplier => 1;
 	protected virtual float HitLimbReactionStrength => 1;
-	protected virtual bool UsesFrozenPose => false;
-	protected virtual string FrozenPoseAnimationName => IdleAnimationName;
-	protected virtual float FrozenPoseProgress => 0;
-	protected virtual bool FrozenPoseFootIK => false;
-	protected virtual Color RigTint => Color.White;
-	protected virtual bool TracksPlayer => true;
-	protected virtual bool ShowsHitBlink => true;
 	protected virtual Color RigHeadTint => Color.White;
 	protected virtual bool BackArmCombatEnabled => true;
 
@@ -757,33 +667,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		=> Game.ShowSpeech(this, new Vector2(0, -44), text, Game.PlayerVoiceProfile, Color.White,
 			voice: VoiceName);
 
-	void EnsureState()
-	{
-		if (visual == null)
-			CreateVisual();
-		if (Rig.VisualFPS <= 0)
-			Rig.VisualFPS = 20;
-		if (StepUp <= 0)
-			StepUp = 2;
-		if (StepDown <= 0)
-			StepDown = 2;
-	}
-
 #if EDITOR
-	internal IReadOnlyList<OzzRig.Clip> AnimationClips => visual.Clips;
-	internal OzzRig.Clip AnimationPreviewClip => visual.Clips[AnimationPreviewClipIndex];
-	internal float AnimationPreviewTime
+	protected override void StopForAnimationPreview()
 	{
-		get => visual.Time;
-		set => visual.Time = value;
-	}
-	internal float AnimationPreviewStart => visual.RangeStart;
-	internal float AnimationPreviewEnd => visual.RangeEnd;
-
-	internal void BeginAnimationPreview()
-	{
-		if (AnimationPreviewEnabled)
-			return;
 		EndScript();
 		if (abilityActive)
 		{
@@ -791,89 +677,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			abilityActive = false;
 			ResetAbilityControl();
 		}
-		AnimationPreviewEnabled = true;
-		AnimationPreviewClipIndex = 0;
-		for (var i = 0; i < visual.Clips.Count; i++)
-			if (visual.Clips[i] == visual.ActiveClip)
-			{
-				AnimationPreviewClipIndex = i;
-				break;
-			}
 		hitReacting = recovering = false;
 		stepTraversal = StepTraversal.None;
 		stepVisualOffset = Vector2.Zero;
-		Velocity = Vector2.Zero;
-		visual.ResetTurn();
-		visual.ResetFeet();
+		AnimationPreviewSpeed = PlaybackSpeed;
 	}
 
-	internal void EndAnimationPreview()
-	{
-		if (!AnimationPreviewEnabled)
-			return;
-		AnimationPreviewEnabled = false;
-		AnimationPreviewPaused = false;
-		if (!visualReady)
-			return;
-		if (UsesFrozenPose)
-			SampleFrozenPose(resetDynamics: true);
-		else
-			visual.Play(IdleName());
-	}
-
-	internal void PreviewAnimation(int index)
-	{
-		AnimationPreviewClipIndex = Math.Clamp(index, 0, visual.Clips.Count - 1);
-		visual.Play(AnimationPreviewClip.Name, AnimationPreviewBlend, restart: true);
-		visual.ResetFeet();
-	}
-
-	internal void PreviewTake(RigTake take)
-	{
-		for (var i = 0; i < visual.Clips.Count; i++)
-			if (string.Equals(visual.Clips[i].Name, take.Clip, StringComparison.OrdinalIgnoreCase))
-			{
-				AnimationPreviewClipIndex = i;
-				break;
-			}
-		AnimationPreviewLooping = take.Loop;
-		PlaybackSpeed = take.Speed;
-		SetAnimationPreviewIK(take.FootIK);
-		visual.Play(take, AnimationPreviewBlend ? 0.2f : 0);
-	}
-
-	internal void SetAnimationPreviewIK(bool enabled)
-	{
-		AnimationPreviewIK = enabled;
-		if (!enabled)
-			visual.ResetFeet();
-	}
-
-	void UpdateAnimationPreview()
-	{
-		Velocity = UsesFrozenPose ? Vector2.Zero : new(0, Velocity.Y + Gravity * Time.Delta);
-		base.Update();
-		var grounded = UsesFrozenPose ? AnimationPreviewIK : Grounded();
-		if (grounded && Velocity.Y > 0)
-			Velocity.Y = 0;
-		SyncVisual();
-		visual.Update(grounded, AnimationPreviewIK, AnimationPreviewLooping, advance: !AnimationPreviewPaused);
-	}
-
-	internal void UpdateAnimationPreviewInEditor()
-	{
-		if (!AnimationPreviewEnabled)
-			return;
-		SyncVisual();
-		visual.Update(AnimationPreviewIK, AnimationPreviewIK, AnimationPreviewLooping,
-			advance: !AnimationPreviewPaused, seekGround: AnimationPreviewIK);
-	}
-
-	void SyncEditorPreviewPose()
-	{
-		if (UsesFrozenPose && !AnimationPreviewEnabled)
-			SampleFrozenPose(resetDynamics: true);
-	}
+	protected override void ResumeAfterAnimationPreview() => visual.Play(IdleName());
 #endif
 
 	bool HasGroundAhead()
@@ -957,23 +767,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		stepVisualOffset = Vector2.Zero;
 	}
 
-	public override void OnCollideY()
-	{
-		visual?.Land(Velocity.Y);
-		base.OnCollideY();
-	}
-
 	public override void Destroyed()
 	{
-#if EDITOR
-		if (Game.IsEditorPreview)
-			Game.EditorPreviewSync -= SyncEditorPreviewPose;
-#endif
 		if (abilityActive)
 			InterruptAbility();
 		EndScript();
-		visual?.Dispose();
-		visualReady = false;
+		base.Destroyed();
 		if (backLegRenderer != null)
 			Game.Destroy(backLegRenderer);
 		backLegRenderer = null;
@@ -989,13 +788,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		if (AnimationPreviewEnabled)
 			return;
 #endif
-		if (UsesFrozenPose)
-		{
-			var propAway = Position.X < by.Position.X ? -1f : 1f;
-			visual.Hit(((Vector2)(Position - by.Position)).Normalized(Vector2.UnitX * propAway),
-				HitLimbReactionStrength);
-			return;
-		}
 		if (scripted || Health <= 0)
 			return;
 		patrolling = false;
@@ -1034,21 +826,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 	}
 
-	HumanoidRigVisual.DrawParts VisualParts
+	private protected override HumanoidRigVisual.DrawParts VisualParts
 		=> StraddlesPlayerDepth ? HumanoidRigVisual.DrawParts.InFrontOfPlayer : HumanoidRigVisual.DrawParts.All;
-
-	public override void Render(Batcher batcher)
-	{
-		if (!ShowsHitBlink || !SpriteBlinkHidden)
-			visual?.Draw(batcher, RigTint, silhouette: false, VisualParts);
-	}
-
-	public override void RenderShadow(Batcher batcher, Color color)
-		=> visual?.Draw(batcher, color, silhouette: true, VisualParts);
-
-	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
-	public override void RenderNormals(Batcher batcher) => visual?.DrawNormals(batcher, VisualParts);
-	public override void RenderEmissive(Batcher batcher) => visual?.DrawEmissive(batcher);
+	protected override bool ArticulatedCombat => ArticulatedCombatBounds;
 
 	internal void RenderBehindPlayer(Batcher batcher)
 	{
@@ -1068,24 +848,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			visual?.DrawNormals(batcher, HumanoidRigVisual.DrawParts.BehindPlayer);
 	}
 
-	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
-		=> visual?.PerturbNeuralTexture(context);
-
 	internal HumanoidRigVisual.RuffPose RuffPose => visual.GetRuffPose();
-
-	internal override bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable)
-		=> !ArticulatedCombatBounds || visual == null
-			? base.OverlapsCombatBounds(bounds, role)
-			: visual.OverlapsCombatBounds(bounds, role);
-
-	internal override void RenderCollisionDebug(Batcher batcher)
-	{
-		if (ArticulatedCombatBounds)
-			visual?.DrawCombatBounds(batcher);
-	}
-
-	public override Rect GetVisualBounds()
-		=> visual?.GetVisualBounds() ?? new(Position.X - 42, Position.Y - 48, 84, 58);
 }
 
 sealed class RigPuppetBackLegRenderer : Actor
