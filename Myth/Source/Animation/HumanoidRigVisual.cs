@@ -209,6 +209,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[16];
 	OzzJointMask upperBodyMask = null!;
 	OzzJointMask leftArmMask = null!;
+	OzzJointMask leftHandMask = null!, rightHandMask = null!;
+	// For joints outside the ragdoll (fingers): the nearest ancestor in it, whose springing they ride along with.
+	int[] ragdollCarriers = [];
 	OzzJointMask rightArmMask = null!;
 	OzzRig.Clip upperBodyHitClip = null!;
 	NeuralSkinRuntime neuralSkin = null!;
@@ -217,6 +220,23 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	SculptedBody? sculptedBody;
 	bool sculptedBodyDirty = true;
 	readonly List<BodyPrimitive> bodyPrimitives = [];
+	// A dent stays where it landed on a bone: its surface point and normal in that bone's frame (meters along, across,
+	// out), so it rides the limb and keeps its side through a turn. Depth springs back to flush on flesh.
+	struct BodyDent
+	{
+		public int Bone;
+		public Vector3 Surface, Normal;
+		public float Radius, Depth, Velocity, Age;
+		public bool Flesh;
+		public Color Color;
+	}
+	readonly List<BodyDent> dents = [];
+	const int MaxDents = 8;
+	static float DentRadius => 0.07f; // meters, at strength 1
+	static float FleshDentDepth => 0.035f;
+	static float MetalDentDepth => 0.025f;
+	static float FleshDentSpring => 140f;
+	static float FleshDentDamping => 5f;
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
 	static float SculptedHeadMinRadius => 5f;
 	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
@@ -485,6 +505,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		upperBodyMask.Set("spine_01", 1, descendants: true);
 		upperBodyMask.Set("spine_01", 0.25f);
 		upperBodyMask.Set("spine_02", 0.6f);
+		leftHandMask = rig.CreateMask();
+		leftHandMask.Set("hand_l", 1, descendants: true);
+		rightHandMask = rig.CreateMask();
+		rightHandMask.Set("hand_r", 1, descendants: true);
+		ragdollCarriers = new int[rig.JointCount];
+		for (var i = 0; i < ragdollCarriers.Length; i++)
+		{
+			var carrier = i;
+			while (carrier >= 0 && !ragdollJoints[carrier])
+				carrier = rig.JointParent(carrier);
+			ragdollCarriers[i] = carrier;
+		}
 		leftArmMask = rig.CreateMask();
 		leftArmMask.Set("clavicle_l", 1, descendants: true);
 		rightArmMask = rig.CreateMask();
@@ -545,6 +577,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			RequiredJoint($"foot_{side}"), RequiredJoint($"ball_{side}"), RequiredJoint($"ball_leaf_{side}"));
 
 	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
+	// Meters per second a walk clip carries the body at its natural rate; 0 for clips that don't walk.
+	public float WalkGroundSpeed(string clip)
+		=> rig != null && rig.TryGetClip(clip, out var found) ? rig.GroundSpeed(found, [leftLeg.Toe, rightLeg.Toe]) : 0;
 	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
 	public RuffPose GetRuffPose()
 	{
@@ -896,8 +931,91 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		UpdateWires();
 		UpdateHeadLook();
 		UpdateEye();
+		UpdateDents();
 		sculptedBodyDirty = true;
 	}
+
+	void UpdateDents()
+	{
+		var span = CollectionsMarshal.AsSpan(dents);
+		for (var i = 0; i < span.Length; i++)
+			if (span[i].Flesh)
+			{
+				ref var dent = ref span[i];
+				Spring.Step(ref dent.Depth, ref dent.Velocity, 0, FleshDentSpring, FleshDentDamping, visualDelta);
+				dent.Age += visualDelta;
+			}
+		dents.RemoveAll(static dent => dent.Flesh && dent.Age > 1 && MathF.Abs(dent.Depth) < 0.002f);
+	}
+
+	// Dents the sculpted body where an attack's world rect touches it.
+	public void Dent(in RectInt attack, float strength = 1)
+	{
+		if (UsesBodyCombat && BodyContact((Rect)(attack - owner.Position), CombatRole.Vulnerable, out var contact))
+			Dent(owner.Position + contact, strength);
+	}
+
+	// Dents the sculpted body at a world point: on the surface under it, or, if it misses the silhouette, the nearest
+	// surface toward the torso.
+	public void Dent(Vector2 worldPoint, float strength = 1)
+	{
+		if (!Settings.SculptedBody || bodyPrimitives.Count == 0)
+			return;
+		var pieces = CollectionsMarshal.AsSpan(bodyPrimitives);
+		var local = worldPoint - owner.Position;
+		Vector3 hit = default;
+		var found = false;
+		for (var i = 0; i <= 12 && !found; i++)
+			found = SculptedBody.Raycast(pieces, Vector2.Lerp(local, TorsoCenter, i / 12f), out hit);
+		if (!found)
+			return;
+		var normal = SculptedBody.Normal(pieces, hit);
+		var piece = SculptedBody.NearestPiece(pieces, hit);
+		var bone = 0;
+		var closest = float.MaxValue;
+		for (var i = 0; i < bones.Length; i++)
+		{
+			var (from, to) = (ViewJoint(bones[i].From), ViewJoint(bones[i].To));
+			var along = to - from;
+			var t = Math.Clamp(Vector3.Dot(hit - from, along) / MathF.Max(along.LengthSquared(), 0.0001f), 0, 1);
+			var distance = Vector3.DistanceSquared(hit, from + along * t);
+			if (distance < closest)
+				(bone, closest) = (i, distance);
+		}
+		var (origin, axis, across, outward) = DentFrame(bone);
+		var ppm = Settings.PixelsPerMeter;
+		var offset = hit - origin;
+		var flesh = piece >= 0 && pieces[piece].Material == 0;
+		if (dents.Count == MaxDents)
+			dents.RemoveAt(0);
+		dents.Add(new()
+		{
+			Bone = bone,
+			Surface = new Vector3(Vector3.Dot(offset, axis), Vector3.Dot(offset, across), Vector3.Dot(offset, outward)) / ppm,
+			Normal = new(Vector3.Dot(normal, axis), Vector3.Dot(normal, across), Vector3.Dot(normal, outward)),
+			Radius = DentRadius * strength,
+			Depth = (flesh ? FleshDentDepth : MetalDentDepth) * strength,
+			Flesh = flesh,
+			Color = piece >= 0 ? pieces[piece].Color : default,
+		});
+		sculptedBodyDirty = true;
+	}
+
+	// A bone's frame in view pixels. Across and outward flip with the facing mirror, so what's on a limb's front stays
+	// on its front when the figure turns.
+	(Vector3 Origin, Vector3 Axis, Vector3 Across, Vector3 Outward) DentFrame(int bone)
+	{
+		var from = ViewJoint(bones[bone].From);
+		var axis = Vector3.Normalize(ViewJoint(bones[bone].To) - from);
+		if (!float.IsFinite(axis.X))
+			axis = Vector3.UnitY;
+		var mirror = PresentationMirror() < 0 ? -1 : 1;
+		var across = Vector3.Cross(axis, Vector3.UnitZ);
+		across = across.LengthSquared() > 0.0001f ? Vector3.Normalize(across) * mirror : Vector3.UnitX;
+		return (from, axis, across, Vector3.Cross(across, axis) * mirror);
+	}
+
+	Vector3 ViewJoint(int joint) => new(projectedPose[joint], jointDepth[joint] * Settings.PixelsPerMeter);
 
 	// Rendered when drawn (it skips itself when nothing changed), so posed and stepped rigs stay current too.
 	SculptedHead? CurrentSculptedHead()
@@ -1181,10 +1299,8 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * secondaryMotion;
 		projectedPose[neck] += headOffset * 0.25f;
 		projectedPose[head] += headOffset;
-		projectedPose[leftHand] += leftOffset;
-		projectedPose[leftPalm] += leftOffset;
-		projectedPose[rightHand] += rightOffset;
-		projectedPose[rightPalm] += rightOffset;
+		OffsetMasked(leftHandMask, leftOffset);
+		OffsetMasked(rightHandMask, rightOffset);
 	}
 
 	Vector2 UpdateSecondaryPoint(ref SecondaryPoint point, Vector2 target, float spring, float damping, float maxOffset)
@@ -1349,7 +1465,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var upperTurnSin = MathF.Sin(upperBodyYaw);
 		for (var i = 0; i < sampledPose.Length; i++)
 		{
-			var joint = i == head ? HeadPosition3D() : ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
+			var carrier = ragdollCarriers[i];
+			var joint = i == head ? HeadPosition3D()
+				: carrier < 0 ? sampledPose[i]
+				: sampledPose[i] + ragdollPose[carrier] - sampledPose[carrier];
 			var offset = joint - pivot;
 			var weight = inertiaActive ? upperBodyMask[i] : 0;
 			var jointYaw = float.Lerp(rigYaw, upperBodyYaw, weight);
@@ -1769,9 +1888,12 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		neuralHeadUVRadius = new Vector2(HeadRadius) / (Vector2)NeuralSize;
 	}
 
-	public bool OverlapsCombatBounds(in RectInt worldBounds)
+	public bool OverlapsCombatBounds(in RectInt worldBounds, CombatRole role = CombatRole.Vulnerable)
 	{
 		var bounds = (Rect)(worldBounds - owner.Position);
+		if (UsesBodyCombat)
+			return BodyContact(bounds, role, out _) ||
+				bounds.Overlaps(new Circle(projectedPose[head], HeadRadius + Settings.CombatBoundsPadding), out _);
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
@@ -1797,9 +1919,77 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			segment.ClosestDistanceSquared(bounds.LeftLine) <= radiusSquared;
 	}
 
+	// A sculpted body fights with what's drawn: each piece's screen footprint, flagged per piece.
+	bool UsesBodyCombat => Settings.SculptedBody && bodyPrimitives.Count > 0;
+
+	// Whether rig-local bounds touch a piece that plays `role`; contact is the point of the body nearest the bounds'
+	// center (the center itself when it's inside), where a hit lands.
+	bool BodyContact(in Rect bounds, CombatRole role, out Vector2 contact)
+	{
+		var need = role == CombatRole.Harmful ? BodyCombat.Harmful : BodyCombat.Vulnerable;
+		var center = bounds.Center;
+		var (touched, nearest) = (false, float.MaxValue);
+		contact = center;
+		foreach (var piece in bodyPrimitives)
+		{
+			if (piece.Carve || (piece.Combat & need) == 0)
+				continue;
+			var (a, b) = (new Vector2(piece.A.X, piece.A.Y), new Vector2(piece.B.X, piece.B.Y));
+			if (!FootprintOverlaps(bounds, a, b, piece.RadiusA, piece.RadiusB))
+				continue;
+			touched = true;
+			var along = b - a;
+			var t = Math.Clamp(Vector2.Dot(center - a, along) / MathF.Max(along.LengthSquared(), 0.0001f), 0, 1);
+			var axis = a + along * t;
+			var radius = float.Lerp(piece.RadiusA, piece.RadiusB, t);
+			var outward = center - axis;
+			var distance = outward.Length();
+			if (distance - radius < nearest)
+			{
+				nearest = distance - radius;
+				contact = distance <= radius ? center : axis + outward / distance * radius;
+			}
+		}
+		return touched;
+	}
+
+	// A round cone seen from the front is a tapered capsule; the gap to a rect along it is convex in t.
+	static bool FootprintOverlaps(in Rect bounds, Vector2 a, Vector2 b, float radiusA, float radiusB)
+	{
+		var (center, half) = (bounds.Center, bounds.Size * 0.5f);
+		float Gap(float t) => Vector2.Max(Vector2.Abs(Vector2.Lerp(a, b, t) - center) - half, Vector2.Zero).Length() -
+			float.Lerp(radiusA, radiusB, t);
+		var (low, high) = (0f, 1f);
+		for (var i = 0; i < 12; i++)
+		{
+			var (left, right) = (float.Lerp(low, high, 1 / 3f), float.Lerp(low, high, 2 / 3f));
+			if (Gap(left) < Gap(right))
+				high = right;
+			else
+				low = left;
+		}
+		return Gap((low + high) * 0.5f) <= 0;
+	}
+
 	public void DrawCombatBounds(Batcher batcher)
 	{
 		var color = new Color(0x39e6c5);
+		if (UsesBodyCombat)
+		{
+			foreach (var piece in bodyPrimitives)
+			{
+				if (piece.Carve || piece.Combat == BodyCombat.None)
+					continue;
+				var tint = piece.Combat == BodyCombat.Harmful ? new Color(0xe64a39) : piece.Combat == BodyCombat.Vulnerable ? new Color(0xe6d739) : color;
+				var from = owner.Position + new Vector2(piece.A.X, piece.A.Y);
+				var to = owner.Position + new Vector2(piece.B.X, piece.B.Y);
+				batcher.CircleLine(from, piece.RadiusA, 1, 12, tint);
+				batcher.CircleLine(to, piece.RadiusB, 1, 12, tint);
+				batcher.Line(from, to, 1, tint * 0.5f);
+			}
+			batcher.CircleLine(owner.Position + projectedPose[head], HeadRadius + Settings.CombatBoundsPadding, 1, 14, color);
+			return;
+		}
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
@@ -2144,8 +2334,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var (legs, shins, feet) = (Settings.LegColor, Settings.ShinColor, Settings.FootColor);
 		Limb(leftUpperArm, leftLowerArm, leftHand, leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
 		Limb(rightUpperArm, rightLowerArm, rightHand, rightPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
-		Limb(leftLeg.Hip, leftLeg.Knee, leftLeg.Ankle, leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, feet);
-		Limb(rightLeg.Hip, rightLeg.Knee, rightLeg.Ankle, rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, feet);
+		Limb(leftLeg.Hip, leftLeg.Knee, leftLeg.Ankle, leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
+		Limb(rightLeg.Hip, rightLeg.Knee, rightLeg.Ankle, rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
+		Boot(leftLeg);
+		Boot(rightLeg);
 		// The codpiece: a rounded mass below the hip joints, pushed forward and smoothed into the hips and thighs.
 		if (Settings.Codpiece > 0)
 		{
@@ -2183,23 +2375,56 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 					Add(knuckle, middle, 0.022f, 0.016f, machined, Settings.ClawColor, Metal);
 					Add(middle, middle + (tip - middle) * (1 + Settings.Claws * 1.5f), 0.016f, 0.003f, machined, Settings.ClawColor, Metal);
 				}
-		Add(V(leftLeg.Toe), V(leftLeg.Tip), 0.05f, 0.04f, machined, feet, Metal);
-		Add(V(rightLeg.Toe), V(rightLeg.Tip), 0.05f, 0.04f, machined, feet, Metal);
 		for (var s = -1; s <= 1; s += 2)
 		{
 			var clavicle = s < 0 ? leftClavicle : rightClavicle;
 			Add(V(neck), V(clavicle), 0.08f, 0.07f, blend, torso);
 		}
+		// Dents carve in last; a flesh dent springing back past flush bulges out for a moment instead.
+		foreach (var dent in dents)
+		{
+			var (origin, axis, across, outward) = DentFrame(dent.Bone);
+			var surface = origin + (axis * dent.Surface.X + across * dent.Surface.Y + outward * dent.Surface.Z) * ppm;
+			var normal = axis * dent.Normal.X + across * dent.Normal.Y + outward * dent.Normal.Z;
+			var (radius, depth) = (dent.Radius * ppm, dent.Depth * ppm);
+			var center = depth >= 0 ? surface + normal * (radius - depth) : surface - normal * (radius + depth);
+			list.Add(new(center, radius, center, radius, (dent.Flesh ? 0.02f : 0.004f) * ppm, dent.Color, dent.Flesh ? Flesh : Metal,
+				Carve: depth >= 0));
+		}
 
 		// A fleshy upper segment with its mass at the root, a metal joint, a machined lower segment and end.
 		void Limb(int root, int joint, int end, int tip, float mass, float upper, float lower, float jointRadius, float endRadius,
-			Color upperColor, Color lowerColor, Color endColor)
+			Color upperColor, Color lowerColor, Color? endColor)
 		{
 			Add(V(root), V(root), mass, mass, blend, upperColor);
 			Add(V(root), V(joint), upper, lower, blend, upperColor);
 			Add(V(joint), V(joint), jointRadius, jointRadius, 0, joints, Metal);
 			Add(V(joint), V(end), jointRadius, endRadius, machined, lowerColor, Metal);
-			Add(V(end), V(tip), endRadius, endRadius * 1.1f, machined, endColor, Metal);
+			if (endColor is { } color)
+				Add(V(end), V(tip), endRadius, endRadius * 1.1f, machined, color, Metal);
+		}
+
+		// A flat boot in the foot's own frame: the ball and toe tip lie along the sole, the heel sits on that line under
+		// the ankle (pushed back by HeelLength), and a shaft runs from partway up the shin down into the heel. Each
+		// piece rests its underside on the floor, a sole's thickness below the line, so it rolls and lifts with the foot.
+		void Boot(Leg leg)
+		{
+			var (knee, ankle, ball, tip) = (V(leg.Knee), V(leg.Ankle), V(leg.Toe), V(leg.Tip));
+			var sole = Vector3.Normalize(tip - ball);
+			if (!float.IsFinite(sole.X))
+				sole = forward;
+			var under = ball + sole * Vector3.Dot(ankle - ball, sole);
+			var down = Vector3.Normalize(under - ankle);
+			if (!float.IsFinite(down.X))
+				down = Vector3.UnitY;
+			var size = Settings.BootSize;
+			var floor = 0.015f * ppm;
+			Vector3 OnFloor(Vector3 point, float radius) => point - down * (radius * size * bulk - floor);
+			var heel = OnFloor(under - sole * Settings.HeelLength * ppm, 0.055f);
+			var ballCenter = OnFloor(ball, 0.05f);
+			Add(Vector3.Lerp(knee, ankle, 1 - Settings.BootHeight), heel, 0.06f * size, 0.055f * size, 0.02f * ppm, feet, Metal);
+			Add(heel, ballCenter, 0.055f * size, 0.05f * size, machined, feet, Metal);
+			Add(ballCenter, OnFloor(tip, 0.035f), 0.05f * size, 0.035f * size, machined, feet, Metal);
 		}
 
 		(Vector3 Inner, Vector3 Outer) Pec(int s) => (chest + (side * s * 0.045f + forward * 0.12f) * bulk,

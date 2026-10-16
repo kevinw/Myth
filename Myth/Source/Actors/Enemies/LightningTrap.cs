@@ -62,7 +62,7 @@ public class LightningTrap : Actor, IRoomInversionListener, IPenDrawn
 	// Only the beam hurts. ApplyDamage drives that from the traced path, so the trap itself never presents a
 	// hurtbox: an empty Hitbox isn't enough, since a zero-size rect still reads as the point it sits on
 	// (RectInt.Overlaps compares X + Width > other.X), and brushing the housing landed on that point.
-	internal override bool OverlapsCombatBounds(in RectInt bounds) => false;
+	internal override bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable) => false;
 
 	public override void Added()
 	{

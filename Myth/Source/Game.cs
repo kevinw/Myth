@@ -1227,7 +1227,7 @@ public partial class Game : IDisposable
 			var actor = Actors[i];
 			if (destroying.Contains(actor))
 				continue;
-			if (actor.Mask.Has(Actor.Masks.Enemy | Actor.Masks.Hazard) && actor.OverlapsCombatBounds(near))
+			if (actor.Mask.Has(Actor.Masks.Enemy | Actor.Masks.Hazard) && actor.OverlapsCombatBounds(near, CombatRole.Harmful))
 				return false;
 			if (actor.UnsafeFooting(standing))
 				return false;
@@ -2209,7 +2209,7 @@ public partial class Game : IDisposable
 	{
 		foreach (var actor in Actors)
 			if (!destroying.Contains(actor) && (!contactDamageOnly || actor.ContactDamageEnabled) &&
-				actor.Mask.Has(mask) && actor.OverlapsCombatBounds(rect))
+				actor.Mask.Has(mask) && actor.OverlapsCombatBounds(rect, contactDamageOnly ? CombatRole.Harmful : CombatRole.Vulnerable))
 				return actor;
 		return null;
 	}

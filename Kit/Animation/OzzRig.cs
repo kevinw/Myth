@@ -19,9 +19,11 @@ public sealed partial class OzzRig : IDisposable
 	readonly Clip[] clips;
 	readonly Dictionary<string, int> jointsByName;
 	readonly Dictionary<string, Clip> clipsByName;
+	readonly Dictionary<int, float> groundSpeeds = [];
 	bool disposed;
 
 	public int JointCount => jointNames.Length;
+	public int JointParent(int joint) => jointParents[joint]; // -1 at the root
 	public IReadOnlyList<Clip> Clips => clips;
 
 	unsafe OzzRig(nint handle)
@@ -83,6 +85,41 @@ public sealed partial class OzzRig : IDisposable
 	public Clip GetClip(string name) => clipsByName.TryGetValue(name, out var clip)
 		? clip : throw new KeyNotFoundException($"Rig clip '{name}' does not exist.");
 	public bool TryGetClip(string name, out Clip clip) => clipsByName.TryGetValue(name, out clip!);
+	// How fast a looping in-place walk carries the body, in meters per second at its natural rate: the speed its
+	// planted feet sweep back (a foot counts as planted within 2 cm of its lowest point). Sampled once per clip.
+	public float GroundSpeed(Clip clip, ReadOnlySpan<int> feet)
+	{
+		if (groundSpeeds.TryGetValue(clip.Index, out var cached))
+			return cached;
+		const int Samples = 120;
+		using var instance = CreateInstance();
+		var positions = new Vector3[JointCount];
+		var rotations = new Quaternion[JointCount];
+		var trail = new Vector3[feet.Length, Samples];
+		for (var i = 0; i < Samples; i++)
+		{
+			instance.Sample([clip.Index], [clip.Duration * i / Samples], [1f], [0], [0], new float[JointCount], positions, rotations);
+			for (var f = 0; f < feet.Length; f++)
+				trail[f, i] = positions[feet[f]];
+		}
+		var (distance, time) = (0f, 0f);
+		var step = clip.Duration / Samples;
+		for (var f = 0; f < feet.Length; f++)
+		{
+			var lowest = float.MaxValue;
+			for (var i = 0; i < Samples; i++)
+				lowest = MathF.Min(lowest, trail[f, i].Y);
+			for (var i = 1; i < Samples; i++)
+				if (trail[f, i].Y < lowest + 0.02f && trail[f, i - 1].Y < lowest + 0.02f)
+				{
+					var (from, to) = (trail[f, i - 1], trail[f, i]);
+					distance += new Vector2(to.X - from.X, to.Z - from.Z).Length();
+					time += step;
+				}
+		}
+		return groundSpeeds[clip.Index] = time > 0 ? distance / time : 0;
+	}
+
 	public OzzRigInstance CreateInstance()
 	{
 		ObjectDisposedException.ThrowIf(disposed, this);

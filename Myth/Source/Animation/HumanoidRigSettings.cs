@@ -100,6 +100,9 @@ public sealed class HumanoidRigSettings
 	[I(0, 2, Knob = true)] public float Glutes = 1;
 	[I(0, 2, Knob = true)] public float Codpiece = 1;
 	[I(0, 2, Knob = true)] public float Claws = 1; // length; 0 leaves plain hands
+	[I(0.3f, 2, Knob = true)] public float BootSize = 1;
+	[I(0, 0.15f, Knob = true)] public float HeelLength = 0.04f; // meters the heel reaches back past the ankle
+	[I(0, 1, Knob = true)] public float BootHeight = 0.3f; // how far up the shin the shaft rises
 	[I(0, 1, Knob = true)] public float SkinMetallic;
 	[I(0, 1, Knob = true)] public float SkinRoughness = 0.5f;
 	[I(0, 1, Knob = true)] public float MetalRoughness = 0.3f;

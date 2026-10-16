@@ -31,6 +31,9 @@ public enum FluidContact
 	Liquid = Water | Lava,
 }
 
+// Which side of a fight a combat-bounds test asks about: where an attack can land, or where touching hurts.
+public enum CombatRole { Vulnerable, Harmful }
+
 public class Actor
 {
 	internal static bool TransitionsEnabled = true;
@@ -779,7 +782,7 @@ public class Actor
 	public virtual void OnPerformHit(Actor hitting) { }
 
 	public virtual bool BlocksAttack(Actor attacker, in RectInt attackPath) => false;
-	internal virtual bool OverlapsCombatBounds(in RectInt bounds) => Hitbox.Overlaps(bounds - Position);
+	internal virtual bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable) => Hitbox.Overlaps(bounds - Position);
 	// Ground we can reach or cover, even when our hurtbox is currently off or elsewhere -- a crusher's
 	// lane, a lightning beam's path. Keeps Game.NoteSafeGrounded from remembering it as a respawn.
 	internal virtual bool UnsafeFooting(in RectInt standing) => false;

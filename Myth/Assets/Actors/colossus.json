@@ -2,6 +2,8 @@
   "Name": "Colossus",
   "Type": "RigPuppet",
   "Health": 40,
+  "ArticulatedCombatBounds": true,
+  "KnockedBackByHits": false,
   "IdleAnimationName": "Idle_Loop",
   "WalkAnimationName": "Walk_Loop",
   "ProjectionYaw": 35,

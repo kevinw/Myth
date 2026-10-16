@@ -1,7 +1,8 @@
 // Ray-marches a SculptedBody: a smooth union of round cones (and carved grooves) posed by the rig, one fragment per
 // body-texture pixel, writing color (SV_Target0: the nearest piece's own color, shaded toward Shadow), screen-space
 // normal (SV_Target1, alpha = hit) and the highlights the nearest scene lights put on it (SV_Target2, premultiplied,
-// drawn into the emissive pass). Each pixel only visits the pieces binned to its tile.
+// drawn into the emissive pass). The pieces and their per-tile bins come in storage buffers (Vulkan only sees the
+// first 4 KB of a uniform block); each pixel only visits the pieces binned to its tile.
 // SculptedHeadMask.hlsl dilates the result into the mask. Units are pixels: x right, y down, z toward the viewer.
 
 cbuffer VertexUniformBlock : register(b0, space1)
@@ -9,32 +10,41 @@ cbuffer VertexUniformBlock : register(b0, space1)
     float4x4 Matrix;
 };
 
-#define MAX_PRIMITIVES 96
 #define MAX_LIGHTS 4
-#define MAX_TILES 512
-#define MAX_TILE_ENTRIES 4104
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
-    float4 Frame;   // x = primitive count, y = occlusion probe distance (px), z = front z, w = back z
+    float4 Frame;   // y = occlusion probe distance (px), z = front z, w = back z
     float4 Shading; // x = 0 banded, 1 smooth, 2 dithered; yz = the texture's world position; w = light count
     float4 Depth;   // x = the body's center z, y = range (px), z = how much the far side darkens
     float4 Tiling;  // x = tile size (px), y = tiles across, z = tiles down
     float4 Shadow;  // the tint the darkest band multiplies a piece's color by
     float4 Materials[2]; // flesh, metal: metallic, roughness, specular, 0
     float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
-    float4 Primitives[MAX_PRIMITIVES * 3]; // (a, radius a), (b, radius b), (blend, material, carve, packed rgb)
-    float4 Tiles[MAX_TILES / 4]; // per tile: first entry * 128 + entry count
-    float4 Entries[MAX_TILE_ENTRIES / 12]; // primitive indices, 8 bits each, 3 to a float
 };
 
-static int TileFirst;
-static int TileCount;
+// Mirrors SculptedBody.cs's BodyPiece.
+struct Piece
+{
+    float3 A;
+    float RadiusA;
+    float3 B;
+    float RadiusB;
+    float Blend;
+    uint Material;
+    uint Carve;
+    uint Rgb;
+};
+
+// No texture: fragment storage buffers follow the sampled textures, so these sit at the bottom of the range.
+StructuredBuffer<Piece> Pieces : register(t0, space2);
+// Per tile (row-major): its first entry and entry count; then every tile's entries, piece indices in draw order.
+StructuredBuffer<uint> Bins : register(t1, space2);
+
+static uint TileFirst;
+static uint TileCount;
 
 #include "Include/SculptedShading.hlsl"
-
-Texture2D Texture : register(t0, space2);
-SamplerState Sampler : register(s0, space2);
 
 struct VsInput
 {
@@ -107,58 +117,46 @@ float smooth_subtract(float a, float b, float k)
     return lerp(a, -b, h) + k * h * (1.0 - h);
 }
 
-float primitive_distance(int i, float3 p)
+float piece_distance(Piece piece, float3 p)
 {
-    float4 a = Primitives[i * 3];
-    float4 b = Primitives[i * 3 + 1];
-    return sd_round_cone(p, a.xyz, b.xyz, a.w, b.w);
-}
-
-int tile_primitive(int j)
-{
-    int k = TileFirst + j;
-    int f = k / 3;
-    uint packed = (uint)Entries[f >> 2][f & 3];
-    return (int)((packed >> ((k - f * 3) * 8)) & 255u);
+    return sd_round_cone(p, piece.A, piece.B, piece.RadiusA, piece.RadiusB);
 }
 
 float body_distance(float3 p)
 {
     float d = 1e5;
-    for (int j = 0; j < TileCount; j++)
+    for (uint j = 0; j < TileCount; j++)
     {
-        int i = tile_primitive(j);
-        float4 c = Primitives[i * 3 + 2];
-        float di = primitive_distance(i, p);
-        if (c.z > 0.5)
-            d = smooth_subtract(d, di, max(c.x, 0.001));
+        Piece piece = Pieces[Bins[TileFirst + j]];
+        float di = piece_distance(piece, p);
+        if (piece.Carve != 0)
+            d = smooth_subtract(d, di, max(piece.Blend, 0.001));
         else
-            d = c.x > 0.0 ? smooth_union(d, di, c.x) : min(d, di);
+            d = piece.Blend > 0.0 ? smooth_union(d, di, piece.Blend) : min(d, di);
     }
     return d;
 }
 
 // The solid piece nearest the surface: whose color and material it shows.
-int nearest_primitive(float3 p)
+Piece nearest_piece(float3 p)
 {
     float nearest = 1e5;
-    int found = 0;
-    for (int j = 0; j < TileCount; j++)
+    uint found = Bins[TileFirst];
+    for (uint j = 0; j < TileCount; j++)
     {
-        int i = tile_primitive(j);
-        float di = primitive_distance(i, p);
-        if (Primitives[i * 3 + 2].z < 0.5 && di < nearest)
+        uint i = Bins[TileFirst + j];
+        float di = piece_distance(Pieces[i], p);
+        if (Pieces[i].Carve == 0 && di < nearest)
         {
             nearest = di;
             found = i;
         }
     }
-    return found;
+    return Pieces[found];
 }
 
-float3 unpack_rgb(float packed)
+float3 unpack_rgb(uint rgb)
 {
-    uint rgb = (uint)packed;
     return float3((rgb >> 16) & 255u, (rgb >> 8) & 255u, rgb & 255u) / 255.0;
 }
 
@@ -186,10 +184,9 @@ BodyOutput fragment_main(VsOutput input)
     int2 tile = int2(input.position.xy / Tiling.x);
     if (tile.x >= (int)Tiling.y || tile.y >= (int)Tiling.z)
         return output;
-    int tileIndex = tile.y * (int)Tiling.y + tile.x;
-    uint entry = (uint)Tiles[tileIndex >> 2][tileIndex & 3];
-    TileFirst = (int)(entry >> 7);
-    TileCount = (int)(entry & 127u);
+    uint tileIndex = (uint)(tile.y * (int)Tiling.y + tile.x);
+    TileFirst = (uint)(Tiling.y * Tiling.z) * 2 + Bins[tileIndex * 2];
+    TileCount = Bins[tileIndex * 2 + 1];
     if (TileCount == 0)
         return output;
 
@@ -210,9 +207,9 @@ BodyOutput fragment_main(VsOutput input)
     output.Normal = float4(normal * 0.5 + 0.5, 1.0);
     float probe = Frame.y;
     float occlusion = clamp(body_distance(position + normal * probe) / probe, 0.0, 1.0);
-    float4 piece = Primitives[nearest_primitive(position) * 3 + 2];
-    float4 surface = Materials[(int)piece.y];
-    float3 near = unpack_rgb(piece.w);
+    Piece piece = nearest_piece(position);
+    float4 surface = Materials[piece.Material];
+    float3 near = unpack_rgb(piece.Rgb);
     float3 far = near * Shadow.rgb;
     float threshold = sculpted_threshold(input.position.xy);
     float light = sculpted_light(normal, occlusion, surface.x, Depth.z * saturate((Depth.x - position.z) / Depth.y));

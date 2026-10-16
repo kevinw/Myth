@@ -50,27 +50,16 @@
       "Position": [40, 264]
     },
     {
-      "Id": "9190000000000002",
-      "Type": "RigPuppetProp",
-      "Position": [330, 264],
-      "HeadLooksAtPlayer": true,
-      "LookRange": 240,
-      "SculptedHead": true,
-      "HeadShapeId": "pig",
-      "PixelsPerMeter": 100,
-      "HeadSize": 0.18,
-      "Layer": "Foreground"
-    },
-    {
       "Id": "9190000000000100",
       "Type": "RigPuppetProp",
       "Position": [90, 264],
-      "Layer": "Foreground",
       "PoseAnimationName": "Yes",
       "SculptedHead": true,
       "HeadShapeId": "pig",
       "PixelsPerMeter": 60,
-      "HeadSize": 0.3
+      "HeadSize": 0.3,
+      "SculptedBody": true,
+      "FleshBlend": 0.12750003
     },
     {
       "Id": "9190000000000110",
@@ -90,20 +79,37 @@
       "NeuralBrightness": 0.264,
       "PoseAnimationName": "Consume",
       "PoseProgress": 0.027,
-      "Layer": "Foreground",
-      "Reactive": true
+      "Reactive": true,
+      "SculptedBody": true,
+      "FleshBlend": 0.0915,
+      "Specular": 0.35499987,
+      "BodyDepthShade": 0.525,
+      "Codpiece": 1.4200002,
+      "HipSize": 0.3,
+      "LegColor": "000000",
+      "CalfColor": "000000",
+      "FootColor": "1D1910",
+      "ShinColor": "0C0B07",
+      "JointColor": "000000"
     },
     {
       "Id": "9190000000000120",
       "Type": "RigPuppetProp",
       "Position": [210, 264],
-      "Layer": "Foreground",
       "PoseAnimationName": "Yes",
       "ProjectionYaw": 90,
       "SculptedHead": true,
-      "HeadShapeId": "pig",
       "PixelsPerMeter": 60,
-      "HeadSize": 0.3
+      "SculptedBody": true,
+      "ChestMass": 1.5699999,
+      "HipSize": 0.5155,
+      "HeadShapeId": "stock",
+      "HeadSize": 0.147,
+      "CalfColor": "D13801",
+      "TorsoColor": "FF4700",
+      "AbsColor": "FF4600",
+      "ChestColor": "FF4700",
+      "ArmColor": "FF4600"
     },
     {
       "Id": "c0105505c0105505",

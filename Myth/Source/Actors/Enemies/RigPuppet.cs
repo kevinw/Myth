@@ -54,6 +54,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	[InspectorGroup("Animation")] public string SurpriseTake = "Surprise"; // spotting the player out of a patrol
 	public string AttackTake = "ArmSwing";
 	public bool ArticulatedCombatBounds;
+	public bool KnockedBackByHits = true; // off for the big ones: a hit dents and flinches them instead
 	public bool StraddlesPlayerDepth;
 	[InspectorGroup("Costume")] public bool Ruff;
 
@@ -172,8 +173,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	void SyncVisual()
 	{
+		// The walk plays at whatever rate makes its planted feet keep pace with the ground, at any size.
+		var stride = visual.WalkGroundSpeed(WalkAnimationName) * Rig.PixelsPerMeter;
 		var gaitScale = SyncGaitToSpeed && (!Performance || scripted) && walking && stepTraversal == StepTraversal.None
-			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
+			? MathF.Abs(Velocity.X) / (stride > 0 ? stride : WalkSpeed) : 1;
 		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed * abilityPlaybackSpeedMultiplier :
 			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale * AnimationSpeedMultiplier;
 		visual.HeadTint = RigHeadTint;
@@ -399,7 +402,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			&& Math.Sign(delta.X) == (int)Facing && visual.FacingMatches;
 	}
 	protected virtual bool AbilityControlsMovement => false;
-	protected virtual bool SuppressKnockdownOnHit => false;
+	protected virtual bool SuppressKnockdownOnHit => !KnockedBackByHits;
 	protected virtual bool DeathIsPersistent => false;
 	protected virtual float PlayerStopDistance => StopDistance;
 	/// Where non-scripted movement walks to. Null chases the player, stopping at PlayerStopDistance.
@@ -998,6 +1001,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		if (scripted || Health <= 0)
 			return;
 		patrolling = false;
+		visual.Dent(hitInfo.AttackBox.Rect);
 		var suppressKnockdown = SuppressKnockdownOnHit;
 		if (abilityActive && !suppressKnockdown)
 		{
@@ -1071,10 +1075,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	internal HumanoidRigVisual.RuffPose RuffPose => visual.GetRuffPose();
 
-	internal override bool OverlapsCombatBounds(in RectInt bounds)
+	internal override bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable)
 		=> !ArticulatedCombatBounds || visual == null
-			? base.OverlapsCombatBounds(bounds)
-			: visual.OverlapsCombatBounds(bounds);
+			? base.OverlapsCombatBounds(bounds, role)
+			: visual.OverlapsCombatBounds(bounds, role);
 
 	internal override void RenderCollisionDebug(Batcher batcher)
 	{
