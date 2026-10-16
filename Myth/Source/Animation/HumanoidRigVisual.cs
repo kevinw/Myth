@@ -705,6 +705,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 
 	float TurnDuration => turnDurationOverride ?? Settings.TurnDuration;
 
+	// The yaw that faces the viewer.
+	float CameraYaw => MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
+
 	public void ResetFeet()
 	{
 		leftFoot = default;
@@ -841,7 +844,12 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		{
 			targetFacing = owner.Facing;
 			turnFromYaw = visualYaw;
-			turnToYaw = FacingYaw(targetFacing);
+			// A half turn goes the way round that passes the camera, so the body turns through its front as the head
+			// does; through its back, a sculpted body's front/back pops mid-turn.
+			var delta = MathF.IEEERemainder(FacingYaw(targetFacing) - turnFromYaw, MathF.Tau);
+			if (MathF.Abs(delta) > MathF.PI - 0.01f)
+				delta = MathF.PI * (MathF.IEEERemainder(CameraYaw - turnFromYaw, MathF.Tau) < 0 ? -1 : 1);
+			turnToYaw = turnFromYaw + delta;
 			turnTime = turnAmount = 0;
 			turning = true;
 			ResetFeet();
@@ -1282,8 +1290,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	{
 		if (YawOverride is { } target)
 			yaw += MathF.IEEERemainder(target - yaw, MathF.Tau) * Math.Clamp(YawOverrideWeight, 0, 1);
-		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
-		return yaw + Math.Clamp(MathF.IEEERemainder(cameraYaw - yaw, MathF.Tau),
+		return yaw + Math.Clamp(MathF.IEEERemainder(CameraYaw - yaw, MathF.Tau),
 			-LookPoseOpenYaw, LookPoseOpenYaw) * lookPoseAmount;
 	}
 
@@ -1785,10 +1792,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// How far the head is turned from facing the viewer, clockwise: what picks a head sprite's frame.
 	float HeadViewYaw()
 	{
-		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
 		var yaw = UpperBodyYaw();
 		var cameraOpenYaw = MathF.Atan2(MathF.Sin(yaw), MathF.Abs(MathF.Cos(yaw)));
-		return Calc.AngleWrap((cameraYaw - cameraOpenYaw) * PresentationMirror());
+		return Calc.AngleWrap((CameraYaw - cameraOpenYaw) * PresentationMirror());
 	}
 
 	internal float ExtraHeadSpriteRoll; // MathF.PI * 0.39f;
