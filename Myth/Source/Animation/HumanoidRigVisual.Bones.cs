@@ -66,8 +66,6 @@ partial class HumanoidRigVisual
 			for (var i = 0; i < visual.bones.Length; i++)
 			{
 				var bone = visual.bones[i];
-				if (!visual.BackArmCombatEnabled && bone.Arm == visual.backArm)
-					continue;
 				BoneWidths(bone, out var fromWidth, out var toWidth);
 				if (bone.Combat && CapsuleOverlaps(bounds, visual.projectedPose[bone.From], visual.projectedPose[bone.To],
 					MathF.Max(fromWidth, toWidth) * 0.5f + visual.Settings.CombatBoundsPadding))
@@ -81,7 +79,7 @@ partial class HumanoidRigVisual
 			for (var i = 0; i < visual.bones.Length; i++)
 			{
 				var bone = visual.bones[i];
-				if (!bone.Combat || !visual.BackArmCombatEnabled && bone.Arm == visual.backArm)
+				if (!bone.Combat)
 					continue;
 				var from = visual.owner.Position + visual.projectedPose[bone.From];
 				var to = visual.owner.Position + visual.projectedPose[bone.To];

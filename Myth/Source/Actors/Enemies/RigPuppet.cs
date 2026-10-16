@@ -138,7 +138,6 @@ public class RigPuppet : RigActor
 		var directive = Directive;
 		visual.PlaybackSpeed = directive.PlaybackSpeed * directive.SpeedMultiplier * gaitScale * AnimationSpeedMultiplier;
 		visual.HeadTint = RigHeadTint;
-		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + directive.VisualOffset;
 		visual.LookTarget = abilityActive ? directive.LookTarget : !patrolling ? Game.GetFirst<Player>()?.Position : null;
@@ -350,7 +349,6 @@ public class RigPuppet : RigActor
 	protected virtual float AnimationSpeedMultiplier => 1;
 	protected virtual float HitLimbReactionStrength => 1;
 	protected virtual Color RigHeadTint => Color.White;
-	protected virtual bool BackArmCombatEnabled => true;
 
 	protected virtual void Die()
 	{
@@ -476,7 +474,7 @@ public class RigPuppet : RigActor
 		}
 	}
 
-	// Stops dead and plays the turn; the visual's yaw sweep lasts as long as the take, so FacingMatches (which walking
+	// Stops dead and plays the turn; the visual turns the body with the clip's own spin, so FacingMatches (which walking
 	// waits on) holds off until the feet are done.
 	void BeginTurnTake(RigTake take)
 	{
@@ -485,8 +483,7 @@ public class RigPuppet : RigActor
 		Velocity.X = 0;
 		turn.Play(take);
 		visual.Play(take);
-		var clip = visual.GetClip(take.Clip);
-		visual.StretchTurn((Math.Min(take.End, clip.Duration) - take.Start) / MathF.Max(0.01f, take.Speed));
+		visual.TurnWithClip();
 	}
 
 	void UpdatePatrol(bool grounded, Player? player)

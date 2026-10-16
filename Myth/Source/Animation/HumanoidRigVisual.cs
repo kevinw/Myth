@@ -17,17 +17,15 @@ interface IHumanoidRigAccessoryVisual
 internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
 	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
 {
-	public readonly record struct RuffProjection(Vector3 Pivot, float PivotX, float Mirror,
+	public readonly record struct RuffProjection(Vector3 Pivot, Vector3 TurnedPivot,
 		float TurnCos, float TurnSin, float CameraCos, float CameraSin, float PixelsPerMeter,
 		Vector2 ScreenOffset, Vector2 Correction)
 	{
 		public Vector2 Project(Vector3 point, out float depth)
 		{
-			var offset = point - Pivot;
-			var turned = new Vector3(offset.X * TurnCos + offset.Z * TurnSin, offset.Y,
-				-offset.X * TurnSin + offset.Z * TurnCos);
-			depth = CameraOpenDepth(point, Pivot, TurnCos, TurnSin, CameraCos, CameraSin);
-			return new Vector2(PivotX * Mirror - turned.Z * CameraCos + turned.X * CameraSin, -point.Y) *
+			var turned = TurnedPivot + Turn(point - Pivot, TurnCos, TurnSin);
+			depth = turned.X * CameraCos + turned.Z * CameraSin;
+			return new Vector2(-turned.Z * CameraCos + turned.X * CameraSin, -point.Y) *
 				PixelsPerMeter + ScreenOffset + Correction;
 		}
 	}
@@ -36,17 +34,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		Vector3 LeftUpperArm, Vector3 LeftLowerArm, Vector3 RightUpperArm, Vector3 RightLowerArm,
 		RuffProjection Projection);
 
-	// Left/right facing is a 2D presentation choice, not permission to show the rig's back.
-	// Fold sorting yaw across 90 degrees while leaving screen projection free to use the full yaw.
-	static float CameraOpenDepth(Vector3 point, Vector3 pivot, float turnCos, float turnSin,
-		float cameraCos, float cameraSin)
-	{
-		var offset = point - pivot;
-		turnCos = MathF.Abs(turnCos);
-		var turnedPoint = pivot + new Vector3(offset.X * turnCos + offset.Z * turnSin, offset.Y,
-			-offset.X * turnSin + offset.Z * turnCos);
-		return turnedPoint.X * cameraCos + turnedPoint.Z * cameraSin;
-	}
+	// Rotates about +Y by the angle whose cosine and sine these are.
+	static Vector3 Turn(Vector3 v, float cos, float sin) => new(v.X * cos + v.Z * sin, v.Y, -v.X * sin + v.Z * cos);
 
 	enum Part { Torso, Chest, Neck, Bicep, Forearm, Hand, Thigh, Shin, Foot }
 	enum Side { None, Left, Right }
@@ -155,7 +144,6 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	public float PoseModifierWeight = 1;
 	public Color HeadTint = Color.White;
 	public bool GaitActive;
-	public bool BackArmCombatEnabled = true;
 	public Action<Vector2>? Footstep;
 	Vector2 offset;
 	public Vector2 Offset
@@ -279,7 +267,10 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	float turnToYaw;
 	float turnTime;
 	float turnAmount;
-	float? turnDurationOverride;
+	// A clip that turns the body itself (a walking turn), while it plays: its pelvis spin is taken out of the pose and the
+	// facing turn follows it instead of a timed sweep, so the feet stay where the clip planted them.
+	OzzRig.Clip? turnClip;
+	bool clipTurn; // the turn in progress follows turnClip
 	bool ragdollReady;
 	float appliedShoulderDrop;
 	bool turnReady;
@@ -547,8 +538,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var cameraCos = MathF.Cos(angle);
 		var cameraSin = MathF.Sin(angle);
 		var yaw = UpperBodyYaw();
-		var projection = new RuffProjection(pivot, -pivot.Z * cameraCos + pivot.X * cameraSin,
-			PresentationMirror(),
+		var rigYaw = RigYaw();
+		var projection = new RuffProjection(pivot, Turn(pivot, MathF.Cos(rigYaw), MathF.Sin(rigYaw)),
 			MathF.Cos(yaw), MathF.Sin(yaw), cameraCos, cameraSin, Settings.PixelsPerMeter,
 			FootSink + Offset, Vector2.Zero);
 		var neck3D = ragdollPose[neck];
@@ -569,16 +560,19 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	}
 
 	// The animator's cross-fade for a clip change; with an inertial blend, none, and the switch is eased out here.
-	// requested < 0 means the default.
+	// requested < 0 means the default. Leaving a turning clip always blends inertially: the animator would cross-fade
+	// its spun pelvis back round, where the pose it showed (spin taken out) is already facing the new way.
 	float Transition(float requested)
 	{
 		keyPending = true;
+		var leavingTurn = turnClip != null;
+		turnClip = null;
 		if (requested == 0)
 			return 0;
-		if (Settings.InertialBlendTime <= 0)
+		if (Settings.InertialBlendTime <= 0 && !leavingTurn)
 			return requested > 0 ? requested : ClipBlendDuration;
 		inertialPending = true;
-		inertialDuration = requested > 0 ? requested : Settings.InertialBlendTime;
+		inertialDuration = requested > 0 ? requested : Settings.InertialBlendTime > 0 ? Settings.InertialBlendTime : ClipBlendDuration;
 		return 0;
 	}
 
@@ -695,15 +689,12 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		turnFromYaw = turnToYaw = visualYaw;
 		turnTime = turnAmount = 0;
 		turnReady = true;
-		turning = false;
-		turnDurationOverride = null;
+		turning = clipTurn = false;
 	}
 
-	// Stretches the turn in progress, or the next one to start, to last this long, so a turn clip's footwork and the
-	// yaw sweep finish together. Applies to that one turn.
-	public void StretchTurn(float seconds) => turnDurationOverride = MathF.Max(0.01f, seconds);
-
-	float TurnDuration => turnDurationOverride ?? Settings.TurnDuration;
+	// Call right after playing a clip that spins the body round (its pelvis turns): the turn the owner's facing change
+	// starts follows that clip, the way the clip turns, until the clip changes.
+	public void TurnWithClip() => turnClip = animator.ActiveClip;
 
 	// The yaw that faces the viewer.
 	float CameraYaw => MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
@@ -832,11 +823,12 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		}
 	}
 
-	public float FacingYaw(Signs facing)
-		=> facing == Signs.Negative ? 0 : Settings.ProjectionYaw >= 0 ? -MathF.PI : MathF.PI;
+	// Facing right is facing left reflected about the yaw that faces the viewer: the same three-quarter view of the
+	// front, from the other side. A turn between them sweeps through the front.
+	public float FacingYaw(Signs facing) => facing == Signs.Negative ? 0 : 2 * CameraYaw;
 
-	float PresentationMirror()
-		=> turning ? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount) : -(int)visualFacing;
+	// +1 while the figure faces left of the viewer, -1 right: which way its body's sides lie on screen.
+	public float FacingSide() => MathF.IEEERemainder(RigYaw() - CameraYaw, MathF.Tau) < 0 ? 1 : -1;
 
 	void UpdateTurn(bool grounded)
 	{
@@ -844,37 +836,75 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		{
 			targetFacing = owner.Facing;
 			turnFromYaw = visualYaw;
-			// A half turn goes the way round that passes the camera, so the body turns through its front as the head
-			// does; through its back, a sculpted body's front/back pops mid-turn.
-			var delta = MathF.IEEERemainder(FacingYaw(targetFacing) - turnFromYaw, MathF.Tau);
-			if (MathF.Abs(delta) > MathF.PI - 0.01f)
-				delta = MathF.PI * (MathF.IEEERemainder(CameraYaw - turnFromYaw, MathF.Tau) < 0 ? -1 : 1);
-			turnToYaw = turnFromYaw + delta;
+			turnToYaw = FacingYaw(targetFacing);
+			clipTurn = turnClip != null;
+			// A clip turn goes the way the clip spins, however far round that is.
+			if (clipTurn && ClipSpin(animator.RangeEnd) is var spin && spin != 0)
+				while ((turnToYaw - turnFromYaw) * spin < 0)
+					turnToYaw += MathF.Tau * MathF.Sign(spin);
 			turnTime = turnAmount = 0;
 			turning = true;
 			ResetFeet();
 		}
+		if (clipTurn)
+		{
+			if (turnClip != null)
+				return; // ApplyClipTurn drives it
+			// The clip was cut short: finish on the clock from where it got to.
+			clipTurn = false;
+			turnTime = turnAmount * Settings.TurnDuration;
+		}
 		if (!turning || !Settings.TurnWhileMoving && (!grounded || MathF.Abs(owner.Velocity.X) > TurnStartSpeed))
 			return;
 
-		turnTime = MathF.Min(turnTime + visualDelta, TurnDuration);
-		var progress = turnTime / TurnDuration;
+		turnTime = MathF.Min(turnTime + visualDelta, Settings.TurnDuration);
+		var progress = turnTime / Settings.TurnDuration;
 		turnAmount = progress * progress * (3 - 2 * progress);
 		visualYaw = float.Lerp(turnFromYaw, turnToYaw, turnAmount);
-		if (turnTime < TurnDuration)
-			return;
+		if (turnTime >= Settings.TurnDuration)
+			FinishTurn();
+	}
 
+	void FinishTurn()
+	{
 		visualFacing = targetFacing;
 		visualYaw = FacingYaw(visualFacing);
 		turnTime = turnAmount = 0;
-		turning = false;
-		turnDurationOverride = null;
+		turning = clipTurn = false;
+	}
+
+	// How far turnClip's pelvis has spun since the start of its range, at a clip time.
+	float ClipSpin(float time) => rig.Yaw(turnClip!, pelvis, time) - rig.Yaw(turnClip!, pelvis, animator.RangeStart);
+
+	// Takes turnClip's pelvis spin back out of the sampled pose, and moves the facing turn along by it instead, scaled
+	// to the turn the figure actually needs.
+	void ApplyClipTurn()
+	{
+		if (turnClip == null || animator.ActiveClip != turnClip)
+			return;
+		var spin = ClipSpin(animator.Time);
+		var (cos, sin) = (MathF.Cos(-spin), MathF.Sin(-spin));
+		var unspin = Quaternion.CreateFromAxisAngle(Vector3.UnitY, -spin);
+		var pivot = sampledPose[pelvis];
+		for (var i = 0; i < sampledPose.Length; i++)
+		{
+			sampledPose[i] = pivot + Turn(sampledPose[i] - pivot, cos, sin);
+			sampledRotations[i] = unspin * sampledRotations[i];
+		}
+		if (!clipTurn)
+			return;
+		var total = ClipSpin(animator.RangeEnd);
+		turnAmount = MathF.Abs(total) > 0.01f ? Math.Clamp(spin / total, 0, 1) : 1;
+		visualYaw = float.Lerp(turnFromYaw, turnToYaw, turnAmount);
+		if (animator.Finished)
+			FinishTurn();
 	}
 
 	void UpdatePose(bool grounded, bool footIK, bool seekGround = false)
 	{
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
+		ApplyClipTurn();
 		ApplyInertialBlend();
 		ApplyShoulderDrop();
 		UpdateLookPose();
@@ -1264,10 +1294,10 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	float UpperBodyYaw()
 	{
 		var yaw = visualYaw;
-		if (turning && Settings.TurnInertia > 0)
+		if (turning && !clipTurn && Settings.TurnInertia > 0)
 		{
 			var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
-			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
+			var progress = Math.Clamp((turnTime / Settings.TurnDuration - delay) / (1 - delay), 0, 1);
 			progress = progress * progress * (3 - 2 * progress);
 			yaw = float.Lerp(turnFromYaw, turnToYaw, progress);
 		}
@@ -1279,12 +1309,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	float AnimationYawOffset => lockedAnimationYaw is { } locked
 		? MathF.IEEERemainder(PelvisYaw() - locked, MathF.Tau) : 0;
 
-	float PelvisYaw()
-	{
-		var rotation = sampledRotations[pelvis];
-		return MathF.Atan2(2 * (rotation.W * rotation.Y + rotation.X * rotation.Z),
-			1 - 2 * (rotation.X * rotation.X + rotation.Y * rotation.Y));
-	}
+	float PelvisYaw() => OzzRig.Yaw(sampledRotations[pelvis]);
 
 	float OverrideYaw(float yaw)
 	{
@@ -1306,14 +1331,13 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var angle = Settings.ProjectionYaw * MathF.PI / 180f;
 		var cos = MathF.Cos(angle);
 		var sin = MathF.Sin(angle);
-		var inertiaActive = turning && Settings.TurnInertia > 0;
+		var inertiaActive = turning && !clipTurn && Settings.TurnInertia > 0;
 		var upperBodyYaw = UpperBodyYaw();
 		var pivot = ragdollPose[pelvis];
-		var pivotX = -pivot.Z * cos + pivot.X * sin;
-		var mirror = PresentationMirror();
 		var rigYaw = RigYaw();
 		var turnCos = MathF.Cos(rigYaw);
 		var turnSin = MathF.Sin(rigYaw);
+		var turnedPivot = Turn(pivot, turnCos, turnSin);
 		var upperTurnCos = MathF.Cos(upperBodyYaw);
 		var upperTurnSin = MathF.Sin(upperBodyYaw);
 		for (var i = 0; i < sampledPose.Length; i++)
@@ -1327,11 +1351,10 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 			var jointYaw = float.Lerp(rigYaw, upperBodyYaw, weight);
 			var jointTurnCos = weight <= 0 ? turnCos : weight >= 1 ? upperTurnCos : MathF.Cos(jointYaw);
 			var jointTurnSin = weight <= 0 ? turnSin : weight >= 1 ? upperTurnSin : MathF.Sin(jointYaw);
-			var turned = new Vector3(offset.X * jointTurnCos + offset.Z * jointTurnSin, offset.Y,
-				-offset.X * jointTurnSin + offset.Z * jointTurnCos);
-			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) *
+			var turned = turnedPivot + Turn(offset, jointTurnCos, jointTurnSin);
+			projectedPose[i] = new Vector2(-turned.Z * cos + turned.X * sin, -joint.Y) *
 				Settings.PixelsPerMeter + FootSink + Offset;
-			jointDepth[i] = CameraOpenDepth(joint, pivot, jointTurnCos, jointTurnSin, cos, sin);
+			jointDepth[i] = turned.X * cos + turned.Z * sin;
 		}
 		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? Side.Left : Side.Right;
 		backArm = ArmDepth(leftClavicle, leftUpperArm, leftLowerArm, leftHand, leftPalm) <
@@ -1792,9 +1815,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// How far the head is turned from facing the viewer, clockwise: what picks a head sprite's frame.
 	float HeadViewYaw()
 	{
-		var yaw = UpperBodyYaw();
-		var cameraOpenYaw = MathF.Atan2(MathF.Sin(yaw), MathF.Abs(MathF.Cos(yaw)));
-		return Calc.AngleWrap((CameraYaw - cameraOpenYaw) * PresentationMirror());
+		return Calc.AngleWrap(CameraYaw - UpperBodyYaw());
 	}
 
 	internal float ExtraHeadSpriteRoll; // MathF.PI * 0.39f;

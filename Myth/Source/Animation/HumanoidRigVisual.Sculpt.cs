@@ -108,7 +108,7 @@ partial class HumanoidRigVisual
 			var axis = Vector3.Normalize(visual.ViewJoint(visual.bones[bone].To) - from);
 			if (!float.IsFinite(axis.X))
 				axis = Vector3.UnitY;
-			var mirror = visual.PresentationMirror() < 0 ? -1 : 1;
+			var mirror = visual.FacingSide();
 			var across = Vector3.Cross(axis, Vector3.UnitZ);
 			across = across.LengthSquared() > 0.0001f ? Vector3.Normalize(across) * mirror : Vector3.UnitX;
 			return (from, axis, across, Vector3.Cross(across, axis) * mirror);

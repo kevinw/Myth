@@ -514,7 +514,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	protected override float AnimationSpeedMultiplier => LowHealth ? SpeedupFactor : 1;
 	protected override float HitLimbReactionStrength => HitLimbMotionStrength;
 	protected override Color RigHeadTint => LowHealth ? LowHealthSkullTint : Color.White;
-	protected override bool BackArmCombatEnabled => false;
 	protected override void OnFootstep(Vector2 position)
 	{
 		// explicitly not calling base.OnFootstep(position)

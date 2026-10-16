@@ -20,6 +20,7 @@ public sealed partial class OzzRig : IDisposable
 	readonly Dictionary<string, int> jointsByName;
 	readonly Dictionary<string, Clip> clipsByName;
 	readonly Dictionary<int, float> groundSpeeds = [];
+	readonly Dictionary<(int Clip, int Joint), float[]> yawTracks = [];
 	bool disposed;
 
 	public int JointCount => jointNames.Length;
@@ -119,6 +120,33 @@ public sealed partial class OzzRig : IDisposable
 		}
 		return groundSpeeds[clip.Index] = time > 0 ? distance / time : 0;
 	}
+
+	// A joint's yaw (radians about +Y, unwrapped, so a full turn reads 2π) at a clip time. Sampled once per clip and joint.
+	public float Yaw(Clip clip, int joint, float time)
+	{
+		const int Samples = 64;
+		if (!yawTracks.TryGetValue((clip.Index, joint), out var track))
+		{
+			track = new float[Samples + 1];
+			using var instance = CreateInstance();
+			var positions = new Vector3[JointCount];
+			var rotations = new Quaternion[JointCount];
+			for (var i = 0; i <= Samples; i++)
+			{
+				instance.Sample([clip.Index], [clip.Duration * i / Samples], [1f], [0], [0], new float[JointCount], positions, rotations);
+				var yaw = Yaw(rotations[joint]);
+				track[i] = i == 0 ? yaw : track[i - 1] + MathF.IEEERemainder(yaw - track[i - 1], MathF.Tau);
+			}
+			yawTracks[(clip.Index, joint)] = track;
+		}
+		var at = Math.Clamp(time / MathF.Max(clip.Duration, 0.0001f), 0, 1) * Samples;
+		var index = Math.Min((int)at, Samples - 1);
+		return float.Lerp(track[index], track[index + 1], at - index);
+	}
+
+	public static float Yaw(Quaternion rotation)
+		=> MathF.Atan2(2 * (rotation.W * rotation.Y + rotation.X * rotation.Z),
+			1 - 2 * (rotation.X * rotation.X + rotation.Y * rotation.Y));
 
 	public OzzRigInstance CreateInstance()
 	{
