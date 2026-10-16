@@ -81,6 +81,8 @@ public abstract partial class Pawn
 	static int RigDuckLookAhead => 8; // pixels, a tile: the duck starts before the ceiling arrives
 	static float RigCrouchClearance => 0f; // pixels above the feet; lower ceilings switch to the crouch takes
 	static float RigCrouchGaitRate => 1.5f; // × the gait rate
+	static float RigAirLegsResponse => 25f;
+	static bool RigAirAttackMirrored => true; // swinging in the air, the far hand swings instead
 
 	// Where the eyes and head aim; null looks ahead.
 	protected virtual Vector2? RigLookTarget => null;
@@ -239,6 +241,7 @@ public abstract partial class Pawn
 		UpdateRigOffset(shown);
 		rigVisual.GripRoll = float.Lerp(rigVisual.GripRoll, RopeSwingAngle() * RigRopeTilt, 1 - MathF.Exp(-RigRopeTiltResponse * Time.Delta));
 		UpdateRigSkidYaw();
+		UpdateRigAirLegs(shown);
 		rigVisual.LookTarget = rigVisual.HeadLookTarget = RigLookTarget;
 		rigVisual.HeadLookMaxTurn = RigHeadLookMaxTurn;
 		rigVisual.HeadLookRate = RigHeadLookRate;
@@ -383,6 +386,17 @@ public abstract partial class Pawn
 			PopRigSinkClip(batcher);
 	}
 
+	// Swinging in the air, the legs keep the air pose; landing mid-swing hands them back to the swing's stance.
+	void UpdateRigAirLegs(string shown)
+	{
+		var visual = rigVisual!;
+		visual.LegWeight = float.Lerp(visual.LegWeight, shown == "PlayerAttack" && !grounded ? 1 : 0,
+			1 - MathF.Exp(-RigAirLegsResponse * Time.Delta));
+		if (visual.LegWeight < 0.01f)
+			visual.LegWeight = 0;
+		visual.LegTake = RigTakes.TryGet("PlayerAir", out var air) ? air : null;
+	}
+
 	void UpdateRigSkidYaw()
 	{
 		var visual = rigVisual!;
@@ -436,10 +450,15 @@ public abstract partial class Pawn
 			: rigPlaying == "PlayerDive" && grounded ? RigDiveLandBlendDuration : -1;
 		rigTake = RigTakes.TryGet(name, out var take) ? take : null;
 		if (rigTake != null)
-			rigVisual!.Play(take, blend);
+			rigVisual!.Play(name == "PlayerAttack" && !grounded && RigAirAttackMirrored
+				? take with { NearHand = take.NearHand switch { RigHand.Left => RigHand.Right, RigHand.Right => RigHand.Left, _ => RigHand.None } }
+				: take, blend);
 		else
 			rigVisual!.Play(name, restart: restart, blendDuration: blend);
 		rigPlaying = name;
+		// A swing out of the air starts on the air legs it already had.
+		if (name == "PlayerAttack")
+			rigVisual.LegWeight = grounded ? 0 : 1;
 	}
 
 	internal HumanoidRigVisual? RigVisual => rigVisual;

@@ -16,6 +16,10 @@ public sealed class OzzAnimator : IDisposable
 	OzzRig.Clip? outgoingClip;
 	OzzRig.Clip? layerClip;
 	OzzJointMask? layerMask;
+	OzzRig.Clip? overrideClip;
+	OzzJointMask? overrideMask;
+	float overrideTime;
+	float overrideWeight;
 	float outgoingTime;
 	float outgoingStart;
 	float outgoingEnd;
@@ -25,7 +29,6 @@ public sealed class OzzAnimator : IDisposable
 	float blendRemaining;
 	bool outgoingLoop = true;
 	bool loop = true;
-	bool layerAdditive;
 	float rangeStart;
 	float rangeEnd;
 
@@ -46,26 +49,36 @@ public sealed class OzzAnimator : IDisposable
 	}
 
 	public void SetAdditive(string name, float time, float weight, OzzJointMask mask)
-		=> SetLayer(Rig.GetClip(name), time, weight, mask, additive: true);
+		=> SetAdditive(Rig.GetClip(name), time, weight, mask);
 
 	public void SetAdditive(OzzRig.Clip clip, float time, float weight, OzzJointMask mask)
-		=> SetLayer(clip, time, weight, mask, additive: true);
-
-	public void SetLayer(string name, float time, float weight, OzzJointMask mask, bool additive = false)
-		=> SetLayer(Rig.GetClip(name), time, weight, mask, additive);
-
-	public void SetLayer(OzzRig.Clip clip, float time, float weight, OzzJointMask mask, bool additive = false)
 	{
-		if (!ReferenceEquals(mask.Rig, Rig))
-			throw new ArgumentException("Joint mask belongs to a different rig.", nameof(mask));
+		CheckMask(mask);
 		layerClip = clip;
-		layerTime = Math.Clamp(time, 0, layerClip.Duration);
+		layerTime = Math.Clamp(time, 0, clip.Duration);
 		layerWeight = weight;
 		layerMask = mask;
-		layerAdditive = additive;
 	}
 
 	public void ClearLayer() => layerClip = null;
+
+	// Replaces the playing clip on the masked joints, by weight × the mask's: the clip shows through only where it's not.
+	public void SetOverride(OzzRig.Clip clip, float time, float weight, OzzJointMask mask)
+	{
+		CheckMask(mask);
+		overrideClip = clip;
+		overrideTime = Math.Clamp(time, 0, clip.Duration);
+		overrideWeight = Math.Clamp(weight, 0, 1);
+		overrideMask = mask;
+	}
+
+	public void ClearOverride() => overrideClip = null;
+
+	void CheckMask(OzzJointMask mask)
+	{
+		if (!ReferenceEquals(mask.Rig, Rig))
+			throw new ArgumentException("Joint mask belongs to a different rig.", nameof(mask));
+	}
 
 	public void Play(string name, float transitionDuration, bool restart = false, float startTime = 0)
 		=> Play(name, 0, Rig.GetClip(name).Duration, transitionDuration, restart, startTime);
@@ -141,12 +154,29 @@ public sealed class OzzAnimator : IDisposable
 			layerCount = 2;
 		}
 
+		if (overrideClip != null && overrideMask != null && overrideWeight > 0)
+		{
+			var joints = Rig.JointCount;
+			for (var layer = 0; layer < layerCount; layer++)
+			{
+				masked[layer] = 1;
+				for (var j = 0; j < joints; j++)
+					jointWeights[layer * joints + j] = 1 - overrideWeight * overrideMask[j];
+			}
+			clipIndices[layerCount] = overrideClip.Index;
+			times[layerCount] = overrideTime;
+			weights[layerCount] = overrideWeight;
+			masked[layerCount] = 1;
+			overrideMask.Weights.CopyTo(jointWeights, layerCount * joints);
+			layerCount++;
+		}
+
 		if (layerClip != null && layerMask != null && layerWeight != 0)
 		{
 			clipIndices[layerCount] = layerClip.Index;
 			times[layerCount] = layerTime;
 			weights[layerCount] = layerWeight;
-			additive[layerCount] = layerAdditive ? (byte)1 : (byte)0;
+			additive[layerCount] = 1;
 			masked[layerCount] = 1;
 			layerMask.Weights.CopyTo(jointWeights, layerCount * Rig.JointCount);
 			layerCount++;

@@ -209,6 +209,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	Bone[] bones = [];
 	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[16];
 	OzzJointMask upperBodyMask = null!;
+	OzzJointMask lowerBodyMask = null!;
 	OzzJointMask leftArmMask = null!;
 	OzzJointMask leftHandMask = null!, rightHandMask = null!;
 	// For joints outside the ragdoll (fingers): the nearest ancestor in it, whose springing they ride along with.
@@ -259,6 +260,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	float visualDelta;
 	float pendingLandingSpeed;
 	float layeredHitTime = -1;
+	float legTime;
 	float neuralHitRemaining;
 	Signs visualFacing;
 	Signs targetFacing;
@@ -374,6 +376,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	public float RangeStart => animator.RangeStart;
 	public float RangeEnd => animator.RangeEnd;
 	public bool AnimationFinished => animator.Finished;
+	// Loops over the pelvis and legs in place of the playing clip's, by weight: an air pose under a ground swing.
+	public RigTake? LegTake;
+	public float LegWeight;
 	public float CurrentFacingYaw => FacingYaw(owner.Facing);
 	public float Time
 	{
@@ -475,6 +480,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		upperBodyMask.Set("spine_01", 1, descendants: true);
 		upperBodyMask.Set("spine_01", 0.25f);
 		upperBodyMask.Set("spine_02", 0.6f);
+		lowerBodyMask = rig.CreateMask();
+		lowerBodyMask.Set("pelvis", 1, descendants: true);
+		lowerBodyMask.Set("spine_01", 0, descendants: true);
+		lowerBodyMask.Set("spine_01", 0.75f);
+		lowerBodyMask.Set("spine_02", 0.4f);
 		leftHandMask = rig.CreateMask();
 		leftHandMask.Set("hand_l", 1, descendants: true);
 		rightHandMask = rig.CreateMask();
@@ -1288,6 +1298,14 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	void UpdateAnimationLayers()
 	{
 		neuralHitRemaining = MathF.Max(0, neuralHitRemaining - visualDelta);
+		if (LegTake is { } legs && LegWeight > 0 && rig.TryGetClip(legs.Clip, out var legClip))
+		{
+			var end = MathF.Min(legs.End, legClip.Duration);
+			legTime = legs.Start + (MathF.Max(0, legTime - legs.Start) + visualDelta * legs.Speed) % MathF.Max(0.0001f, end - legs.Start);
+			animator.SetOverride(legClip, legTime, LegWeight, lowerBodyMask);
+		}
+		else
+			animator.ClearOverride();
 		if (layeredHitTime < 0)
 		{
 			animator.ClearLayer();
