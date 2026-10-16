@@ -279,6 +279,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	float turnToYaw;
 	float turnTime;
 	float turnAmount;
+	float? turnDurationOverride;
 	bool ragdollReady;
 	float appliedShoulderDrop;
 	bool turnReady;
@@ -695,7 +696,14 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		turnTime = turnAmount = 0;
 		turnReady = true;
 		turning = false;
+		turnDurationOverride = null;
 	}
+
+	// Stretches the turn in progress, or the next one to start, to last this long, so a turn clip's footwork and the
+	// yaw sweep finish together. Applies to that one turn.
+	public void StretchTurn(float seconds) => turnDurationOverride = MathF.Max(0.01f, seconds);
+
+	float TurnDuration => turnDurationOverride ?? Settings.TurnDuration;
 
 	public void ResetFeet()
 	{
@@ -841,17 +849,18 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		if (!turning || !Settings.TurnWhileMoving && (!grounded || MathF.Abs(owner.Velocity.X) > TurnStartSpeed))
 			return;
 
-		turnTime = MathF.Min(turnTime + visualDelta, Settings.TurnDuration);
-		var progress = turnTime / Settings.TurnDuration;
+		turnTime = MathF.Min(turnTime + visualDelta, TurnDuration);
+		var progress = turnTime / TurnDuration;
 		turnAmount = progress * progress * (3 - 2 * progress);
 		visualYaw = float.Lerp(turnFromYaw, turnToYaw, turnAmount);
-		if (turnTime < Settings.TurnDuration)
+		if (turnTime < TurnDuration)
 			return;
 
 		visualFacing = targetFacing;
 		visualYaw = FacingYaw(visualFacing);
 		turnTime = turnAmount = 0;
 		turning = false;
+		turnDurationOverride = null;
 	}
 
 	void UpdatePose(bool grounded, bool footIK, bool seekGround = false)
@@ -1250,7 +1259,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		if (turning && Settings.TurnInertia > 0)
 		{
 			var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
-			var progress = Math.Clamp((turnTime / Settings.TurnDuration - delay) / (1 - delay), 0, 1);
+			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
 			progress = progress * progress * (3 - 2 * progress);
 			yaw = float.Lerp(turnFromYaw, turnToYaw, progress);
 		}

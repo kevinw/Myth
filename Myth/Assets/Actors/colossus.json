@@ -6,6 +6,7 @@
   "KnockedBackByHits": false,
   "IdleAnimationName": "Idle_Loop",
   "WalkAnimationName": "Walk_Loop",
+  "TurnTake": "WalkTurn",
   "ProjectionYaw": 35,
   "PixelsPerMeter": 95,
   "BodyStyle": "Sculpted",

@@ -52,7 +52,7 @@
 
 - **Fast clips looked flattened** because every joint is a ragdoll spring (~2 Hz) chasing the animation. Pawns use `RagdollCarry = 1`, so joints ride the animation and the springs only add reactions. ELP is at 0.
 - **Foot IK snapped lifted toes to the ground** and flattened the stride. With `GaitFeetFollowTerrain`, gait feet only shift by the terrain delta.
-- **Double turns:** a clip that turns 180° plus the rig's facing flip ends up backwards. Bake with `StripYaw` and drive yaw procedurally (`YawOverride`); the skid does this.
+- **Double turns:** a clip that turns 180° plus the rig's facing flip ends up backwards. Bake with `StripYaw` and drive yaw procedurally: the skid sweeps `YawOverride`; `RigPuppet.TurnTake` uses `visual.StretchTurn` so the rig's own turn lasts as long as the clip.
 - **Fixed rotation angles undershoot** when the take's pose isn't what you assumed. Measure and aim instead (`ArmAim` rotates the figure so neck→hands points where asked).
 - **Visual FPS at or above the frame rate** now does one update per frame using the real delta. Previously it ran several fixed steps per frame and threw away all but the last. Pawns use 240, meaning every frame.
 - **Rig-vs-sim alignment:** the rope pins at the rig's hands (`RopeGrip`), and the rig slides so its hand is on the rope. The crawl lifts the rig 2px (`UpdateRigOffset`). Expect similar per-pose offsets.
@@ -85,4 +85,4 @@ Gait/sprint rates, `RigRollMinRate`, `RigLandingScale`, head-look turn/rate, `Ri
 
 ## Open ideas
 
-Tilt the rig with the rope's angle on a swing. Distance-matched gait rates. Prone duck (avoids the duck↔crawl pop). `Leaning` / `Walking_Turn_180` are baked but unused. Footstep audio for Bud. Full clip preview on pawns (refactor `RigPuppet`'s preview into a shared helper).
+Tilt the rig with the rope's angle on a swing. Distance-matched gait rates. Prone duck (avoids the duck↔crawl pop). `Leaning` is baked but unused (`Walking_Turn_180` is the colossus's `TurnTake`, `WalkTurn`). Footstep audio for Bud. Full clip preview on pawns (refactor `RigPuppet`'s preview into a shared helper).

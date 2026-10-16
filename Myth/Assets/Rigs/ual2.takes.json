@@ -307,6 +307,17 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "WalkTurn": {
+    "Clip": "Walking_Turn_180",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "PlayerSkid": {
     "Clip": "Running_Turn_180",
     "Start": 0,

@@ -27,7 +27,7 @@ public class RigPuppet : RigActor
 		public void Play(RigTake take) => Play(take.Speed, take.Loop, take.FootIK);
 	}
 
-	RigDirective Directive => abilityActive ? ability : scripted ? script : RigDirective.Free(PlaybackSpeed);
+	RigDirective Directive => abilityActive ? ability : scripted ? script : turnTaking ? turn : RigDirective.Free(PlaybackSpeed);
 
 	internal virtual void OnWasHurt() {
 		Game.Shake(0.15f);
@@ -51,6 +51,9 @@ public class RigPuppet : RigActor
 	public bool SwingsAtPlayer;
 	[InspectorGroup("Animation")] public string SurpriseTake = "Surprise"; // spotting the player out of a patrol
 	public string AttackTake = "ArmSwing";
+	// Played whenever he turns around outside an ability (chasing, patrolling), and he finishes it before doing anything
+	// else; the yaw sweep stretches to its length. Empty keeps the quick procedural turn.
+	public string TurnTake = "";
 	public bool ArticulatedCombatBounds;
 	public bool KnockedBackByHits = true; // off for the big ones: a hit dents and flinches them instead
 	public bool StraddlesPlayerDepth;
@@ -78,6 +81,9 @@ public class RigPuppet : RigActor
 	bool scripted;
 	bool scriptedArrived;
 	RigDirective script = RigDirective.Free(1);
+	RigDirective turn = RigDirective.Free(1);
+	bool turnTaking;
+	Signs lastFacing;
 	float scriptedWalkOffsetX;
 	float scriptedStopDistance;
 	float? scriptedWalkTargetX;
@@ -112,6 +118,7 @@ public class RigPuppet : RigActor
 		base.Added();
 		patrolOriginX = Position.X;
 		patrolling = IdlePatrol && !Game.IsEditorPreview;
+		lastFacing = Facing;
 	}
 
 	protected override string InitialClip => IdleAnimationName;
@@ -204,8 +211,11 @@ public class RigPuppet : RigActor
 		if (wasAbilityActive && !abilityActive)
 			ResetAbilityControl();
 		walking = (!Performance || scripted || patrolling) && stepTraversal != StepTraversal.None;
+		turnTaking &= !abilityActive && !scripted && !hitReacting && !recovering;
 		if (abilityActive)
 			walking = false;
+		else if (turnTaking)
+			turnTaking = !visual.AnimationFinished || !visual.FacingMatches;
 		else if (patrolling)
 			UpdatePatrol(grounded, player);
 		else if (scripted)
@@ -226,6 +236,10 @@ public class RigPuppet : RigActor
 				}
 			}
 		}
+		if (Facing != lastFacing && !abilityActive && !scripted && !hitReacting && !recovering && grounded &&
+			stepTraversal == StepTraversal.None && TurnTake.Length > 0 && RigTakes.TryGet(TurnTake, out var turnTake))
+			BeginTurnTake(turnTake);
+		lastFacing = Facing;
 		if (stepTraversal == StepTraversal.None && grounded)
 			Velocity.X = Calc.Approach(Velocity.X,
 				walking ? (int)Facing * WalkSpeed * (scripted ? 1 : WalkSpeedMultiplier) : 0,
@@ -250,13 +264,13 @@ public class RigPuppet : RigActor
 				recovering = false;
 				visual.Play(IdleName(), seededPhase: Rig.SeedAnimationPhase);
 			}
-			else if (!hitReacting && !recovering)
+			else if (!hitReacting && !recovering && !turnTaking)
 				visual.Play(walking ? WalkName() : IdleName(), seededPhase: Rig.SeedAnimationPhase);
 		}
 
 		SyncVisual();
 		var directive = Directive;
-		var directed = abilityActive || scripted;
+		var directed = abilityActive || scripted || turnTaking;
 		visual.Update(grounded,
 			directed ? directive.FootIK : !Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
 			loop: directed ? directive.Loop : !hitReacting && !recovering,
@@ -460,6 +474,19 @@ public class RigPuppet : RigActor
 			if (!walking)
 				TryStartStepDown((int)Facing);
 		}
+	}
+
+	// Stops dead and plays the turn; the visual's yaw sweep lasts as long as the take, so FacingMatches (which walking
+	// waits on) holds off until the feet are done.
+	void BeginTurnTake(RigTake take)
+	{
+		turnTaking = true;
+		walking = false;
+		Velocity.X = 0;
+		turn.Play(take);
+		visual.Play(take);
+		var clip = visual.GetClip(take.Clip);
+		visual.StretchTurn((Math.Min(take.End, clip.Duration) - take.Start) / MathF.Max(0.01f, take.Speed));
 	}
 
 	void UpdatePatrol(bool grounded, Player? player)

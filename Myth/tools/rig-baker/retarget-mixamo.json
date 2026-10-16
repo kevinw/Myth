@@ -17,7 +17,8 @@
       "InPlace": "Lock"
     },
     "Walking_Turn_180": {
-      "InPlace": "Linear"
+      "InPlace": "Lock",
+      "StripYaw": true
     },
     "Running_Turn_180": {
       "InPlace": "Lock",
