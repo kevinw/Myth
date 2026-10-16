@@ -9,6 +9,26 @@ public class RigPuppet : RigActor
 {
 	enum StepTraversal { None, Up, Down }
 
+	// How whoever's in control (an ability, a script, or nobody) drives the visual. Scripts only steer the playback.
+	struct RigDirective
+	{
+		public bool Loop, FootIK, SeekGround;
+		public float PlaybackSpeed, SpeedMultiplier, PoseModifierWeight, PoseJostle, LookPoseWeight, YawWeight;
+		public Vector2 VisualOffset;
+		public Vector2? LookTarget;
+		public float? Yaw;
+
+		public static RigDirective Free(float playbackSpeed)
+			=> new() { Loop = true, FootIK = true, PlaybackSpeed = playbackSpeed, SpeedMultiplier = 1, PoseModifierWeight = 1 };
+
+		public void Play(float playbackSpeed, bool loop = true, bool footIK = true)
+			=> (Loop, FootIK, SeekGround, PlaybackSpeed) = (loop, footIK, false, playbackSpeed);
+
+		public void Play(RigTake take) => Play(take.Speed, take.Loop, take.FootIK);
+	}
+
+	RigDirective Directive => abilityActive ? ability : scripted ? script : RigDirective.Free(PlaybackSpeed);
+
 	internal virtual void OnWasHurt() {
 		Game.Shake(0.15f);
 		Game.HitStun(0.11f);
@@ -54,23 +74,10 @@ public class RigPuppet : RigActor
 	float patrolOriginX;
 	float patrolSightTimer;
 	bool abilityActive;
-	bool abilityLoop = true;
-	bool abilityFootIK = true;
-	bool abilityFootIKGrounded;
-	float abilityPlaybackSpeed = 1;
-	float abilityPlaybackSpeedMultiplier = 1;
-	float abilityPoseModifierWeight = 1;
-	float abilityPoseJostle;
-	Vector2 abilityVisualOffset;
-	Vector2? abilityLookTarget;
-	float abilityLookPoseWeight;
-	float? abilityYaw;
-	float abilityYawWeight;
+	RigDirective ability = RigDirective.Free(1);
 	bool scripted;
 	bool scriptedArrived;
-	bool scriptedLoop = true;
-	bool scriptedFootIK = true;
-	float scriptedPlaybackSpeed = 1;
+	RigDirective script = RigDirective.Free(1);
 	float scriptedWalkOffsetX;
 	float scriptedStopDistance;
 	float? scriptedWalkTargetX;
@@ -121,18 +128,18 @@ public class RigPuppet : RigActor
 		var stride = visual.WalkGroundSpeed(WalkAnimationName) * Rig.PixelsPerMeter;
 		var gaitScale = SyncGaitToSpeed && (!Performance || scripted) && walking && stepTraversal == StepTraversal.None
 			? MathF.Abs(Velocity.X) / (stride > 0 ? stride : WalkSpeed) : 1;
-		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed * abilityPlaybackSpeedMultiplier :
-			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale * AnimationSpeedMultiplier;
+		var directive = Directive;
+		visual.PlaybackSpeed = directive.PlaybackSpeed * directive.SpeedMultiplier * gaitScale * AnimationSpeedMultiplier;
 		visual.HeadTint = RigHeadTint;
 		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
-		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
-		visual.LookTarget = abilityActive ? abilityLookTarget : !patrolling ? Game.GetFirst<Player>()?.Position : null;
-		visual.LookPoseWeight = abilityActive ? abilityLookPoseWeight : 0;
-		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
-		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
-		visual.YawOverride = abilityActive ? abilityYaw : null;
-		visual.YawOverrideWeight = abilityActive ? abilityYawWeight : 0;
+		visual.Offset = stepVisualOffset + directive.VisualOffset;
+		visual.LookTarget = abilityActive ? directive.LookTarget : !patrolling ? Game.GetFirst<Player>()?.Position : null;
+		visual.LookPoseWeight = directive.LookPoseWeight;
+		visual.PoseModifierWeight = directive.PoseModifierWeight;
+		visual.PoseJostlePixels = directive.PoseJostle;
+		visual.YawOverride = directive.Yaw;
+		visual.YawOverrideWeight = directive.YawWeight;
 		SyncBackLegRenderer();
 		SyncRuff();
 	}
@@ -248,11 +255,12 @@ public class RigPuppet : RigActor
 		}
 
 		SyncVisual();
+		var directive = Directive;
+		var directed = abilityActive || scripted;
 		visual.Update(grounded,
-			abilityActive ? abilityFootIK : scripted ? scriptedFootIK :
-				!Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
-			loop: abilityActive ? abilityLoop : scripted ? scriptedLoop : !hitReacting && !recovering,
-			seekGround: abilityActive && abilityFootIKGrounded);
+			directed ? directive.FootIK : !Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
+			loop: directed ? directive.Loop : !hitReacting && !recovering,
+			seekGround: directive.SeekGround);
 	}
 
 	// The plain puppet's abilities: the startle on spotting you, then arm swings. Subclasses with their own
@@ -366,37 +374,29 @@ public class RigPuppet : RigActor
 
 	protected void PlayAbilityIdle(float blendDuration = -1)
 	{
-		abilityLoop = abilityFootIK = true;
-		abilityFootIKGrounded = false;
-		abilityPlaybackSpeed = PlaybackSpeed;
+		ability.Play(PlaybackSpeed);
 		visual.Play(IdleName(), blendDuration: blendDuration);
 	}
 
 	protected void PlayAbilityTake(string name, float blendDuration = 0.2f)
 	{
 		var take = RigTakes.Get(name);
-		abilityLoop = take.Loop;
-		abilityFootIK = take.FootIK;
-		abilityFootIKGrounded = false;
-		abilityPlaybackSpeed = take.Speed;
+		ability.Play(take);
 		visual.Play(take, blendDuration);
 		if (!take.FootIK)
 			visual.ResetFeet();
 	}
 
-	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
-	protected void SetAbilityLookPoseWeight(float weight) => abilityLookPoseWeight = Math.Clamp(weight, 0, 1);
-	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
-	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
-	protected void SetAbilityVisualOffset(Vector2 offset) => abilityVisualOffset = offset;
+	protected void SetAbilityLookTarget(Vector2? target) => ability.LookTarget = target;
+	protected void SetAbilityLookPoseWeight(float weight) => ability.LookPoseWeight = Math.Clamp(weight, 0, 1);
+	protected void SetAbilityPoseModifierWeight(float weight) => ability.PoseModifierWeight = Math.Clamp(weight, 0, 1);
+	protected void SetAbilityPoseJostle(float pixels) => ability.PoseJostle = MathF.Max(0, pixels);
+	protected void SetAbilityVisualOffset(Vector2 offset) => ability.VisualOffset = offset;
 	protected void SetAbilityFootIK(bool enabled, bool seekGround = false)
-	{
-		abilityFootIK = enabled;
-		abilityFootIKGrounded = enabled && seekGround;
-	}
+		=> (ability.FootIK, ability.SeekGround) = (enabled, enabled && seekGround);
 	protected void FreezeAbilityPose(float duration) => visual.Freeze(duration);
 	protected void SetAbilityPlaybackSpeedMultiplier(float multiplier)
-		=> abilityPlaybackSpeedMultiplier = MathF.Max(0, multiplier);
+		=> ability.SpeedMultiplier = MathF.Max(0, multiplier);
 	protected void LockAbilityAnimationYaw() => visual.LockAnimationYaw();
 	protected void UnlockAbilityAnimationYaw() => visual.UnlockAnimationYaw();
 	protected void RecoilAbilityPose(Vector2 screenVelocity, float spread) => visual.Recoil(screenVelocity, spread);
@@ -405,10 +405,7 @@ public class RigPuppet : RigActor
 	protected void SetAbilityHandWidthScale(float scale, bool leftHandOnly = false)
 		=> visual.SetHandWidthScale(scale, leftHandOnly);
 	protected void SetAbilityYaw(float? yaw, float weight = 1)
-	{
-		abilityYaw = yaw;
-		abilityYawWeight = Math.Clamp(weight, 0, 1);
-	}
+		=> (ability.Yaw, ability.YawWeight) = (yaw, Math.Clamp(weight, 0, 1));
 	protected float CameraFacingYaw => MathF.PI * 0.5f - Rig.ProjectionYaw * MathF.PI / 180f;
 	protected void SetRuffSpin(float radiansPerSecond)
 	{
@@ -427,17 +424,7 @@ public class RigPuppet : RigActor
 
 	void ResetAbilityControl()
 	{
-		abilityLoop = abilityFootIK = true;
-		abilityFootIKGrounded = false;
-		abilityPlaybackSpeed = PlaybackSpeed;
-		abilityPlaybackSpeedMultiplier = 1;
-		abilityPoseModifierWeight = 1;
-		abilityPoseJostle = 0;
-		abilityVisualOffset = Vector2.Zero;
-		abilityLookTarget = null;
-		abilityLookPoseWeight = 0;
-		abilityYaw = null;
-		abilityYawWeight = 0;
+		ability = RigDirective.Free(PlaybackSpeed);
 		visual.PoseModifierWeight = 1;
 		visual.PoseJostlePixels = 0;
 		visual.LookPoseWeight = 0;
@@ -549,7 +536,7 @@ public class RigPuppet : RigActor
 			ResetAbilityControl();
 		}
 		scripted = true;
-		scriptedPlaybackSpeed = PlaybackSpeed;
+		script = RigDirective.Free(PlaybackSpeed);
 		hitReacting = recovering = false;
 	}
 
@@ -572,9 +559,7 @@ public class RigPuppet : RigActor
 		scriptedWalkTargetActor = null;
 		scriptedWalkTargetX = null;
 		scriptedArrived = false;
-		scriptedLoop = true;
-		scriptedFootIK = true;
-		scriptedPlaybackSpeed = PlaybackSpeed;
+		script = RigDirective.Free(PlaybackSpeed);
 		walking = false;
 		Velocity.X = 0;
 		visual?.Play(IdleName());
@@ -601,9 +586,7 @@ public class RigPuppet : RigActor
 	{
 		scriptedStopDistance = Math.Max(0, stoppingDistance);
 		scriptedArrived = false;
-		scriptedLoop = true;
-		scriptedFootIK = true;
-		scriptedPlaybackSpeed = PlaybackSpeed;
+		script.Play(PlaybackSpeed);
 		visual.Play(WalkName(), seededPhase: Rig.SeedAnimationPhase);
 	}
 
@@ -614,9 +597,7 @@ public class RigPuppet : RigActor
 		scriptedWalkTargetActor = null;
 		scriptedWalkTargetX = null;
 		scriptedArrived = false;
-		scriptedLoop = take.Loop;
-		scriptedFootIK = take.FootIK;
-		scriptedPlaybackSpeed = take.Speed;
+		script.Play(take);
 		walking = false;
 		Velocity.X = 0;
 		visual.Play(take, blendDuration);
