@@ -146,7 +146,9 @@
       "ChestSize": 0.0667,
       "NeckSize": 0.05,
       "ShinSize": 0.05,
-      "FootSize": 0.0333
+      "FootSize": 0.0333,
+      "CostumeId": "candy-bands",
+      "HeadLooksAtPlayer": true
     },
     {
       "Id": "f3897a5d2032a193",

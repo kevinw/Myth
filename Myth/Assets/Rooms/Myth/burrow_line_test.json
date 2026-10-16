@@ -146,6 +146,12 @@
       "FlowOrigin": [-1517.184, -661.184],
       "DetailOrigin": [48, 48],
       "PaintedMask": "f4036e78a49157f7.png"
+    },
+    {
+      "Id": "8ba24caa02b1f403",
+      "Type": "LinkedSound",
+      "Position": [250, 115],
+      "EventName": "background_ambience/server_local"
     }
   ]
 }

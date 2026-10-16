@@ -394,6 +394,54 @@ public partial class Manager
 		return null;
 	}
 
+#if EDITOR
+	delegate ref bool WindowOpenFlag(Manager manager);
+
+	static readonly (string Name, WindowOpenFlag Open)[] ConsoleWindows =
+	[
+		("Tweaks", static _ => ref TweakRegistry.Open),
+		("Rig Animation Viewer", static m => ref m.rigAnimationViewerOpen),
+		("Surfaces", static m => ref m.surfaceEditorOpen),
+		("Tile Kits", static m => ref m.tileKitEditorOpen),
+		("Heads", static m => ref m.headEditorOpen),
+		("NCT Tiles", static m => ref m.nctEditorOpen),
+		("Music Regions", static m => ref m.musicRegionsOpen),
+		("Visuals", static m => ref m.visualsOpen),
+		("Tiles", static m => ref m.tilesPanelOpen),
+		("Actors", static m => ref m.actorsPanelOpen),
+		("Actor List", static m => ref m.actorListPanelOpen),
+		("Room", static m => ref m.roomPanelOpen),
+		("Right Tool Dock", static m => ref m.editorDockOpen),
+		("Preferences", static m => ref m.preferencesOpen),
+		("MIDI Controls", static m => ref m.midiWindowOpen),
+		("Debug Help", static m => ref m.debugHelpOpen),
+		("Dear ImGui Demo", static m => ref m.imguiDemoOpen),
+#if !BROWSER
+		("SFX", static m => ref m.proceduralSoundEditor.Open),
+		(ScriptingWindow, static m => ref m.scriptingOpen),
+#endif
+	];
+
+	[ConsoleCommand("open", Completer = nameof(CompleteWindow))]
+	void OpenWindow(string name)
+	{
+		foreach (var window in ConsoleWindows)
+			if (string.Equals(window.Name, name, StringComparison.OrdinalIgnoreCase))
+			{
+				window.Open(this) = true;
+				return;
+			}
+		throw new InvalidOperationException(string.IsNullOrWhiteSpace(name) ? "Usage: open <window>" : $"Window not found: {name}");
+	}
+
+	void CompleteWindow(string filter, List<ConsoleCompletion> result)
+	{
+		foreach (var window in ConsoleWindows)
+			if (window.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+				result.Add(new(window.Name, window.Name));
+	}
+#endif
+
 	[ConsoleCommand("invert")]
 	void InvertRoom(string _)
 	{

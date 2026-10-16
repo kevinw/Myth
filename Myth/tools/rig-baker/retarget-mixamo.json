@@ -36,6 +36,18 @@
     },
     "Standard_Run": {
       "InPlace": "Linear"
+    },
+    "Front_Flip": {
+      "InPlace": "Lock"
+    },
+    "Running_Forward_Flip": {
+      "InPlace": "Lock"
+    },
+    "Backflip": {
+      "InPlace": "Lock"
+    },
+    "Crouched_To_Sprinting": {
+      "InPlace": "Lock"
     }
   }
 }

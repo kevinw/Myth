@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json.Nodes;
+using Foster.Framework;
 using ImGuiNET;
 using Kit;
 
@@ -157,6 +158,7 @@ public partial class Manager
 		rigAnimationPreviewActor = null;
 		rigPreviewPawn?.PreviewRigTake(null);
 		rigPreviewPawn = null;
+		DisposeRigTakeThumbs();
 	}
 
 	void DrawRigAnimationControls(RigActor rig)
@@ -296,14 +298,135 @@ public partial class Manager
 		}
 	}
 
+	// The saved takes as a grid of animated thumbnails, drawn by the selected rig's own settings on a bone body.
 	void DrawSavedTakeCombo(RigActor? rig)
 	{
-		if (!ImGui.BeginCombo("Saved take", rigTakeName))
+		if (ImGui.Button($"{(rigTakeName.Length > 0 ? rigTakeName : "(none)")}##SavedTake", new Vector2(ImGui.CalcItemWidth(), 0)))
+			ImGui.OpenPopup("##RigTakeGrid");
+		ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+		ImGui.TextUnformatted("Saved take");
+		if (!ImGui.BeginPopup("##RigTakeGrid"))
+		{
+			DisposeRigTakeThumbs();
 			return;
+		}
+		if ((rig?.Rig ?? SelectedRigPawn()?.RigVisual?.Settings) is not { } settings)
+		{
+			ImGui.EndPopup();
+			return;
+		}
+		if (settings != rigThumbSource)
+		{
+			DisposeRigTakeThumbs();
+			rigThumbSource = settings;
+		}
+		ImGui.SetNextItemWidth(RigTakeThumbColumns * (RigTakeThumbSize + ImGui.GetStyle().ItemSpacing.X));
+		ImGui.InputTextWithHint("##RigTakeSearch", "Search takes", ref rigTakeThumbSearch, 128);
+
+		var size = new Vector2(RigTakeThumbSize);
+		var draw = ImGui.GetWindowDrawList();
+		var slot = 0;
+		var column = 0;
+		var hovered = (string?)null;
+		rigThumbShown.Clear();
 		foreach (var take in RigTakes.All)
-			if (ImGui.Selectable($"{take.Name}  ({take.Clip})"))
+		{
+			var at = slot++;
+			if (rigTakeThumbSearch.Length > 0 && !take.Name.Contains(rigTakeThumbSearch, StringComparison.OrdinalIgnoreCase) &&
+				!take.Clip.Contains(rigTakeThumbSearch, StringComparison.OrdinalIgnoreCase))
+				continue;
+			SwatchGridWrap(ref column, RigTakeThumbColumns);
+			var tile = new Rect(at % RigTakeThumbColumns * RigTakeThumbSize, at / RigTakeThumbColumns * RigTakeThumbSize, size.X, size.Y);
+			if (ImGuiSubtextureButton($"##take{take.Name}", new Subtexture(rigThumbAtlas?.Attachments[0], tile), $"{take.Name}  ({take.Clip})",
+				take.Name == rigTakeName, size, 0f))
+			{
 				LoadRigTakeDraft(rig, take);
-		ImGui.EndCombo();
+				ImGui.CloseCurrentPopup();
+			}
+			if (ImGui.IsItemHovered())
+				hovered = take.Name;
+			if (ImGui.IsItemVisible())
+				rigThumbShown.Add((take, tile));
+			draw.AddText(ImGui.GetItemRectMin() + new Vector2(3, 1),
+				ImGui.GetColorU32(ImGuiCol.Text), take.Name);
+		}
+		ImGui.EndPopup();
+		UpdateRigTakeThumbs(settings, slot, hovered);
+	}
+
+	const int RigTakeThumbSize = 96;
+	const int RigTakeThumbColumns = 6;
+	// Thumbnails pose at this rate, each on its own phase, so only a few pose each frame; the hovered one every frame.
+	static float RigTakeThumbFPS => 12;
+	static int RigTakeThumbsCreatedPerFrame => 3;
+	string rigTakeThumbSearch = "";
+	readonly Dictionary<string, (HumanoidRigVisual Visual, RigTake Take)> rigThumbs = [];
+	readonly List<(RigTake Take, Rect Tile)> rigThumbShown = [];
+	HumanoidRigSettings? rigThumbSource;
+	Game? rigThumbGame;
+	Actor? rigThumbOwner;
+	Target? rigThumbAtlas;
+	Batcher? rigThumbBatcher;
+
+	void UpdateRigTakeThumbs(HumanoidRigSettings source, int count, string? hovered)
+	{
+		var rows = (count + RigTakeThumbColumns - 1) / RigTakeThumbColumns;
+		if (rigThumbAtlas == null || rigThumbAtlas.Height != rows * RigTakeThumbSize)
+		{
+			rigThumbAtlas?.Dispose();
+			rigThumbAtlas = new Target(GraphicsDevice, RigTakeThumbColumns * RigTakeThumbSize, Math.Max(1, rows) * RigTakeThumbSize,
+				name: "RigTakeThumbs");
+		}
+		rigThumbGame ??= new Game(this, new Room(Point2.Zero, new Point2(Game.Columns, Game.Rows)),
+			audioEventsEnabled: false, spawnBud: false, enableParticles: false);
+		rigThumbOwner ??= rigThumbGame.Create<Actor>(Point2.Zero);
+		rigThumbBatcher ??= new Batcher(GraphicsDevice, "RigTakeThumbs");
+
+		// New thumbnails trickle in a few a frame, which also staggers their posing phases.
+		var created = 0;
+		foreach (var (take, tile) in rigThumbShown)
+		{
+			if (!rigThumbs.TryGetValue(take.Name, out var thumb))
+			{
+				if (created++ >= RigTakeThumbsCreatedPerFrame)
+					continue;
+				var settings = source.Copy();
+				settings.BodyStyle = RigBodyStyle.Bones;
+				settings.KeyEvents = false;
+				settings.PixelsPerMeter = RigTakeThumbSize * 0.4f;
+				thumb.Visual = new(rigThumbOwner, settings);
+				thumb.Visual.Initialize(take.Clip);
+			}
+			if (thumb.Take != take)
+			{
+				thumb.Visual.Play(take);
+				thumb = (thumb.Visual, take);
+				rigThumbs[take.Name] = thumb;
+			}
+			thumb.Visual.Settings.VisualFPS = take.Name == hovered ? 240 : RigTakeThumbFPS;
+			thumb.Visual.Update(grounded: true, footIK: false);
+			rigThumbBatcher.PushMatrix(Matrix3x2.CreateTranslation(tile.Center + new Vector2(0, RigTakeThumbSize * 0.42f)));
+			thumb.Visual.Draw(rigThumbBatcher, Color.White, silhouette: false);
+			rigThumbBatcher.PopMatrix();
+		}
+		rigThumbAtlas.Clear(Color.Transparent);
+		rigThumbBatcher.Render(rigThumbAtlas);
+		rigThumbBatcher.Clear();
+	}
+
+	void DisposeRigTakeThumbs()
+	{
+		foreach (var (visual, _) in rigThumbs.Values)
+			visual.Dispose();
+		rigThumbs.Clear();
+		rigThumbSource = null;
+		rigThumbAtlas?.Dispose();
+		rigThumbAtlas = null;
+		rigThumbBatcher?.Dispose();
+		rigThumbBatcher = null;
+		rigThumbOwner = null;
+		rigThumbGame?.Dispose();
+		rigThumbGame = null;
 	}
 
 	// rig == null tunes the take live for whoever plays it (a pawn in gameplay) instead of previewing on a puppet.

@@ -66,6 +66,9 @@ public sealed class HumanoidRigSettings
 
 	[InspectorGroup("Palette")] public Color OutlineColor = new(0x171d27);
 	[NoSerialize] public Color AccentColor = new(0xd92240);
+
+	// Shares the body settings (Bones, Sculpt) with this one.
+	public HumanoidRigSettings Copy() => (HumanoidRigSettings)MemberwiseClone();
 }
 
 public sealed class BoneBodySettings

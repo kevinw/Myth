@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.04.00">
+	<object class="AudioFile" id="{6867f1f1-279d-47cc-8fd5-640609db1287}">
+		<property name="assetPath">
+			<value>841383__bashrambali__atmo-bram-meindersma-airco-server-computer-roomtone.wav</value>
+		</property>
+		<property name="isStreaming">
+			<value>true</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>64</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{0c477f3c-ca46-455a-aecc-567ce41f5eab}</destination>
+		</relationship>
+	</object>
+</objects>

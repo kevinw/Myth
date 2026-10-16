@@ -257,6 +257,12 @@
       "Width": 3.789,
       "Points": [[32, -88],[40, -48],[96, -16],[112, 80]
       ]
+    },
+    {
+      "Id": "7ecc47d4bb1f0be0",
+      "Type": "LinkedSound",
+      "Position": [464, 149],
+      "EventName": "background_ambience/server_local"
     }
   ]
 }

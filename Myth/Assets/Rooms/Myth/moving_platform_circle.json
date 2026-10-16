@@ -374,6 +374,12 @@
       "Type": "Jumpthru",
       "Position": [94, 216],
       "Size": [26, 8]
+    },
+    {
+      "Id": "c6a12b2c9916ab00",
+      "Type": "LinkedSound",
+      "Position": [73, 350],
+      "EventName": "background_ambience/server_local"
     }
   ]
 }

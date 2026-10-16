@@ -1,7 +1,6 @@
 {
   "Name": "Humanoid",
   "VisualFPS": 24,
-  "EyeSize": 0.5,
   "NeckSize": 0.25,
   "BicepSize": 0.083,
   "ThighSize": 0.125,
@@ -25,5 +24,6 @@
   "LandingHold": 0.06,
   "PixelSnap": true,
   "KeyEvents": true,
-  "HeadSize": 0.074
+  "HeadSize": 0.074,
+  "EyeSize": 0
 }
