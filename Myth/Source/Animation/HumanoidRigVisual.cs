@@ -169,6 +169,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	public float HeadRoll { get; private set; } // radians, clockwise on screen
 	public Vector2 HeadPosition => projectedPose[head];
 	public float? YawOverride;
+	// Sculpted bodies only: per region, 0..1, a limb charging an attack -- its pieces swell, blend softer and run toward
+	// SculptHeatColor.
+	public enum SculptRegion { LeftArm, RightArm, LeftLeg, RightLeg, Torso }
+	public readonly float[] SculptHeat = new float[5];
+	public Color SculptHeatColor = new(0xff7a2a);
 	// Rotates the whole figure about its torso so its arms (neck to hands) point this way on screen, by ArmAimWeight.
 	public Vector2 ArmAim = Vector2.UnitX;
 	public float ArmAimWeight;

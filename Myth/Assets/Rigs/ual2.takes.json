@@ -396,5 +396,38 @@
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1
+  },
+  "ColossusThrow": {
+    "Clip": "OverhandThrow",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 0.6,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "ColossusCollapse": {
+    "Clip": "Hit_Knockback",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 0.7,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "ColossusRise": {
+    "Clip": "LayToIdle",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 0.6,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
   }
 }

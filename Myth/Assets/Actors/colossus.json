@@ -1,7 +1,7 @@
 {
   "Name": "Colossus",
-  "Type": "RigPuppet",
-  "Health": 40,
+  "Type": "Colossus",
+  "Health": 15,
   "ArticulatedCombatBounds": true,
   "KnockedBackByHits": false,
   "IdleAnimationName": "Idle_Loop",

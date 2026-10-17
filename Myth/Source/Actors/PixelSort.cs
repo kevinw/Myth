@@ -11,7 +11,7 @@ namespace Myth;
 //
 // Nothing sorts unless something stirs it: every frame each actor may draw strokes into the
 // field (Actor.StirPixelSort), and a stroke says how that patch sorts. Regions stir a rectangle
-// that breathes; a ghosted FlipBlock stirs its own tiles; a dash stirs a wake. The shared
+// that breathes; a ghosted FlipBlock stirs its own tiles; a burrow churns its path. The shared
 // meaning: sorted is not-quite-real.
 
 // Background sorts the layer behind the playfield before anything is lit or drawn over it; Frame

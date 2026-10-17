@@ -144,6 +144,8 @@ partial class HumanoidRigVisual
 			var muscle = 0.02f * ppm; // a tight blend, so each muscle keeps a crease where it meets the limb
 			var list = bodyPrimitives;
 			list.Clear();
+			const float HeatSwell = 0.22f, HeatBlend = 0.04f, HeatColor = 0.8f;
+			var heat = visual.SculptHeat[(int)SculptRegion.Torso];
 
 			var side = Vector3.Normalize(V(visual.rightClavicle) - V(visual.leftClavicle));
 			var up = Vector3.Normalize(V(visual.neck) - V(visual.pelvis));
@@ -188,14 +190,20 @@ partial class HumanoidRigVisual
 					}
 				}
 			Add(V(visual.neck), V(visual.head), 0.075f, 0.07f, blend, torso);
+			heat = 0;
 			var (arms, forearms, hands) = (visual.Settings.Sculpt.ArmColor, visual.Settings.Sculpt.ForearmColor, visual.Settings.Sculpt.HandColor);
 			var (legs, shins, feet) = (visual.Settings.Sculpt.LegColor, visual.Settings.Sculpt.ShinColor, visual.Settings.Sculpt.FootColor);
+			heat = Heat(SculptRegion.LeftArm);
 			Limb(visual.leftUpperArm, visual.leftLowerArm, visual.leftHand, visual.leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
+			heat = Heat(SculptRegion.RightArm);
 			Limb(visual.rightUpperArm, visual.rightLowerArm, visual.rightHand, visual.rightPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
+			heat = Heat(SculptRegion.LeftLeg);
 			Limb(visual.leftLeg.Hip, visual.leftLeg.Knee, visual.leftLeg.Ankle, visual.leftLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
-			Limb(visual.rightLeg.Hip, visual.rightLeg.Knee, visual.rightLeg.Ankle, visual.rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
 			Boot(visual.leftLeg);
+			heat = Heat(SculptRegion.RightLeg);
+			Limb(visual.rightLeg.Hip, visual.rightLeg.Knee, visual.rightLeg.Ankle, visual.rightLeg.Toe, 0.13f * hips, 0.09f * hips, 0.07f, 0.075f, 0.055f, legs, shins, null);
 			Boot(visual.rightLeg);
+			heat = 0;
 			// The codpiece: a rounded mass below the hip joints, pushed forward and smoothed into the hips and thighs.
 			if (visual.Settings.Sculpt.Codpiece > 0)
 			{
@@ -206,9 +214,11 @@ partial class HumanoidRigVisual
 			for (var s = -1; s <= 1; s += 2)
 			{
 				var (upperArm, lowerArm) = s < 0 ? (visual.leftUpperArm, visual.leftLowerArm) : (visual.rightUpperArm, visual.rightLowerArm);
+				heat = Heat(s < 0 ? SculptRegion.LeftArm : SculptRegion.RightArm);
 				Muscle(V(upperArm), V(lowerArm), 0.3f, 0.7f, forward, 0.03f, 0.06f, 0.05f, arms); // biceps
 				Muscle(V(upperArm), V(lowerArm), 0.15f, 0.6f, -forward, 0.03f, 0.06f, 0.045f, arms); // triceps
 				var leg = s < 0 ? visual.leftLeg : visual.rightLeg;
+				heat = Heat(s < 0 ? SculptRegion.LeftLeg : SculptRegion.RightLeg);
 				var (hip, knee, ankle) = (V(leg.Hip), V(leg.Knee), V(leg.Ankle));
 				var front = Vector3.Normalize(V(leg.Toe) - ankle);
 				Muscle(hip, knee, 0.25f, 0.8f, front, 0.04f, 0.085f * hips, 0.065f, legs); // quads
@@ -229,10 +239,12 @@ partial class HumanoidRigVisual
 				foreach (var claws in (ReadOnlySpan<int[]>)[visual.leftClaws, visual.rightClaws])
 					for (var i = 0; i < claws.Length; i += 3)
 					{
+						heat = Heat(claws == visual.leftClaws ? SculptRegion.LeftArm : SculptRegion.RightArm);
 						var (knuckle, middle, tip) = (V(claws[i]), V(claws[i + 1]), V(claws[i + 2]));
 						Add(knuckle, middle, 0.022f, 0.016f, machined, visual.Settings.Sculpt.ClawColor, Metal);
 						Add(middle, middle + (tip - middle) * (1 + visual.Settings.Sculpt.Claws * 1.5f), 0.016f, 0.003f, machined, visual.Settings.Sculpt.ClawColor, Metal);
 					}
+			heat = Heat(SculptRegion.Torso);
 			for (var s = -1; s <= 1; s += 2)
 			{
 				var clavicle = s < 0 ? visual.leftClavicle : visual.rightClavicle;
@@ -297,8 +309,15 @@ partial class HumanoidRigVisual
 				Add(Vector3.Lerp(a, b, from) + push, Vector3.Lerp(a, b, to) + push, radiusA, radiusB, muscle, color);
 			}
 
+			// Heat swells a piece, softens its blend, and runs its color toward the heat color.
 			void Add(Vector3 a, Vector3 b, float radiusA, float radiusB, float k, Color color, int material = Flesh)
-				=> list.Add(new(a, radiusA * bulk, b, radiusB * bulk, k, color, material));
+			{
+				var swell = bulk * (1 + heat * HeatSwell);
+				list.Add(new(a, radiusA * swell, b, radiusB * swell, k + heat * HeatBlend * ppm,
+					heat > 0 ? Color.Lerp(color, visual.SculptHeatColor, heat * HeatColor) : color, material));
+			}
+
+			float Heat(SculptRegion region) => Math.Clamp(visual.SculptHeat[(int)region], 0, 1);
 
 			Vector3 V(int joint) => new(visual.projectedPose[joint], visual.jointDepth[joint] * ppm);
 		}
