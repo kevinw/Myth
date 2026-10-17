@@ -374,5 +374,27 @@
     "ArmWidthScale": 1.25,
     "HandWidthScale": 1,
     "NearHand": "Left"
+  },
+  "PlayerTurnJump": {
+    "Clip": "Backflip",
+    "Start": 0.6,
+    "End": 1.37,
+    "Loop": false,
+    "Speed": 1.6,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "PlayerRunStop": {
+    "Clip": "Run_to_Stop",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": false,
+    "Speed": 1.62,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
   }
 }

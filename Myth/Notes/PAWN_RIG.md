@@ -14,7 +14,7 @@
 `shown = rigPreview ?? rigLead ?? clip`
 
 - `clip` is the sprite request after substitutions: the dive (`PlayerAir` + jump held + `Velocity.Y >= 0` + `CanBurrow()`), and sprint (`Jog` above 1.15× `MaxGroundSpeed`).
-- `rigLead` is a one-shot *transition* take chosen in `RigLeadFor(from, to)` when the request changes (jump start, jump land, roll start, crouch↔crawl, crouch to stand). It plays to its end, then the request resumes. The skid also "holds" through run/idle once `Facing` has flipped.
+- `rigLead` is a one-shot *transition* take chosen in `RigLeadFor(from, to)` when the request changes (jump start, turn jump (a backflip when jumping out of a skid: StartTurnJump flips Facing and momentum on takeoff; its yaw twists like the skid), jump land, roll start, crouch↔crawl, crouch to stand). It plays to its end, then the request resumes. The skid also "holds" through run/idle once `Facing` has flipped.
 - `rigPreview` is forced by the Rig Animation Viewer.
 - A name is either a **take** (looked up in `RigTakes`) or a **raw clip**. Takes are only `Play`ed on change, because `Play(take)` restarts the take. Raw clips are idempotent.
 - Playback rate = `take.Speed ×` a state factor: gait clips scale with ground speed, the roll with roll speed, the climb only advances while climbing up.

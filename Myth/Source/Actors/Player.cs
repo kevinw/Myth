@@ -182,6 +182,9 @@ public abstract partial class Pawn : Actor
 	protected static float RollJumpForce => -82;
 	protected static float RollJumpTime => 0.11f;
 	protected static float RollJumpSpeed => 150;
+	static float TurnJumpMinSpeed => 1f; // × MaxGroundSpeed, the new way
+	static int TurnJumpParticles => 10;
+	static float TurnJumpParticleSpeed => 2.5f;
 	static float AirDrag => 150; // how fast launched speed above MaxAirSpeed bleeds away
 	static float AirborneRollDistance => Game.TileSize * 2f;
 	protected static float DashSpeed => 250;
@@ -983,6 +986,9 @@ public abstract partial class Pawn : Actor
 						Position.Y = coyoteJumpY;
 					coyoteJumpTimer = 0;
 					canAirHop = true;
+					// Jumping out of a skid turns around on takeoff: facing, momentum and a backflip.
+					if (moveX != 0 && Velocity.X * moveX < 0)
+						StartTurnJump(moveX);
 					if (wasGroundedJump)
 						EmitJumpParticles(Position);
 				}
@@ -1047,6 +1053,20 @@ public abstract partial class Pawn : Actor
 			return;
 
 		TryStartPawnAction(moveX);
+	}
+
+	void StartTurnJump(int direction)
+	{
+		const float sprayAngle = 0.35f; // radians off the ground, toward the old heading
+		Game.Particles?.Emit(jumpParticlesEffect,
+			worldPosition: Position,
+			count: TurnJumpParticles,
+			directionRadians: Velocity.X > 0 ? sprayAngle : MathF.PI - sprayAngle,
+			speedScale: TurnJumpParticleSpeed,
+			spreadRadians: 30 * Calc.DegToRad);
+		Facing = direction;
+		Velocity.X = direction * MathF.Max(MathF.Abs(Velocity.X), MaxGroundSpeed * TurnJumpMinSpeed);
+		rigTurnJumpTimer = 0.1f;
 	}
 
 	protected void EmitJumpParticles(Vector2 position, int count = 8) =>

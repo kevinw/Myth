@@ -29,6 +29,7 @@ public abstract partial class Pawn
 	float rigSkidFromYaw;
 	float rigSkidToYaw;
 	float rigSkidYawWeight;
+	float rigTurnJumpTimer; // set by StartTurnJump, until the rig sees the jump
 	// A dive that ends in a burrow keeps its momentum into the surface, cut off where it meets it (PushRigSinkClip).
 	bool rigSinking;
 	Vector2 rigSinkVelocity;
@@ -57,6 +58,7 @@ public abstract partial class Pawn
 	static float RigRollMinRate => 0.5f;
 	static float RigLandingScale => 0.5f;
 	static float RigSkidYawRelease => 0.15f;
+	static float RigRunStopMinSpeed => 0.6f; // × MaxGroundSpeed; slower stops just settle into the idle
 	static float RigRopeHandResponse => 20f;
 	static float RigRopeTilt => 0.6f; // × the rope's angle off vertical at the grip
 	static float RigRopeTiltResponse => 12f;
@@ -125,10 +127,12 @@ public abstract partial class Pawn
 		_ => null,
 	};
 
-	static string? RigLeadFor(string from, string to, float velocityY) => (from, to) switch
+	static string? RigLeadFor(string from, string to, Vector2 velocity, bool turned) => (from, to) switch
 	{
-		(not "PlayerAir", "PlayerAir") when velocityY < 0 => "PlayerJumpStart",
+		(not "PlayerAir", "PlayerAir") when velocity.Y < 0 && turned => "PlayerTurnJump",
+		(not "PlayerAir", "PlayerAir") when velocity.Y < 0 => "PlayerJumpStart",
 		("PlayerAir" or "PlayerDive", "PlayerIdle") => "PlayerJumpLand",
+		("PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop", "PlayerIdle") when MathF.Abs(velocity.X) > MaxGroundSpeed * RigRunStopMinSpeed => "PlayerRunStop",
 		("PlayerCrawl", "Crouch_Idle_Loop") => "PlayerCrawlToCrouch",
 		("Crouch_Idle_Loop", "PlayerCrawl") => "PlayerCrouchToCrawl",
 		("Crouch_Idle_Loop", "PlayerIdle") => "PlayerCrouchToStand",
@@ -192,6 +196,8 @@ public abstract partial class Pawn
 		rigDiveClip = airborne && (diving || rigDiveClip && rigDiveWeight > RigDiveClipOut);
 		var clip = rigSinking || rigDiveClip ? "PlayerDive" :
 			RigPushing() ? "PlayerPush" :
+			// Let go, the sprite coasts on "walk" until it's slow enough to idle; the rig is already stopping.
+			rigClip == "Walk_Loop" && input.MoveX == 0 ? "PlayerIdle" :
 			// Ducking out of a run slides at run speed, which the sprite plays as "crawl". The rig crouches through
 			// the slide and only goes prone once it's really crawling.
 			rigClip == "PlayerCrawl" && (input.MoveX == 0 || speed > Player.CrawlSpeed * RigCrawlSpeedSlack) ? "Crouch_Idle_Loop" :
@@ -209,13 +215,14 @@ public abstract partial class Pawn
 		clip = RigFidget(clip);
 		rigVisual.ArmAim = new((int)Facing * MathF.Cos(rigDiveAngle), MathF.Sin(rigDiveAngle));
 		rigVisual.ArmAimWeight = rigDiveWeight;
+		rigTurnJumpTimer = MathF.Max(0, rigTurnJumpTimer - Time.Delta);
 		if (clip != rigRequested)
 		{
 			// Once the sim has turned around, the skid finishes before the run resumes.
 			var skidHolds = rigPlaying == "PlayerSkid" && Facing != rigSkidFacing &&
 				clip is "PlayerIdle" or "Walk_Loop" or "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop";
 			rigLead = skidHolds ? "PlayerSkid" :
-				RigLeadFor(rigRequested, clip, Velocity.Y) is { } lead && RigTakes.TryGet(lead, out var leadTake) &&
+				RigLeadFor(rigRequested, clip, Velocity, rigTurnJumpTimer > 0) is { } lead && RigTakes.TryGet(lead, out var leadTake) &&
 				rigVisual.TryGetClip(leadTake.Clip, out _) ? lead : null; // a take whose clip isn't baked yet is skipped
 			rigRequested = clip;
 		}
@@ -421,7 +428,7 @@ public abstract partial class Pawn
 	void UpdateRigSkidYaw()
 	{
 		var visual = rigVisual!;
-		if (rigPlaying == "PlayerSkid")
+		if (rigPlaying is "PlayerSkid" or "PlayerTurnJump")
 		{
 			var progress = Math.Clamp((visual.Time - visual.RangeStart) / MathF.Max(0.0001f, visual.RangeEnd - visual.RangeStart), 0, 1);
 			visual.YawOverride = float.Lerp(rigSkidFromYaw, rigSkidToYaw, progress * progress * (3 - 2 * progress));
@@ -466,6 +473,11 @@ public abstract partial class Pawn
 			rigSkidFacing = -toward;
 			rigSkidFromYaw = rigVisual!.FacingYaw(-toward);
 			rigSkidToYaw = rigVisual.FacingYaw(toward);
+		}
+		if (name == "PlayerTurnJump")
+		{
+			rigSkidFromYaw = rigVisual!.FacingYaw(-Facing);
+			rigSkidToYaw = rigVisual.FacingYaw(Facing);
 		}
 		var blend = name == "PlayerDive" ? RigDiveBlendDuration
 			: rigPlaying == "PlayerDive" && grounded ? RigDiveLandBlendDuration : -1;
