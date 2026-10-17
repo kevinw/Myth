@@ -108,7 +108,7 @@ partial class HumanoidRigVisual
 					if (item.Kind == RigDrawKind.Costume)
 						bounds = bounds.Conflate(CostumeBounds(item));
 			}
-			return bounds;
+			return visual.GarmentBounds(bounds);
 		}
 
 		public void Dispose() => neuralSkin.Dispose();
@@ -198,6 +198,7 @@ partial class HumanoidRigVisual
 		{
 			drawItems.Clear();
 			var accessoryIndex = 0;
+			var garmentIndex = 0;
 			var headAdded = false;
 			var headDepth = visual.jointDepth[visual.head];
 			var costume = Assets.GetCostume(visual.Settings.Bones.CostumeId);
@@ -212,10 +213,12 @@ partial class HumanoidRigVisual
 				if (visual.Accessory != null && !headAdded && headDepth <= boneDepth)
 				{
 					visual.AddItemsThrough(drawItems, ref accessoryIndex, headDepth);
+					visual.AddGarmentsThrough(drawItems, ref garmentIndex, headDepth);
 					drawItems.Add(new(RigDrawKind.Head, -1, false));
 					headAdded = true;
 				}
 				visual.AddItemsThrough(drawItems, ref accessoryIndex, boneDepth);
+				visual.AddGarmentsThrough(drawItems, ref garmentIndex, boneDepth);
 				BoneWidths(bone, out var fromWidth, out var toWidth);
 				var rings = bone.Part == Part.Hand ? JointRings.None : Rings<Bone>(visual.bones, boneIndex, added);
 				added[boneIndex] = true;
@@ -227,9 +230,11 @@ partial class HumanoidRigVisual
 			if (!headAdded)
 			{
 				visual.AddItemsThrough(drawItems, ref accessoryIndex, headDepth);
+				visual.AddGarmentsThrough(drawItems, ref garmentIndex, headDepth);
 				drawItems.Add(new(RigDrawKind.Head, -1, false));
 			}
 			visual.AddItemsThrough(drawItems, ref accessoryIndex, float.PositiveInfinity);
+			visual.AddGarmentsThrough(drawItems, ref garmentIndex, float.PositiveInfinity);
 		}
 
 		RigSkin Skin(Surface? surface, Texture? texture, float amount, bool normals)
@@ -282,6 +287,9 @@ partial class HumanoidRigVisual
 					case RigDrawKind.Accessory:
 						visual.Accessory!.DrawItem(batcher, item.Index, null);
 						break;
+					case RigDrawKind.Garment:
+						visual.DrawGarment(batcher, item.Index, Multiply(visual.garmentFaces[item.Index].Color, tint));
+						break;
 				}
 			}
 			skin.Pop(batcher);
@@ -301,6 +309,8 @@ partial class HumanoidRigVisual
 						HandSpinAmount(visual.bones[item.Index]), 2, tint);
 				else if (item.Kind == RigDrawKind.Bone)
 					DrawBoneSilhouette(batcher, item, tint);
+				else if (item.Kind == RigDrawKind.Garment)
+					visual.DrawGarment(batcher, item.Index, tint, grow: 1);
 			}
 			foreach (var item in drawItems)
 			{
@@ -354,6 +364,9 @@ partial class HumanoidRigVisual
 						break;
 					case RigDrawKind.Accessory:
 						visual.Accessory!.DrawItem(batcher, item.Index, flat);
+						break;
+					case RigDrawKind.Garment:
+						visual.DrawGarment(batcher, item.Index, flat);
 						break;
 				}
 			}

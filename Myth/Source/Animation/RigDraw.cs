@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-enum RigDrawKind { Bone, Hand, Head, Body, Accessory, Costume }
+enum RigDrawKind { Bone, Hand, Head, Body, Accessory, Costume, Garment }
 [Flags] enum JointRings { None = 0, From = 1, To = 2 }
 readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 

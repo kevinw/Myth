@@ -424,8 +424,10 @@ public class Rope : Actor, IResizable
 	// Registered by the climbing pawn every frame: adds its weight to the solve and applies the
 	// left/right pump. Pump strength falls out of the sim naturally — the same force swings the
 	// free end far and the near-anchor points barely at all.
-	public void SetRider(Chain chain, float index, float pumpDirection)
+	public void SetRider(Chain chain, float index, float pumpDirection, bool passenger = false)
 	{
+		if (passenger && chain.RiderIndex >= 0)
+			return;
 		chain.RiderIndex = Math.Clamp((int)MathF.Round(index), chain.Pinned ? waiting : 0, LastIndex(chain));
 		var speed = MathF.Abs(PointVelocity(chain, index).X);
 		var speedBoost = 1 + Math.Clamp(speed / PumpSpeedForFullBoost, 0, 1) * PumpMaxSpeedBoost;

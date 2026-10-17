@@ -55,8 +55,8 @@ public abstract partial class Pawn : Actor
 	}
 
 	void OnRoomChanged(RoomChange change) {
-		// don't get stuck in Climb when leaving a room
-		if (state.Current == States.Climb) {
+		// don't get stuck in Climb when leaving a room, unless a rope handoff carries it into the next one
+		if (state.Current == States.Climb && !ropeHandoff) {
 			state.Change(States.Normal);
 		}
 	}
@@ -206,6 +206,9 @@ public abstract partial class Pawn : Actor
 	protected static float ClimbUpSpeed => 55f.T();
 	protected static float ClimbDownSpeed => 85f.T();
 	static float RopeGrabRadius => 9f.T();
+	// Climbing hands that cross the room's edge carry on along a rope authored under them next door (rest shapes, swing ignored).
+	static float RopeHandoffSlackX => Game.TileSize;
+	static float RopeHandoffSlackY => Game.TileSize; // a rider stretches the rope a few px
 	static float RopeRegrabTime => 0.3f;
 	static float RopeSwingCarry => 1.25f.T();
 	static float RopeJumpKick => 55f.T();
@@ -277,6 +280,7 @@ public abstract partial class Pawn : Actor
 	Rope? climbRope;
 	Rope.Chain? climbChain;
 	float climbIndex;   // float point index along the chain (0 = anchor)
+	bool ropeHandoff;   // crossed rooms on a rope: grab its partner on the first climb update in the new room
 	int ropePumpInputDirection;
 	int ropePumpDirection;
 	bool ropePumpStarted;
@@ -1309,6 +1313,15 @@ public abstract partial class Pawn : Actor
 
 	protected void ClimbState()
 	{
+		if (ropeHandoff)
+		{
+			ropeHandoff = false;
+			if (!TryGrabRope())
+			{
+				ExitClimb();
+				return;
+			}
+		}
 		if (climbRope == null || climbChain == null || !climbRope.Contains(climbChain))
 		{
 			ExitClimb();
@@ -1323,6 +1336,11 @@ public abstract partial class Pawn : Actor
 			if (input.MoveY > 0) AudioEventDebounced("rope/slide", 1.0f);
 			climbIndex += input.MoveY * (input.MoveY > 0 ? ClimbDownSpeed : ClimbUpSpeed) *
 				ScriptedClimbSpeed / Rope.SegmentLength * Time.Delta;
+			// Hands crossing the room's edge, or running out of rope on the way, look for a rope next door.
+			var grip = rope.Sample(chain, climbIndex);
+			if (input.MoveY < 0 && (grip.Y <= Game.Bounds.Top || climbIndex < 0) && TryRopeHandoff(grip, -1) ||
+				input.MoveY > 0 && (grip.Y >= Game.Bounds.Bottom || climbIndex > Rope.LastIndex(chain)) && TryRopeHandoff(grip, 1))
+				return;
 			if (climbIndex < 0)
 			{
 				// Climbed past the anchor: pop up off the top (lands you on the ledge when there is one).
@@ -1382,7 +1400,8 @@ public abstract partial class Pawn : Actor
 			ropePumpStarted = true;
 		else if (ropePumpStarted && pumpVelocity < -RopePumpReversalSpeed)
 			ropePumpDirection = 0;
-		rope.SetRider(chain, climbIndex, ropePumpDirection);
+		// Bud only weighs the rope down when nobody else rides it, so it never cancels the player's pump.
+		rope.SetRider(chain, climbIndex, ropePumpDirection, passenger: this is not Player);
 		if (ropePumpDirection != 0)
 			Skew = ropePumpDirection * RopePumpSkew;
 
@@ -1439,6 +1458,31 @@ public abstract partial class Pawn : Actor
 				RopeCreakMinRumble, RopeCreakMaxRumble), 0, RopeCreakRumbleDuration);
 		}
 		ropeCreakSide = side;
+	}
+
+	bool TryRopeHandoff(Vector2 grip, int directionY)
+	{
+		if (this is not Player || Game.CurrentRoom is not { } room ||
+			Assets.FindAdjacentRoomPlayMode(room, new Point2(0, directionY), grip) is not { } next)
+			return false;
+
+		foreach (var spec in next.Actors)
+		{
+			if (ActorSpecs.GetTypeName(spec) != nameof(Rope))
+				continue;
+			var size = ActorSpecs.ReadResolvedPoint(spec, "Size") ?? Rope.DefaultSize;
+			var top = next.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPosition(spec) ?? Point2.Zero);
+			if (MathF.Abs(top.X + size.X / 2 - grip.X) > RopeHandoffSlackX ||
+				grip.Y < top.Y - RopeHandoffSlackY || grip.Y > top.Y + size.Y + RopeHandoffSlackY)
+				continue;
+			ropeHandoff = true; // before Transition, whose room-change event would otherwise drop the climb
+			if (!Game.Transition(new Point2(0, directionY)))
+				return ropeHandoff = false;
+			climbRope = null;
+			climbChain = null;
+			return true;
+		}
+		return false;
 	}
 
 	void ExitClimb()
@@ -1958,7 +2002,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 
 		// Resolve a fall before horizontal edges: otherwise continued outward velocity at a
 		// bottom corner can cross and re-clamp X every frame, starving this check forever.
-		if (Position.Y > Game.Bounds.Bottom + 12)
+		// Hanging from a rope, the feet dangle past the room's bottom edge; ropes cross rooms by handoff instead.
+		if (Position.Y > Game.Bounds.Bottom + 12 && State != States.Climb)
 		{
 			if (!Game.Transition(Point2.Down))
 				FallOffCliff();

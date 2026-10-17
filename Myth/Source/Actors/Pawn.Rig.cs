@@ -33,7 +33,10 @@ public abstract partial class Pawn
 	// A dive that ends in a burrow keeps its momentum into the surface, cut off where it meets it (PushRigSinkClip).
 	bool rigSinking;
 	Vector2 rigSinkVelocity;
-	bool rigSinkCutMaterial; // what PushRigSinkClip pushed: the terrain-cut material, else a scissor
+	bool rigSinkCutMaterial; // what PushRigSinkClip pushed: the terrain-cut material, a scissor, or both
+	bool rigSinkScissor;
+	float? rigSinkFarFace; // past the surface to open air again (a thin platform's underside); null when deeper than the scan
+	static int RigSinkFarFaceScan => 3 * Game.TileSize;
 	// Left alone, the idle breaks into a one-shot fidget now and then; any input hands straight back.
 	static readonly string[] RigFidgets =
 		["PlayerFidgetHolding", "PlayerFidgetOffensive", "PlayerFidgetWarrior", "PlayerFidgetDwarf", "PlayerFidgetHappy"];
@@ -84,6 +87,12 @@ public abstract partial class Pawn
 	static float RigCrouchClearance => 0f; // pixels above the feet; lower ceilings switch to the crouch takes
 	static float RigCrouchGaitRate => 1.5f; // × the gait rate
 	static float RigAirLegsResponse => 25f;
+	// Pumping a rope folds the legs out in front, easing in with each push and back out on the back-swing.
+	static float RigPumpLegDegrees => 50f;
+	static float RigPumpKneeBend => 10f;
+	static float RigPumpLegSpread => 8f; // the far leg trails by this
+	static float RigPumpLegRise => 6f;
+	static float RigPumpLegRelease => 3f;
 	static bool RigAirAttackMirrored => true; // swinging in the air, the far hand swings instead
 	// Up and down swipes in the air reach that way: the torso bends a little, the swing arm turns the rest, over these
 	// legs (take names).
@@ -273,6 +282,12 @@ public abstract partial class Pawn
 			// Pulls only while climbing up; hanging and sliding down hold the grip.
 			shown == "PlayerClimb" ? (State == States.Climb && input.MoveY < 0 ? ScriptedClimbSpeed : 0) : 1);
 		UpdateRigOffset(shown);
+		var pumping = State == States.Climb && ropePumpDirection != 0;
+		rigVisual.LegPikeWeight = float.Lerp(rigVisual.LegPikeWeight, pumping ? 1 : 0,
+			1 - MathF.Exp(-(pumping ? RigPumpLegRise : RigPumpLegRelease) * Time.Delta));
+		rigVisual.LegPikeRaise = RigPumpLegDegrees * MathF.PI / 180;
+		rigVisual.LegPikeKneeBend = RigPumpKneeBend * MathF.PI / 180;
+		rigVisual.LegPikeSpread = RigPumpLegSpread * MathF.PI / 180;
 		rigVisual.GripRoll = float.Lerp(rigVisual.GripRoll, RopeSwingAngle() * RigRopeTilt, 1 - MathF.Exp(-RigRopeTiltResponse * Time.Delta));
 		UpdateRigSkidYaw();
 		UpdateRigAirLegs(shown);
@@ -342,7 +357,10 @@ public abstract partial class Pawn
 			// waits on that window, and an early end would draw the pose, unclipped, on the surface.
 			rigSinking = State == States.Burrow && (burrowEnterTimer > 0 || !RigSubmerged(visual.GetVisualBounds()));
 			if (rigSinking)
+			{
 				Game.View?.RequestTerrainCut();
+				rigSinkFarFace = RigSinkFarFace();
+			}
 			else
 				visual.Offset = Vector2.Zero; // hidden by now, or popped straight back out
 			return;
@@ -375,39 +393,58 @@ public abstract partial class Pawn
 			Vector2.Dot(worldBounds.BottomLeft - surface, toward) > 0 && Vector2.Dot(worldBounds.BottomRight - surface, toward) > 0;
 	}
 
-	// Sinking, cuts away the body wherever terrain is, so it dives into slopes too. A jumpthru, and passes other than
-	// the world draw, scissor away everything past the burrow surface instead -- a real cut, so a thin jumpthru doesn't
-	// show the body below it; surfaces are cut along their dominant axis. Call PopRigSinkClip when this returns true.
+	// Sinking, cuts away the body wherever terrain is, so it dives into slopes too, and past a thin platform's far
+	// face so it doesn't come out the other side. A jumpthru, and passes other than the world draw, scissor away
+	// everything past the burrow surface instead -- a real cut, so a thin jumpthru doesn't show the body below it;
+	// surfaces are cut along their dominant axis. Call PopRigSinkClip when this returns true.
 	protected bool PushRigSinkClip(Batcher batcher)
 	{
 		if (!rigSinking)
 			return false;
 		rigSinkCutMaterial = !burrowOnJumpthru && Game.View?.PushTerrainCutMaterial() == true;
 		if (rigSinkCutMaterial)
-		{
 			rigVisual!.SkipSurfaces = true;
-			return true;
+		rigSinkScissor = !rigSinkCutMaterial || rigSinkFarFace != null;
+		if (rigSinkScissor)
+		{
+			const float Far = 100000;
+			var axis = RigSinkAxis;
+			var surface = (Vector2)(Position - RenderPosition) + axis * (rigSinkCutMaterial ? rigSinkFarFace!.Value : 0); // drawing is local to RenderPosition
+			var across = axis.TurnLeft() * Far;
+			var open = (RectInt)Rect.Between(Vector2.Transform(surface + across, batcher.Matrix),
+				Vector2.Transform(surface - across - axis * Far, batcher.Matrix));
+			batcher.PushScissor(batcher.Scissor is { } outer ? outer.GetIntersection(open) : open);
 		}
-		const float Far = 100000;
-		var toward = burrow.Toward;
-		var axis = MathF.Abs(toward.X) > MathF.Abs(toward.Y) ? new Vector2(MathF.Sign(toward.X), 0) : new Vector2(0, MathF.Sign(toward.Y));
-		var surface = (Vector2)(Position - RenderPosition); // drawing is local to RenderPosition
-		var across = axis.TurnLeft() * Far;
-		var open = (RectInt)Rect.Between(Vector2.Transform(surface + across, batcher.Matrix),
-			Vector2.Transform(surface - across - axis * Far, batcher.Matrix));
-		batcher.PushScissor(batcher.Scissor is { } outer ? outer.GetIntersection(open) : open);
 		return true;
 	}
 
 	protected void PopRigSinkClip(Batcher batcher)
 	{
+		if (rigSinkScissor)
+			batcher.PopScissor();
 		if (rigSinkCutMaterial)
 		{
 			batcher.PopMaterial();
 			rigVisual!.SkipSurfaces = false;
 		}
-		else
-			batcher.PopScissor();
+	}
+
+	Vector2 RigSinkAxis => MathF.Abs(burrow.Toward.X) > MathF.Abs(burrow.Toward.Y)
+		? new Vector2(MathF.Sign(burrow.Toward.X), 0) : new Vector2(0, MathF.Sign(burrow.Toward.Y));
+
+	// Steps from the surface into the solid along the cut axis, to where it opens up again.
+	float? RigSinkFarFace()
+	{
+		var axis = RigSinkAxis;
+		var inSolid = false;
+		for (var distance = 0; distance <= RigSinkFarFaceScan; distance++)
+		{
+			var solid = Game.BurrowLineSolidAt(Position + axis * (distance + 0.5f));
+			if (inSolid && !solid)
+				return distance;
+			inSolid |= solid;
+		}
+		return null;
 	}
 
 	void DrawRigClipped(Batcher batcher, Color color, bool silhouette)

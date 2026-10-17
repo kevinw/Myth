@@ -1,6 +1,6 @@
 {
   "Pieces": [
-    { "Bones": "Thigh, Shin", "Count": 3, "Width": 1.15, "Color": "e8f4ff" },
+    { "Kind": "Trousers", "Width": 2.2, "Flare": 0.7, "Color": "cfe3f7" },
     { "Bones": "UpperArm", "Count": 2, "Width": 1.15, "Color": "e8f4ff" },
     { "Bones": "Waist", "From": 0.1, "To": 0.55, "Width": 1.5, "Color": "ff9f6b" },
     { "Kind": "Stud", "Bones": "Waist", "From": 0.15, "To": 0.5, "Width": 0.6, "Color": "ffe08a" },

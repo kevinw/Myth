@@ -11,6 +11,7 @@
     { "Kind": "Stud", "Bones": "Shoulder", "From": 0.7, "Width": 1.5, "Color": "e6aa51", "Surface": "crawler-metal" },
     //{ "Bones": "Forearm", "From": 0.55, "Width": 1.4, "Color": "e6aa51" },
     //{ "Kind": "Stud", "Bones": "Forearm", "From": 0.65, "To": 0.9, "Width": 0.5, "Color": "ffcf70" },
-    { "Bones": "Hand", "To": 0.5, "Width": 1.1, "Color": "5a3b2a" }
+    { "Bones": "Hand", "To": 0.5, "Width": 1.1, "Color": "5a3b2a" },
+    { "Kind": "Kilt", "Count": 8, "Length": 0.42, "Width": 1.4, "Flare": 0.55, "Color": "8a3a2e" }
   ]
 }

@@ -14,11 +14,14 @@ public enum RigTags
 	Left = 1 << 12, Right = 1 << 13,
 }
 
-public enum CostumePieceKind { Sleeve, Stud, Spikes }
+public enum CostumePieceKind { Sleeve, Stud, Spikes, Kilt, Trousers }
 
 // Covers every bone matching Bones between From and To, as fractions along the bone. Width scales the
 // bone's width. Sleeve: Count bands (stripes when > 1). Stud: Count discs. Spikes: Count triangles,
 // Length bone-widths tall, on the other side when negative.
+// Kilt and Trousers ignore Bones and the span (see HumanoidRigVisual.Garment). Kilt: Count pleats hanging Length
+// meters from the hips, Width × the hip girth, flaring out by Flare. Trousers: Width × the leg's width, the hem
+// flaring by Flare. Stiffness scales how hard the cloth springs back to its drape.
 public sealed class CostumePiece
 {
 	const RigTags Sides = RigTags.Left | RigTags.Right;
@@ -32,6 +35,8 @@ public sealed class CostumePiece
 	public float Length { get; set; } = 1;
 	public string Color { get; set; } = "ffffff";
 	public string Surface { get; set; } = "";
+	public float Flare { get; set; } = 0.3f;
+	public float Stiffness { get; set; } = 1;
 
 	[JsonIgnore] public Color Fill { get; private set; }
 

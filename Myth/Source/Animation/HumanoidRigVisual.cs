@@ -180,6 +180,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// ArmReachFlip.
 	public float ArmReachWeight, ArmReachRoll, ArmArcScale = 1;
 	public bool ArmReachFlip;
+	// Folds both legs out in front, near straight, by LegPikeWeight: the thighs LegPikeRaise radians up from hanging
+	// down (the far one LegPikeSpread less), the knees bent LegPikeKneeBend. Hips and up are untouched.
+	public float LegPikeWeight, LegPikeRaise, LegPikeKneeBend, LegPikeSpread;
 	float? armArcFrom;
 	float armReachOffset; // the arm's last turn, which eases back out once the reach lets go
 	static float ArmReachRelease => 15f;
@@ -987,6 +990,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		ApplyCeilingDuck();
 		RotateMasked(upperBodyMask, TorsoRoll, projectedPose[pelvis]);
 		ApplyArmReach();
+		ApplyLegPike(rightLeg, LegPikeRaise);
+		ApplyLegPike(leftLeg, LegPikeRaise - LegPikeSpread);
 		ApplyPoseRoll();
 		UpdateSecondaryMotion();
 		UpdateGaitFootstep(grounded && footIK);
@@ -997,9 +1002,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		}
 		else
 			ResetFeet();
+		SimulateGarments();
 		if (Settings.PixelSnap)
 			for (var i = 0; i < projectedPose.Length; i++)
 				projectedPose[i] = projectedPose[i].Round();
+		BuildGarmentFaces();
 		SortBones();
 		UpdateHeadLook();
 		UpdateEye();
@@ -1244,6 +1251,30 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		armReachOffset = ArmReachWeight > 0 ? forward * ArmReachWeight * ((ArmReachFlip ? -swing : swing) - angle)
 			: armReachOffset * MathF.Exp(-ArmReachRelease * visualDelta);
 		RotateMasked(mirrored ? leftArmMask : rightArmMask, armReachOffset, shoulder);
+	}
+
+	void ApplyLegPike(Leg leg, float raise)
+	{
+		if (LegPikeWeight <= 0)
+			return;
+		var forward = (int)visualFacing;
+		var hip = projectedPose[leg.Hip];
+		var thigh = projectedPose[leg.Knee] - hip;
+		var shin = projectedPose[leg.Ankle] - projectedPose[leg.Knee];
+		var thighFrom = MathF.Atan2(thigh.Y, thigh.X);
+		var shinFrom = MathF.Atan2(shin.Y, shin.X);
+		// Hanging straight down is +90° on screen; raising turns toward the facing side.
+		var thighTo = MathF.PI / 2 - forward * raise;
+		var shinTo = MathF.PI / 2 - forward * (raise - LegPikeKneeBend);
+		var thighAngle = thighFrom + LegPikeWeight * MathF.IEEERemainder(thighTo - thighFrom, MathF.Tau);
+		var shinAngle = shinFrom + LegPikeWeight * MathF.IEEERemainder(shinTo - shinFrom, MathF.Tau);
+
+		var ankle = projectedPose[leg.Ankle];
+		projectedPose[leg.Knee] = hip + Calc.AngleToVector(thighAngle, thigh.Length());
+		projectedPose[leg.Ankle] = projectedPose[leg.Knee] + Calc.AngleToVector(shinAngle, shin.Length());
+		var foot = Matrix3x2.CreateRotation(shinAngle - shinFrom, ankle) * Matrix3x2.CreateTranslation(projectedPose[leg.Ankle] - ankle);
+		projectedPose[leg.Toe] = Vector2.Transform(projectedPose[leg.Toe], foot);
+		projectedPose[leg.Tip] = Vector2.Transform(projectedPose[leg.Tip], foot);
 	}
 
 	void RotateMasked(OzzJointMask mask, float angle, Vector2 pivot)
