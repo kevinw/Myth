@@ -78,7 +78,8 @@ public class BurrowLine : PointPathActor, IActivationSource
 		RenderRoundedPath(batcher, ProceduralWidth * 0.45f, ProceduralInnerColor);
 		RenderStitches(batcher);
 		RenderGlint(batcher);
-		// Sampled here rather than in Update so terminals are ready on the first frame, even mid room-transition.
+		// Sampled here rather than in Update so terminals are ready on the first frame, even mid room-transition
+		// (when actors don't update and the game's room is still the one being left).
 		if (terminalSampleTimer <= 0)
 		{
 			terminalSampleTimer = TerminalSampleInterval;
@@ -239,7 +240,7 @@ public class BurrowLine : PointPathActor, IActivationSource
 		var tangent = normal.TurnLeft();
 		for (var depth = 1; depth <= 4; depth++)
 			for (var across = -2; across <= 2; across += 2)
-				if (Game.BurrowLineSolidAt(Position + center + normal * depth + tangent * across))
+				if (Game.BurrowLineSolidAt(Position + center + normal * depth + tangent * across, Room))
 					score++;
 		return score;
 	}
