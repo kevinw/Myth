@@ -1086,7 +1086,7 @@ public abstract partial class Pawn : Actor
 			spreadRadians: 59.0f * Calc.DegToRad);
 
 	protected float burrowTimer = 0;
-	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
+	protected bool burrowNeedsGrounding; // after a pop, must touch ground or grab a rope before it can re-arm
 	protected bool CanBurrow() => !wallSliding && BurrowAvailable();
 
 	// Every burrow condition except the wall slide, so the slide suppression above can ask
@@ -1304,6 +1304,7 @@ public abstract partial class Pawn : Actor
 			Stop();
 			ducking = false;
 			jumpTimer = 0;
+			burrowNeedsGrounding = false; // a rope re-arms the burrow like landing does
 			State = States.Climb;
 			PlayPawnAnimation("climb_idle");
 			return true;

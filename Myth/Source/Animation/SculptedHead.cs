@@ -6,14 +6,16 @@ namespace Myth;
 // A head as a small signed distance field -- cranium, jaw, brow, nose, carved eye sockets and mouth -- ray-marched
 // orthographically on the GPU (SculptedHead.hlsl) into tiny targets: color shaded like a SculptedBody (sockets and
 // mouth read dark by cavity), screen-space normals for the lighting pass, scene-light highlights for the emissive
-// pass, and a 1px-dilated mask for outlines and silhouettes (SculptedHeadMask.hlsl). Head-local units are head
-// radii: x is the head's right, y up, z out of the face. Re-renders only when its inputs change. The CPU version
-// below is the reference the shape is verified against (Verify); keep the two in step.
+// pass, and a 1px-dilated mask for outlines and silhouettes (SculptedHeadMask.hlsl). Dents carve spheres out of it
+// and a wobble warps it like jelly. Head-local units are head radii: x is the head's right, y up, z out of the face.
+// Re-renders only when its inputs change. The CPU version below is the reference the shape is verified against
+// (Verify) and where hits land (Raycast); keep the two in step.
 sealed class SculptedHead(GraphicsDevice device) : IDisposable
 {
 	const float Extent = 1.45f; // the shape's reach past the radius (nose, jaw), in radii
 	const int MaxSteps = 40;
 	const int MaxLights = SculptedBody.MaxLights;
+	public const int MaxDents = 4;
 
 	static readonly BlendMode Overwrite = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly TextureSampler Nearest = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
@@ -42,11 +44,14 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 
 	// surface: metallic, roughness, specular. worldCenter: where the head's center sits in the world, for the lights
-	// and the dither.
+	// and the dither. dents: head-local (center, radius) spheres carved out, their floors shaded toward bruise.
+	// wobble: how far (radii) the jelly warp pushes the surface, at wobblePhase.
 	public void Render(HeadShape shape, float radius, float yaw, float pitch, float roll, float mouthOpen,
 		Color near, Color core, Color far, Color eye, BodyShadeMode mode = BodyShadeMode.Banded, Vector4 surface = default,
-		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default)
+		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default, ReadOnlySpan<Vector4> dents = default,
+		float wobble = 0, float wobblePhase = 0, Color bruise = default)
 	{
+		dents = dents[..Math.Min(dents.Length, MaxDents)];
 		var size = TextureSize(radius);
 		var textureWorld = (worldCenter - new Vector2(size * 0.5f)).RoundToPoint2();
 		var shading = new HashCode();
@@ -58,13 +63,18 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			shading.Add(light);
 		if (lights.Length > 0)
 			shading.Add(textureWorld);
+		shading.Add(wobble);
+		shading.Add(wobble > 0 ? wobblePhase : 0);
+		shading.Add(bruise);
+		foreach (var dent in dents)
+			shading.Add(dent);
 		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
 			MathF.Round(mouthOpen * 32) / 32, near, core, far, eye, shading.ToHashCode());
 		if (marched != null && key == last)
 			return;
 		last = key;
 #if DEBUG
-		lastInputs = (radius, yaw, pitch, roll, mouthOpen);
+		lastInputs = (radius, yaw, pitch, roll, mouthOpen, dents.ToArray(), wobble, wobblePhase);
 #endif
 
 		if (size != Size || marched == null)
@@ -101,7 +111,11 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			Eye = (Vector4)eye,
 			Shading = new((int)mode, textureWorld.X, textureWorld.Y, lightCount),
 			Surface = surface,
+			Deform = new(wobble, wobblePhase, dents.Length, 0),
+			Bruise = (Vector4)bruise,
 		};
+		for (var i = 0; i < dents.Length; i++)
+			uniforms.Dents[i] = dents[i];
 		for (var i = 0; i < lightCount; i++)
 		{
 			var light = lights[i];
@@ -133,19 +147,23 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	struct HeadUniforms
 	{
 		public Vector4 ToHead0, ToHead1, ToHead2, ToView0, ToView1, ToView2, Frame, Cranium, Jaw, Jaw2, Brow, Nose, Eyes,
-			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface;
+			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise;
 		public LightArray Lights;
+		public DentArray Dents;
 	}
 
 	[System.Runtime.CompilerServices.InlineArray(MaxLights * 2)]
 	struct LightArray { Vector4 first; }
+
+	[System.Runtime.CompilerServices.InlineArray(MaxDents)]
+	struct DentArray { Vector4 first; }
 
 	static float Quantize(float angle) => MathF.Round(angle * 180 / MathF.PI * 2) / 2;
 
 	static int TextureSize(float radius) => (int)MathF.Ceiling(radius * Extent * 2) + 3;
 
 	// View space: x right, y up, z toward the viewer. Head-local -> view is roll (screen) * pitch * yaw.
-	static (Matrix4x4 ToView, Matrix4x4 ToHead) Rotations(float yaw, float pitch, float roll)
+	internal static (Matrix4x4 ToView, Matrix4x4 ToHead) Rotations(float yaw, float pitch, float roll)
 	{
 		var toView = Matrix4x4.CreateRotationY(yaw) * Matrix4x4.CreateRotationX(pitch) * Matrix4x4.CreateRotationZ(-roll);
 		Matrix4x4.Invert(toView, out var toHead);
@@ -153,7 +171,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 
 #if DEBUG
-	(float Radius, float Yaw, float Pitch, float Roll, float Mouth) lastInputs;
+	(float Radius, float Yaw, float Pitch, float Roll, float Mouth, Vector4[] Dents, float Wobble, float Phase) lastInputs;
 
 	// Compares the last GPU render against the CPU reference: per texture, how many pixels differ by more than a
 	// rounding step, and the worst channel difference. With a directory, writes both versions as PNGs side by side.
@@ -161,8 +179,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	{
 		if (marched == null || last.Shape is not { } shape)
 			return "nothing rendered yet";
-		var (radius, yaw, pitch, roll, mouth) = lastInputs;
-		var (normals, mask) = RenderReference(shape, radius, yaw, pitch, roll, mouth);
+		var (radius, yaw, pitch, roll, mouth, dents, wobble, phase) = lastInputs;
+		var (normals, mask) = RenderReference(new(shape, mouth, dents, wobble, phase), radius, yaw, pitch, roll);
 		var report = new System.Text.StringBuilder($"{Size}x{Size}");
 		Compare("normal", NormalTexture!, normals);
 		Compare("mask", MaskTexture!, mask);
@@ -196,8 +214,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 
 	// The CPU ray-march the shaders mirror, pixel for pixel.
-	static (Color[] Normals, Color[] Mask) RenderReference(HeadShape s, float radius, float yaw, float pitch, float roll,
-		float mouth)
+	static (Color[] Normals, Color[] Mask) RenderReference(Field s, float radius, float yaw, float pitch, float roll)
 	{
 		var size = TextureSize(radius);
 		var normals = new Color[size * size];
@@ -221,12 +238,13 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 				var found = false;
 				for (var step = 0; step < MaxSteps && travelled < depth * 2; step++)
 				{
-					var distance = Distance(position, s, mouth);
+					var distance = Distance(position, s);
 					if (distance < 0.004f)
 					{
 						found = true;
 						break;
 					}
+					distance *= s.Wobble > 0 ? 0.7f : 1;
 					position += rayDirection * distance;
 					travelled += distance;
 				}
@@ -234,7 +252,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 					continue;
 
 				hit[i] = true;
-				var normal = SurfaceNormal(position, s, mouth);
+				var normal = SurfaceNormal(position, s);
 				var viewNormal = Vector3.Normalize(Vector3.TransformNormal(normal, toView));
 				// Screen normals: x right, y down, z toward the viewer.
 				normals[i] = new Color(viewNormal.X * 0.5f + 0.5f, -viewNormal.Y * 0.5f + 0.5f, viewNormal.Z * 0.5f + 0.5f, 1f);
@@ -264,8 +282,52 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			}
 		return (normals, mask);
 	}
+#endif
+
+	readonly record struct Field(HeadShape Shape, float Mouth, Vector4[] Dents, float Wobble, float Phase);
+
+	// Where a view ray through `across` (radii from the center, y up) first meets the head, in head-local units, and the
+	// surface normal there. Falls back toward the center when it misses the silhouette.
+	public static bool Raycast(HeadShape shape, Vector2 across, float yaw, float pitch, float roll, out Vector3 point,
+		out Vector3 normal)
+	{
+		var (_, toHead) = Rotations(yaw, pitch, roll);
+		var rayDirection = Vector3.TransformNormal(-Vector3.UnitZ, toHead);
+		for (var attempt = 0; attempt <= 8; attempt++, across *= 0.8f)
+		{
+			var depth = Extent * Extent - across.LengthSquared();
+			if (depth <= 0)
+				continue;
+			depth = MathF.Sqrt(depth);
+			point = Vector3.Transform(new Vector3(across, depth), toHead);
+			for (var (step, travelled) = (0, 0f); step < MaxSteps && travelled < depth * 2; step++)
+			{
+				var distance = Distance(point, shape, 0);
+				if (distance < 0.004f)
+				{
+					normal = SurfaceNormal(point, new(shape, 0, [], 0, 0));
+					return true;
+				}
+				point += rayDirection * distance;
+				travelled += distance;
+			}
+		}
+		(point, normal) = (Vector3.Zero, Vector3.UnitZ);
+		return false;
+	}
 
 	static Vector3 Socket(HeadShape s, float side) => new(s.EyeSpacing * side, s.EyeHeight, s.EyeDepth);
+
+	static Vector3 Wobble(Vector3 p, Field f) => p + f.Wobble * new Vector3(MathF.Sin(p.Y * 5 + f.Phase),
+		MathF.Sin(p.Z * 5 + f.Phase + 2.1f), MathF.Sin(p.X * 5 + f.Phase + 4.2f));
+
+	static float Distance(Vector3 p, Field f)
+	{
+		var d = Distance(Wobble(p, f), f.Shape, f.Mouth);
+		foreach (var dent in f.Dents)
+			d = SmoothSubtract(d, Sphere(Wobble(p, f) - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
+		return d;
+	}
 
 	static float Distance(Vector3 p, HeadShape s, float mouthOpen)
 	{
@@ -309,15 +371,15 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		return d;
 	}
 
-	static Vector3 SurfaceNormal(Vector3 p, HeadShape s, float mouthOpen)
+	static Vector3 SurfaceNormal(Vector3 p, Field s)
 	{
 		const float e = 0.01f;
 		var a = new Vector3(1, -1, -1);
 		var b = new Vector3(-1, -1, 1);
 		var c = new Vector3(-1, 1, -1);
 		var d = new Vector3(1, 1, 1);
-		return Vector3.Normalize(a * Distance(p + a * e, s, mouthOpen) + b * Distance(p + b * e, s, mouthOpen) +
-			c * Distance(p + c * e, s, mouthOpen) + d * Distance(p + d * e, s, mouthOpen));
+		return Vector3.Normalize(a * Distance(p + a * e, s) + b * Distance(p + b * e, s) +
+			c * Distance(p + c * e, s) + d * Distance(p + d * e, s));
 	}
 
 	static float Sphere(Vector3 p, float radius) => p.Length() - radius;
@@ -360,8 +422,6 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		var h = Math.Clamp(0.5f - 0.5f * (a + b) / k, 0, 1);
 		return float.Lerp(a, -b, h) + k * h * (1 - h);
 	}
-
-#endif
 
 	void DisposeTargets()
 	{

@@ -1685,12 +1685,24 @@ public partial class Game : IDisposable
 
 	public void DestroyForThisSession(Actor actor)
 	{
+		RememberDestroyedForThisSession(actor);
+		Destroy(actor);
+	}
+
+	// Counts an enemy dead for the session while its remains stay in the room until it unloads.
+	internal void KillForThisSession(Actor enemy)
+	{
+		RememberDestroyedForThisSession(enemy);
+		NotifyEnemyKilledIfPlayerCaused(enemy);
+	}
+
+	void RememberDestroyedForThisSession(Actor actor)
+	{
 		if (!string.IsNullOrEmpty(actor.SessionDestroyKey))
 		{
 			Save.Session.DestroyedActors.Add(actor.SessionDestroyKey);
 			MarkSaveDirty();
 		}
-		Destroy(actor);
 	}
 
 	public bool DestroyPersistently(Actor actor)

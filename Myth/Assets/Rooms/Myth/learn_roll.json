@@ -155,6 +155,11 @@
       "Type": "Raft",
       "Position": [240, 144],
       "Size": [24, 6]
+    },
+    {
+      "Id": "9299ec5e66dd7f58",
+      "Type": "FloatingHead",
+      "Position": [160, 92]
     }
   ]
 }

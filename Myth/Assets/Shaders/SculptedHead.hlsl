@@ -9,6 +9,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 };
 
 #define MAX_LIGHTS 4
+#define MAX_DENTS 4
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
@@ -33,7 +34,10 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Eye;
     float4 Shading;  // x = 0 banded, 1 smooth, 2 dithered; yz = the texture's world position; w = light count
     float4 Surface;  // metallic, roughness, specular
+    float4 Deform;   // x = wobble amplitude (radii), y = wobble phase, z = dent count
+    float4 Bruise;   // what a dent's floor shades toward, by alpha
     float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
+    float4 Dents[MAX_DENTS]; // head-local center, radius: spheres carved out of the head
 };
 
 Texture2D Texture : register(t0, space2);
@@ -123,8 +127,26 @@ float smooth_subtract(float a, float b, float k)
 
 float3 socket(float side) { return float3(Eyes.x * side, Eyes.y, Eyes.w); }
 
+float3 wobble(float3 p) { return p + Deform.x * sin(p.yzx * 5.0 + Deform.y + float3(0.0, 2.1, 4.2)); }
+
+// How close p is to a dent's floor: 1 at its center, falling off toward the rim, 0 away from it.
+float in_dent(float3 p)
+{
+    float amount = 0.0;
+    for (int i = 0; i < (int)Deform.z; i++)
+    {
+        float3 offset = p - Dents[i].xyz;
+        float3 axis = normalize(Dents[i].xyz);
+        float lateral = length(offset - axis * dot(offset, axis));
+        if (length(offset) < Dents[i].w * 1.15)
+            amount = max(amount, saturate(1.0 - lateral / Dents[i].w));
+    }
+    return amount;
+}
+
 float head_distance(float3 p)
 {
+    p = wobble(p);
     float mouthOpen = Frame.z;
     float cranium = sd_ellipsoid(p - float3(0.0, Cranium.w, -0.08), Cranium.xyz);
     float jaw = sd_ellipsoid(p - float3(0.0, -Jaw.w, Jaw2.x), Jaw.xyz);
@@ -164,6 +186,8 @@ float head_distance(float3 p)
     if (Mouth.x > 0.0)
         d = smooth_subtract(d, sd_capsule(p, float3(-Mouth.x, Mouth.y, 0.86), float3(Mouth.x, Mouth.y, 0.86),
             Mouth.z + mouthOpen * 0.14), 0.04);
+    for (int i = 0; i < (int)Deform.z; i++)
+        d = smooth_subtract(d, sd_sphere(p - Dents[i].xyz, Dents[i].w), 0.06);
     return d;
 }
 
@@ -229,6 +253,8 @@ HeadOutput fragment_main(VsOutput input)
             found = true;
             break;
         }
+        // A wobbling field overstates distances; step short so rays don't tunnel.
+        distance *= Deform.x > 0.0 ? 0.7 : 1.0;
         position += rayDirection * distance;
         travelled += distance;
     }
@@ -248,7 +274,9 @@ HeadOutput fragment_main(VsOutput input)
     // A flat snout's end face sits a shade down from the cheeks around it.
     if (on_snout_face(position))
         light = min(light, 0.6);
-    output.Color = in_eye_glow(position) && Eye.a > 0.0 ? Eye : float4(sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold), 1.0);
+    float3 color = sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold);
+    color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(wobble(position)) * 2.0));
+    output.Color = in_eye_glow(position) && Eye.a > 0.0 ? Eye : float4(color, 1.0);
     output.Specular = sculpted_specular(pixel, screenNormal, Near.rgb, Surface, threshold);
     return output;
 }
