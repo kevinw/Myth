@@ -7,6 +7,7 @@
 - **Units:** body sizes (`HeadSize`, `TorsoSize`, … `FootSize`, `NeckExtension`, `ShoulderDrop`) are meters, scaled by `PixelsPerMeter`, so zooming keeps proportions. Outlines, eye and joint-radius floor stay in pixels.
 - `HumanoidRigSettings`: serialized, inspector-editable. `[NoSerialize]` flags (`TurnWhileMoving`, `GaitFeetFollowTerrain`) are set in code by Pawn.
 - Pawn rig settings are data: `Assets/Actors/humanoid.json` (shared body, motion, outline; no `Type`, so it never spawns) ← `player.json` / `bud.json` (costume, Bud's palette). `Game.SpawnPlayer` and `EnsureBudForPlayer` spawn from those prefabs. In the live inspector, **Apply to Prefab** writes each edited value to the prefab that sets it (e.g. `HeadSize` → Humanoid), else to the actor's own prefab, and saves. Other live actors pick it up on respawn.
+- **Hitbox:** drawn as a rig, the terrain box is `RigHitboxHeight` meters × PPM tall (capped at 15 px to fit 2-tile gaps; ducking is half). Hits land on `HurtRect`: that box plus the drawn head, not the limbs (`OverlapsCombatBounds`; enemy attacks query with `OverlapsFirstCombat`).
 - Sprite mode must keep working. Every rig path is guarded by `rigVisual != null` / `RigDrawing`. Toggle with `RigDraw` in the inspector.
 
 ## How a frame picks what to show (`UpdateRig`)

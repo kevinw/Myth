@@ -220,8 +220,12 @@ public abstract partial class Pawn : Actor
 	static float RopeCreakRumbleDuration => 0.08f;
 	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
 
-	internal static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
-	protected static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
+	// Drawn as a rig, the body grows with PixelsPerMeter, up to what still fits through a 2-tile gap.
+	static float RigHitboxHeight => 1.1f; // meters
+	protected const int MaxStandingHeight = 2 * Game.TileSize - 1;
+	int StandingHeight => DrawRig is { } rig ? Math.Min((int)MathF.Round(RigHitboxHeight * rig.PixelsPerMeter), MaxStandingHeight) : 12;
+	internal RectInt StandingHitboxRect => new(-4, -StandingHeight, 8, StandingHeight);
+	protected RectInt DuckingHitboxRect => new(-4, -StandingHeight / 2, 8, StandingHeight / 2);
 	// While burrowing the player is effectively a point that rides the surface, so the
 	// follower probes with a tiny 2x2 footprint: the burrow center sits on the surface
 	// (not a hitbox-width away) and never snags on a nearby ceiling/wall.
@@ -2054,7 +2058,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	// Room-parameterized so it also answers for a room that isn't loaded yet (spawn placement).
 	internal static bool HasSupportedFooting(Room room, Point2 pos)
 	{
-		var box = StandingHitboxRect + pos;
+		var box = new RectInt(-4, -MaxStandingHeight, 8, MaxStandingHeight) + pos;
 		if (Game.OverlapsRoomCollision(room, box))
 			return false; // standing space is blocked
 
@@ -2113,7 +2117,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		UpdateDeathRecovery();
 		ClampPositionToRoomOrTransitionRooms();
 
-		var hitRect = Hitbox.Rect + Position;
+		var hitRect = HurtRect + Position;
 
 		if (State == States.Burrow)
 		{

@@ -1321,7 +1321,7 @@ public partial class Game : IDisposable
 		{
 			player.Position = safe;
 			player.Stop();
-			NoteSafeGrounded(safe, Player.StandingHitboxRect + safe);
+			NoteSafeGrounded(safe, player.StandingHitboxRect + safe);
 			EnsureBudForPlayer(repositionExisting: true);
 			DisplayMessage("death loop detected: moved player to safe ground");
 			return;

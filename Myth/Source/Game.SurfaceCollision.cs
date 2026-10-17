@@ -818,7 +818,10 @@ public partial class Game
 		return false;
 	}
 
-	internal bool BurrowLineSolidAt(Vector2 point) => SolidPixel(CellAt(point));
+	// A room that isn't loaded (sliding in on a transition) answers from its tiles alone.
+	internal bool BurrowLineSolidAt(Vector2 point, Room? inRoom = null) => inRoom != null && inRoom != room
+		? OverlapsRoomCollision(inRoom, new RectInt(CellAt(point), 1, 1))
+		: SolidPixel(CellAt(point));
 
 	// A jumpthru (one-way platform) cell — same test as SolidPixel but for the Jumpthru
 	// mask. The burrow boundary walk uses this to ride the *top* of jumpthru runs.

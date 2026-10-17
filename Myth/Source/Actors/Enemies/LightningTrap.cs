@@ -262,7 +262,7 @@ public class LightningTrap : Actor, IRoomInversionListener, IPenDrawn
 			var rect = SegmentWorldRect(seg);
 			if (rect.Width <= 0 || rect.Height <= 0)
 				continue;
-			if (Game.OverlapsFirst(rect, Masks.Player) is { } player)
+			if (Game.OverlapsFirstCombat(rect, Masks.Player) is { } player)
 			{
 				Hit(player, new(rect));
 				return;

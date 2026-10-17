@@ -156,7 +156,7 @@ public class ShieldKnight : Actor
 			if (CurrentSpriteFrame?.UserData == "spear_hit")
 			{
 				var hurtBox = Hitbox.FromSlice(this, "spear").Rect + Position;
-				if (Game.OverlapsFirst(hurtBox, Masks.Player) is { } hit)
+				if (Game.OverlapsFirstCombat(hurtBox, Masks.Player) is { } hit)
 					Hit(hit, new(hurtBox));
 			}
 

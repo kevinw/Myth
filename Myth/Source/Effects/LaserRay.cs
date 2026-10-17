@@ -49,7 +49,7 @@ public sealed class LaserRay
 		for (var distance = 0f; distance <= length; distance += step)
 		{
 			hitRect = SampleRect(Origin + Direction * distance);
-			if (game.OverlapsFirst(hitRect, mask) is { } actor)
+			if (game.OverlapsFirstCombat(hitRect, mask) is { } actor)
 				return actor;
 		}
 

@@ -109,7 +109,7 @@ public class AlienBug : Actor, INeuralTextureAgent
 				attackHit = true;
 				var x = Facing == Signs.Positive ? 0 : -30;
 				var attackBox = new RectInt(Position.X + x, Position.Y - 18, 30, 18);
-				if (Game.OverlapsFirst(attackBox, Masks.Player) is { } hit)
+				if (Game.OverlapsFirstCombat(attackBox, Masks.Player) is { } hit)
 					Hit(hit, new(attackBox));
 			}
 			if (visual.Time >= visual.ActiveClip.Duration - 0.02f)

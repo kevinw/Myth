@@ -114,7 +114,7 @@ public class GhostFrog : Actor
 				rect.X = -(rect.X + rect.Width);
 
 			var attackBox = Position + rect;
-			if (Game.OverlapsFirst(attackBox, Masks.Player) is { } hit)
+			if (Game.OverlapsFirstCombat(attackBox, Masks.Player) is { } hit)
 				Hit(hit, new(attackBox));
 
 			yield return 0;

@@ -103,6 +103,21 @@ public abstract partial class Pawn
 
 	protected bool RigDrawing => rigVisual != null;
 
+	// What hits land on: the body box plus the drawn head, not the limbs.
+	internal RectInt HurtRect => rigVisual is { } visual
+		? Hitbox.Rect.Conflate(RectInt.Centered(visual.HeadPosition.RoundToPoint2(),
+			Point2.One * (int)MathF.Ceiling(2 * (visual.HeadRadius + visual.Settings.CombatBoundsPadding))))
+		: Hitbox.Rect;
+
+	internal override bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable)
+		=> role == CombatRole.Vulnerable ? HurtRect.Overlaps(bounds - Position) : base.OverlapsCombatBounds(bounds, role);
+
+	internal override void RenderCollisionDebug(Batcher batcher)
+	{
+		if (rigVisual != null)
+			batcher.RectLine(HurtRect + Position, 1, new Color(0x39e6c5));
+	}
+
 	// Where the pawn holds a rope, local to it: the sprite hangs by its chest, the rig by its raised hands.
 	protected Point2 RopeGrip => rigVisual == null ? Hitbox.Rect.Center
 		: new(Hitbox.Rect.Center.X, -(int)MathF.Round(RigRopeGripHeight * rigVisual.Settings.PixelsPerMeter));
