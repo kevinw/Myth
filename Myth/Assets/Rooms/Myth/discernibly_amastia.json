@@ -2,6 +2,7 @@
   "position": [200, 0],
   "size": [40, 23],
   "ambientColor": "56565A",
+  "playerLight": false,
   "sporeFogStrength": 0.324,
   "sporeFogColor": "FCB311",
   "reverb": 0.325,

@@ -3,6 +3,7 @@
   "size": [68, 59],
   "backdropColor2": "3F0101",
   "ambientColor": "696969",
+  "playerLight": false,
   "reverb": 0.64,
   "colorFields": {
     "foreground": "a94ff2ea3f22170e.png"

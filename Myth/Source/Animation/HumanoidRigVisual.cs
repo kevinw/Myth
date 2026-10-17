@@ -237,7 +237,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	Sprite? headSprite;
 	SculptedHead? sculptedHead;
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
-	static float SculptedHeadMinRadius => 5f;
+	static float SculptedHeadMinRadius => 3f;
 	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
 		HeadRadius >= SculptedHeadMinRadius;
 	int[] boneOrder = [];

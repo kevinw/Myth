@@ -2,6 +2,7 @@
   "position": [-374, -27],
   "size": [80, 36],
   "ambientColor": "333335",
+  "playerLight": false,
   "legend": {
     "H": "sporgy",
     "T": "stone"
@@ -98,7 +99,6 @@
       "Type": "RigPuppetProp",
       "Position": [210, 264],
       "PoseAnimationName": "Yes",
-      "HipSize": 0.5155,
       "HeadShapeId": "stock",
       "CalfColor": "D13801",
       "PixelsPerMeter": 47.5,
@@ -109,7 +109,6 @@
       "FleshBlend": 0.041999936,
       "Abs": 0.6850008,
       "Glutes": 0.72000027,
-      "Codpiece": 0.5500014,
       "Claws": 0.49000096,
       "BootSize": 1.1415006,
       "ChestMass": 1.0750004,
@@ -134,7 +133,9 @@
       "EyeSize": 0,
       "PoseProgress": 0.104,
       "BackgroundBrightness": 0.642,
-      "BodyStyle": "Sculpted"
+      "BodyStyle": "Sculpted",
+      "HipSize": 0.64299995,
+      "Codpiece": 0.049999997
     },
     {
       "Id": "c0105505c0105505",
@@ -181,23 +182,24 @@
       "Id": "c4b5811e3d7a110d",
       "Type": "CurveRibbon",
       "Position": [604, 269],
-      "WobbleSpeed": 0.705,
       "WobbleIntensity": 5.827,
       "WobbleFrequency": 0.616,
       "Points": [[-24, 0],[-24, -32],[0, -72],[-24, -112],[-40, -160]
-      ]
+      ],
+      "TwistPeriod": 44.589,
+      "WobbleSpeed": 0.044
     },
     {
       "Id": "55c10ea6499f1496",
       "Type": "CurveRibbon",
       "Position": [589, 274],
-      "WobbleSpeed": 0.705,
       "WobbleIntensity": 5.827,
       "WobbleFrequency": 0.616,
       "Points": [[-8, 0],[-24, -32],[-40, -48],[-24, -64],[-32, -96]
       ],
       "Width": 9.74,
-      "EndWidth": 0.107
+      "EndWidth": 0.107,
+      "WobbleSpeed": 0.06
     }
   ]
 }

@@ -2,6 +2,7 @@
   "position": [-98, 0],
   "size": [58, 23],
   "ambientColor": "424242",
+  "playerLight": false,
   "reverb": 0.555,
   "colorFields": {
     "foreground": "6cfd6e32df2b5a80.png"

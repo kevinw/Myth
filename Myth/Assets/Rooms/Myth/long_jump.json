@@ -2,6 +2,7 @@
   "position": [120, 0],
   "size": [40, 23],
   "backdropColor2": "2A1D44",
+  "playerLight": false,
   "reverb": 0.731,
   "colorFields": {
     "foreground": "c5d62c4f1c243cb0.png"

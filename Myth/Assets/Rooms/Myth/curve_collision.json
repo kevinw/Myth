@@ -3,6 +3,7 @@
   "size": [50, 29],
   "backdropColor": "020202",
   "ambientColor": "201F1F",
+  "playerLight": false,
   "sporeFogStrength": 0.745,
   "sporeFogColor": "FFB651",
   "reverb": 0.042,

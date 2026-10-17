@@ -1,7 +1,8 @@
 {
   "position": [160, 0],
   "size": [40, 23],
-  "ambientColor": "58585F",
+  "ambientColor": "6B6B70",
+  "playerLight": false,
   "colorFields": {
     "foreground": "dd7bdfb0c6ba0305.png",
     "background": "5b99a7a957ca6bd1.png"

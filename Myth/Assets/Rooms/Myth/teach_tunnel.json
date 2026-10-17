@@ -2,6 +2,7 @@
   "position": [-244, -5],
   "size": [20, 11],
   "ambientColor": "515151",
+  "playerLight": false,
   "reverb": 0.446,
   "zoom": 2,
   "legend": {
