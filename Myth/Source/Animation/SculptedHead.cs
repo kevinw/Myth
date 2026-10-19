@@ -16,6 +16,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	const int MaxSteps = 40;
 	const int MaxLights = SculptedBody.MaxLights;
 	public const int MaxDents = 4;
+	public const int MaxContacts = 2;
 
 	static readonly BlendMode Overwrite = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly TextureSampler Nearest = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
@@ -45,13 +46,15 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 
 	// surface: metallic, roughness, specular. worldCenter: where the head's center sits in the world, for the lights
 	// and the dither. dents: head-local (center, radius) spheres carved out, their floors shaded toward bruise.
-	// wobble: how far (radii) the jelly warp pushes the surface, at wobblePhase.
+	// wobble: how far (radii) the jelly warp pushes the surface, at wobblePhase. contacts: walls it's pressed against,
+	// (screen normal toward the wall, y down; the wall's distance from the center in radii; squash along it, 1 = none).
 	public void Render(HeadShape shape, float radius, float yaw, float pitch, float roll, float mouthOpen,
 		Color near, Color core, Color far, Color eye, BodyShadeMode mode = BodyShadeMode.Banded, Vector4 surface = default,
 		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default, ReadOnlySpan<Vector4> dents = default,
-		float wobble = 0, float wobblePhase = 0, Color bruise = default)
+		float wobble = 0, float wobblePhase = 0, Color bruise = default, ReadOnlySpan<Vector4> contacts = default)
 	{
 		dents = dents[..Math.Min(dents.Length, MaxDents)];
+		contacts = contacts[..Math.Min(contacts.Length, MaxContacts)];
 		var size = TextureSize(radius);
 		var textureWorld = (worldCenter - new Vector2(size * 0.5f)).RoundToPoint2();
 		var shading = new HashCode();
@@ -68,14 +71,13 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		shading.Add(bruise);
 		foreach (var dent in dents)
 			shading.Add(dent);
+		foreach (var contact in contacts)
+			shading.Add(contact);
 		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
 			MathF.Round(mouthOpen * 32) / 32, near, core, far, eye, shading.ToHashCode());
 		if (marched != null && key == last)
 			return;
 		last = key;
-#if DEBUG
-		lastInputs = (radius, yaw, pitch, roll, mouthOpen, dents.ToArray(), wobble, wobblePhase);
-#endif
 
 		if (size != Size || marched == null)
 		{
@@ -86,6 +88,12 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 		}
 
 		var (toView, toHead) = Rotations(yaw, pitch, roll);
+		Span<Contact> headContacts = stackalloc Contact[contacts.Length];
+		for (var i = 0; i < contacts.Length; i++)
+			headContacts[i] = new(Vector3.TransformNormal(new(contacts[i].X, -contacts[i].Y, 0), toHead), contacts[i].Z, contacts[i].W);
+#if DEBUG
+		lastInputs = (radius, yaw, pitch, roll, mouthOpen, dents.ToArray(), wobble, wobblePhase, headContacts.ToArray());
+#endif
 		var s = shape;
 		var lightCount = Math.Min(lights.Length, MaxLights);
 		var uniforms = new HeadUniforms
@@ -111,11 +119,16 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			Eye = (Vector4)eye,
 			Shading = new((int)mode, textureWorld.X, textureWorld.Y, lightCount),
 			Surface = surface,
-			Deform = new(wobble, wobblePhase, dents.Length, 0),
+			Deform = new(wobble, wobblePhase, dents.Length, contacts.Length),
 			Bruise = (Vector4)bruise,
 		};
 		for (var i = 0; i < dents.Length; i++)
 			uniforms.Dents[i] = dents[i];
+		for (var i = 0; i < headContacts.Length; i++)
+		{
+			uniforms.Contacts[i * 2] = new(headContacts[i].Normal, headContacts[i].Wall);
+			uniforms.Contacts[i * 2 + 1] = new(headContacts[i].Squash, 0, 0, 0);
+		}
 		for (var i = 0; i < lightCount; i++)
 		{
 			var light = lights[i];
@@ -150,6 +163,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise;
 		public LightArray Lights;
 		public DentArray Dents;
+		public ContactArray Contacts;
 	}
 
 	[System.Runtime.CompilerServices.InlineArray(MaxLights * 2)]
@@ -157,6 +171,12 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 
 	[System.Runtime.CompilerServices.InlineArray(MaxDents)]
 	struct DentArray { Vector4 first; }
+
+	[System.Runtime.CompilerServices.InlineArray(MaxContacts * 2)]
+	struct ContactArray { Vector4 first; }
+
+	// A wall the head's pressed against, head-local: the normal toward it, its distance (radii), the squash along it.
+	readonly record struct Contact(Vector3 Normal, float Wall, float Squash);
 
 	static float Quantize(float angle) => MathF.Round(angle * 180 / MathF.PI * 2) / 2;
 
@@ -171,7 +191,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 
 #if DEBUG
-	(float Radius, float Yaw, float Pitch, float Roll, float Mouth, Vector4[] Dents, float Wobble, float Phase) lastInputs;
+	(float Radius, float Yaw, float Pitch, float Roll, float Mouth, Vector4[] Dents, float Wobble, float Phase,
+		Contact[] Contacts) lastInputs;
 
 	// Compares the last GPU render against the CPU reference: per texture, how many pixels differ by more than a
 	// rounding step, and the worst channel difference. With a directory, writes both versions as PNGs side by side.
@@ -179,8 +200,8 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	{
 		if (marched == null || last.Shape is not { } shape)
 			return "nothing rendered yet";
-		var (radius, yaw, pitch, roll, mouth, dents, wobble, phase) = lastInputs;
-		var (normals, mask) = RenderReference(new(shape, mouth, dents, wobble, phase), radius, yaw, pitch, roll);
+		var (radius, yaw, pitch, roll, mouth, dents, wobble, phase, contacts) = lastInputs;
+		var (normals, mask) = RenderReference(new(shape, mouth, dents, wobble, phase, contacts), radius, yaw, pitch, roll);
 		var report = new System.Text.StringBuilder($"{Size}x{Size}");
 		Compare("normal", NormalTexture!, normals);
 		Compare("mask", MaskTexture!, mask);
@@ -284,7 +305,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	}
 #endif
 
-	readonly record struct Field(HeadShape Shape, float Mouth, Vector4[] Dents, float Wobble, float Phase);
+	readonly record struct Field(HeadShape Shape, float Mouth, Vector4[] Dents, float Wobble, float Phase, Contact[] Contacts);
 
 	// Where a view ray through `across` (radii from the center, y up) first meets the head, in head-local units, and the
 	// surface normal there. Falls back toward the center when it misses the silhouette.
@@ -305,7 +326,7 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 				var distance = Distance(point, shape, 0);
 				if (distance < 0.004f)
 				{
-					normal = SurfaceNormal(point, new(shape, 0, [], 0, 0));
+					normal = SurfaceNormal(point, new(shape, 0, [], 0, 0, []));
 					return true;
 				}
 				point += rayDirection * distance;
@@ -321,11 +342,24 @@ sealed class SculptedHead(GraphicsDevice device) : IDisposable
 	static Vector3 Wobble(Vector3 p, Field f) => p + f.Wobble * new Vector3(MathF.Sin(p.Y * 5 + f.Phase),
 		MathF.Sin(p.Z * 5 + f.Phase + 2.1f), MathF.Sin(p.X * 5 + f.Phase + 4.2f));
 
+	// Squashed toward each contact's wall, bulging the rest to keep the volume, then flattened where it meets the wall.
 	static float Distance(Vector3 p, Field f)
 	{
-		var d = Distance(Wobble(p, f), f.Shape, f.Mouth);
+		var (q, scale) = (p, 1f);
+		foreach (var contact in f.Contacts)
+		{
+			var along = Vector3.Dot(q, contact.Normal);
+			var anchor = MathF.Min(contact.Wall, 1);
+			q = (q - contact.Normal * along) * MathF.Sqrt(contact.Squash) + contact.Normal * (anchor + (along - anchor) / contact.Squash);
+			scale *= MathF.Min(contact.Squash, 1 / MathF.Sqrt(contact.Squash));
+		}
+		var w = Wobble(q, f);
+		var d = Distance(w, f.Shape, f.Mouth);
 		foreach (var dent in f.Dents)
-			d = SmoothSubtract(d, Sphere(Wobble(p, f) - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
+			d = SmoothSubtract(d, Sphere(w - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
+		d *= scale;
+		foreach (var contact in f.Contacts)
+			d = SmoothSubtract(d, contact.Wall - Vector3.Dot(p, contact.Normal), 0.08f);
 		return d;
 	}
 

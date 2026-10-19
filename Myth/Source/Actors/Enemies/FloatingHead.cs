@@ -39,6 +39,13 @@ public sealed class FloatingHead : Actor
 	static float WobbleRate => 30f;
 	static float SpinKick => 5f; // radians/sec of yaw and roll a hit throws in
 
+	static float ContactReach => 1f; // radii: walls nearer than this press into the head
+	static float PressSquash => 0.7f; // squash per radius pressed in
+	static float ImpactSquash => 0.025f; // squash spring kick per px/sec of impact
+	static float SquashStiffness => 260f;
+	static float SquashDamping => 9f;
+	static float RemainsSag => 0.12f;
+
 	static float FallGravity => 520f;
 	static float GroundBounce => 0.3f;
 	static int RemainsDepth => 100;
@@ -56,6 +63,10 @@ public sealed class FloatingHead : Actor
 	float yaw, yawVelocity, pitch, pitchVelocity, roll, rollVelocity;
 	float wobble, wobblePhase;
 	float darken;
+	// Per axis (side walls, floor/ceiling): which way the nearest wall face or slope lies, or the last thing it hit, and
+	// how far (px) from the center, MaxValue when out of reach.
+	readonly (Vector2 Toward, float Gap)[] walls = new (Vector2, float)[2];
+	Vector2 impact, impactVelocity; // extra squash along each axis, sprung, so impacts compress and rebound
 	Vector2 home;
 	readonly Vector4[] dents = new Vector4[SculptedHead.MaxDents];
 	int dentCount;
@@ -156,7 +167,44 @@ public sealed class FloatingHead : Actor
 		if (wobble < 0.004f)
 			wobble = 0;
 		wobblePhase += WobbleRate * Time.Delta;
+		Spring.Step(ref impact, ref impactVelocity, state == State.Remains ? new(0, RemainsSag) : Vector2.Zero,
+			SquashStiffness, SquashDamping, Time.Delta);
 		base.Update();
+		FindWalls();
+	}
+
+	static readonly Point2[] Sides = [new(-1, 0), new(1, 0), new(0, -1), new(0, 1)];
+
+	void FindWalls()
+	{
+		walls[0].Gap = walls[1].Gap = float.MaxValue;
+		var half = Hitbox.Rect.Width / 2;
+		foreach (var side in Sides)
+			for (var gap = half; gap < Radius * ContactReach; gap++)
+			{
+				var probe = Hitbox.Rect + Position + side * (gap - half + 1);
+				if (!Game.OverlapsRoomCollision(this, probe))
+					continue;
+				var axis = side.X != 0 ? 0 : 1;
+				var wall = ((Vector2)side, (float)gap);
+				// Slopes are floors and ceilings: the vertical probe presses it flat along the slope's own normal.
+				if (Game.TryFindSurface(this, probe, side, 0, out var hit) && hit.Slope is { } slope)
+				{
+					if (axis == 0)
+						break;
+					Game.CollisionRoomFor(this)!.GetSlopeSurface(slope, out var left, out _);
+					wall = (-hit.Normal, Vector2.Dot(Center - left, hit.Normal));
+				}
+				if (wall.Item2 < walls[axis].Gap)
+					walls[axis] = wall;
+				break;
+			}
+	}
+
+	void Impact(int axis, float speed)
+	{
+		impactVelocity[axis] += MathF.Abs(speed) * ImpactSquash;
+		walls[axis].Toward = axis == 0 ? new(MathF.Sign(speed), 0) : new(0, MathF.Sign(speed));
 	}
 
 	void Enter(State next)
@@ -288,6 +336,7 @@ public sealed class FloatingHead : Actor
 
 	public override void OnCollideX()
 	{
+		Impact(0, Velocity.X);
 		if (state is State.Knocked or State.Falling)
 		{
 			Velocity.X = -Velocity.X * WallRestitution;
@@ -299,6 +348,7 @@ public sealed class FloatingHead : Actor
 
 	public override void OnCollideY()
 	{
+		Impact(1, Velocity.Y);
 		if (state == State.Falling && Velocity.Y > 0)
 		{
 			Game.Shake(0.15f, 1.5f);
@@ -373,10 +423,21 @@ public sealed class FloatingHead : Actor
 		var far = RigDraw.Multiply(near, new Color(0x705c8c));
 		var center = (Vector2)RenderPosition;
 		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
+		// Walls in reach press it flat and squash it; impacts squash it further, then it springs back.
+		Span<Vector4> contacts = stackalloc Vector4[SculptedHead.MaxContacts];
+		var contactCount = 0;
+		for (var axis = 0; axis < 2; axis++)
+		{
+			var (toward, gap) = walls[axis];
+			var wall = gap / Radius;
+			var squash = MathF.Round(Math.Clamp(1 - MathF.Max(0, ContactReach - wall) * PressSquash - impact[axis], 0.55f, 1.3f) * 64) / 64;
+			if (toward != Vector2.Zero && (wall < ContactReach || squash != 1))
+				contacts[contactCount++] = new(toward, MathF.Min(wall, 10), squash);
+		}
 		head.Render(Assets.GetHeadShape(HeadShapeId), Radius, yaw, pitch, roll, mouth, near, Color.Lerp(near, far, 0.5f), far,
 			eyes > 0.02f ? Color.Lerp(Color.Black, EyeColor, eyes) : default, BodyShadeMode.Banded, new(0, 0.5f, 1, 0),
 			lights[..HumanoidRigVisual.GatherLights(Game, lights, center, Radius)], center, dents.AsSpan(0, dentCount),
-			wobble, wobblePhase, BruiseColor);
+			wobble, wobblePhase, BruiseColor, contacts[..contactCount]);
 		return head;
 	}
 

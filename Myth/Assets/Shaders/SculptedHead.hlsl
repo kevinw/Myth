@@ -10,6 +10,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 
 #define MAX_LIGHTS 4
 #define MAX_DENTS 4
+#define MAX_CONTACTS 2
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
@@ -34,10 +35,11 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Eye;
     float4 Shading;  // x = 0 banded, 1 smooth, 2 dithered; yz = the texture's world position; w = light count
     float4 Surface;  // metallic, roughness, specular
-    float4 Deform;   // x = wobble amplitude (radii), y = wobble phase, z = dent count
+    float4 Deform;   // x = wobble amplitude (radii), y = wobble phase, z = dent count, w = contact count
     float4 Bruise;   // what a dent's floor shades toward, by alpha
     float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
     float4 Dents[MAX_DENTS]; // head-local center, radius: spheres carved out of the head
+    float4 Contacts[MAX_CONTACTS * 2]; // (head-local normal toward a wall, the wall's distance), (squash along it, 0, 0, 0)
 };
 
 Texture2D Texture : register(t0, space2);
@@ -144,7 +146,30 @@ float in_dent(float3 p)
     return amount;
 }
 
-float head_distance(float3 p)
+// Squashes p's space along each contact's normal by its squash, toward its wall (within a radius) so the side against
+// it stays put, bulging the rest to keep the volume; returns how much that shrinks distances, so the march stays safe.
+float squash(inout float3 p)
+{
+    float scale = 1.0;
+    for (int i = 0; i < (int)Deform.w; i++)
+    {
+        float3 n = Contacts[i * 2].xyz;
+        float s = Contacts[i * 2 + 1].x;
+        float along = dot(p, n);
+        float anchor = min(Contacts[i * 2].w, 1.0);
+        p = (p - n * along) * sqrt(s) + n * (anchor + (along - anchor) / s);
+        scale *= min(s, 1.0 / sqrt(s));
+    }
+    return scale;
+}
+
+float3 squashed(float3 p)
+{
+    squash(p);
+    return p;
+}
+
+float shape_distance(float3 p)
 {
     p = wobble(p);
     float mouthOpen = Frame.z;
@@ -189,6 +214,27 @@ float head_distance(float3 p)
     for (int i = 0; i < (int)Deform.z; i++)
         d = smooth_subtract(d, sd_sphere(p - Dents[i].xyz, Dents[i].w), 0.06);
     return d;
+}
+
+// The shape squashed against its contacts, and flattened where it meets their walls.
+float head_distance(float3 p)
+{
+    float3 q = p;
+    float scale = squash(q);
+    float d = shape_distance(q) * scale;
+    for (int i = 0; i < (int)Deform.w; i++)
+        d = smooth_subtract(d, Contacts[i * 2].w - dot(p, Contacts[i * 2].xyz), 0.08);
+    return d;
+}
+
+// How hard p is pressed into a wall: flesh near a firmly squashed contact blanches.
+float blanch(float3 p)
+{
+    float amount = 0.0;
+    for (int i = 0; i < (int)Deform.w; i++)
+        amount = max(amount, saturate(1.0 - (Contacts[i * 2].w - dot(p, Contacts[i * 2].xyz)) / 0.3) *
+            saturate((1.0 - Contacts[i * 2 + 1].x) * 5.0));
+    return amount;
 }
 
 bool in_eye_glow(float3 p)
@@ -275,7 +321,9 @@ HeadOutput fragment_main(VsOutput input)
     if (on_snout_face(position))
         light = min(light, 0.6);
     float3 color = sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold);
-    color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(wobble(position)) * 2.0));
+    color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(wobble(squashed(position))) * 2.0));
+    if (blanch(position) > threshold)
+        color = lerp(Near.rgb, 1.0, 0.25);
     output.Color = in_eye_glow(position) && Eye.a > 0.0 ? Eye : float4(color, 1.0);
     output.Specular = sculpted_specular(pixel, screenNormal, Near.rgb, Surface, threshold);
     return output;
