@@ -120,6 +120,7 @@ public class Light : Actor, IHitByHitbox
 
 	public float FlickerScale => FlickerBaseScale * (1 + CurrentFlicker * FlickerIntensity);
 	public float FlickerBaseScale => 1 + FlickerIntensity;
+	public float FlickerRatio => FlickerScale / FlickerBaseScale; // the breathing alone, without its headroom
 	public bool Enabled => string.IsNullOrWhiteSpace(EnabledByPersistentButtonId) || Game.IsButtonPressed(EnabledByPersistentButtonId);
 	float CurrentFlicker => FlickerFrequency <= 0 ? 0 :
 		0.7f * MathF.Sin(Timer * FlickerFrequency * 0.23f * MathF.Tau + FlickerRandomOffset * 1.7f) +

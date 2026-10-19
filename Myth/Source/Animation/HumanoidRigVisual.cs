@@ -237,6 +237,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	Sprite? headSprite;
 	SculptedHead? sculptedHead;
 	public float MouthOpen; // 0 closed .. 1 wide, for a sculpted head
+	public Expression Face; // a sculpted head's expression; MouthOpen opens it further
 	static float SculptedHeadMinRadius => 3f;
 	bool UsesSculptedHead => (Settings.SculptedHead || Settings.HeadShapeId.Name is { Length: > 0 }) && headSprite == null &&
 		HeadRadius >= SculptedHeadMinRadius;
@@ -1031,9 +1032,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
 		// Head sprites count yaw the other way round.
 		sculptedHead.Render(Assets.GetHeadShape(Settings.HeadShapeId), HeadRadius, -HeadViewYaw(), 0,
-			HeadSpriteRoll(), MouthOpen, near, core, far, Settings.EyeSize > 0 ? Settings.AccentColor : default,
+			HeadSpriteRoll(), Face with { MouthOpen = MathF.Max(Face.MouthOpen, MouthOpen) }, near, core, far, Settings.EyeSize > 0 ? Settings.AccentColor : default,
 			Settings.Sculpt.BodyShading, new(Settings.Sculpt.SkinMetallic, Settings.Sculpt.SkinRoughness, Settings.Sculpt.Specular, 0),
-			lights[..GatherLights(lights, center, HeadRadius)], center);
+			lights[..GatherLights(lights, center, HeadRadius)], center, stretch: Vector2.Lerp(Vector2.One, owner.Squish, Settings.SquishResponse));
 		return sculptedHead;
 	}
 
@@ -1851,8 +1852,10 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 			return 0;
 		Span<float> scores = stackalloc float[into.Length];
 		var count = 0;
-		foreach (var light in view.SceneLights)
+		var flickers = view.SceneLightFlickers;
+		for (var i = 0; i < flickers.Length; i++)
 		{
+			var light = view.SceneLights[i];
 			var score = light.ColorIntensity.W * Math.Clamp(1 - (Vector2.Distance(light.Position, center) - reach) / light.Radius, 0, 1);
 			if (score <= 0 || count == into.Length && score <= scores[count - 1])
 				continue;
@@ -1863,8 +1866,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 				into[at] = into[at - 1];
 			}
 			scores[at] = score;
+			// Without the flicker, so sculpts that cache on their lights don't re-march every frame (the lighting pass
+			// carries the flicker); rounded, since dividing it back out isn't exact.
 			var color = light.ColorIntensity;
-			into[at] = new(light.Position, light.Height, light.Radius, new Vector3(color.X, color.Y, color.Z) * color.W);
+			into[at] = new(light.Position, light.Height, MathF.Round(light.Radius / flickers[i]),
+				(new Vector3(color.X, color.Y, color.Z) * color.W / flickers[i] * 256).Round() / 256);
 			count = Math.Min(count + 1, into.Length);
 		}
 		return count;
@@ -1874,8 +1880,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	{
 		Body.DrawEmissive(batcher);
 		if (CurrentSculptedHead() is { SpecularTexture: { } headSpecular } sculpt)
-			batcher.Image(headSpecular, projectedPose[head], new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
+			batcher.Image(headSpecular, SculptedHeadTopLeft(sculpt), Color.White);
 	}
+
+	// Whole pixels, so the marched texels land 1:1 even when the pose isn't pixel-snapped.
+	Vector2 SculptedHeadTopLeft(SculptedHead sculpt) => (projectedPose[head] - new Vector2(sculpt.Size / 2)).Round();
 
 	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin, bool outlined = true,
 		(Vector2 Center, Vector2 Radius) skinUV = default)
@@ -1892,12 +1901,11 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var position = projectedPose[head];
 		if (CurrentSculptedHead() is { ColorTexture: { } sculpted } sculpt)
 		{
-			var origin = new Vector2(sculpt.Size * 0.5f);
+			var topLeft = SculptedHeadTopLeft(sculpt);
 			if (silhouette || outlined)
-				batcher.Image(sculpt.MaskTexture!, position, origin, Vector2.One, 0,
-					silhouette ? tint : Multiply(Settings.OutlineColor, tint));
+				batcher.Image(sculpt.MaskTexture!, topLeft, silhouette ? tint : Multiply(Settings.OutlineColor, tint));
 			if (!silhouette)
-				batcher.Image(sculpted, position, origin, Vector2.One, 0, tint);
+				batcher.Image(sculpted, topLeft, tint);
 			return;
 		}
 		if (outlined)
@@ -1920,7 +1928,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		var position = projectedPose[head];
 		if (CurrentSculptedHead() is { NormalTexture: { } normals } sculpt)
 		{
-			batcher.Image(normals, position, new Vector2(sculpt.Size * 0.5f), Vector2.One, 0, Color.White);
+			batcher.Image(normals, SculptedHeadTopLeft(sculpt), Color.White);
 			return;
 		}
 		if (Settings.Bones.NormalRoundness > 0)

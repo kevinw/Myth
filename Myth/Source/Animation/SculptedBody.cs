@@ -55,6 +55,7 @@ sealed class SculptedBody(GraphicsDevice device) : IDisposable
 	readonly List<Rect> reach = [];
 	Target? marched; // color, raw normal (alpha = hit), specular
 	Target? dilated; // mask, normal
+	int last; // what the current textures were marched from
 
 	public Texture? ColorTexture => marched?.Attachments[0];
 	public Texture? NormalTexture => dilated?.Attachments[1];
@@ -76,6 +77,14 @@ sealed class SculptedBody(GraphicsDevice device) : IDisposable
 	{
 		if (primitives.IsEmpty)
 			return;
+		var key = new HashCode();
+		key.AddBytes(MemoryMarshal.AsBytes(primitives));
+		key.AddBytes(MemoryMarshal.AsBytes(lights));
+		key.Add(shading);
+		key.Add(worldOrigin);
+		if (marched != null && key.ToHashCode() == last)
+			return;
+		last = key.ToHashCode();
 		var min = new Vector3(float.MaxValue);
 		var max = new Vector3(float.MinValue);
 		foreach (var p in primitives)

@@ -1696,7 +1696,8 @@ public sealed partial class GameView
 					light.RenderShadowSourceRadius,
 					light.ShadowSoftness,
 					light.ShadowNoise,
-					light.ShadowNoiseSpeed);
+					light.ShadowNoiseSpeed,
+					light.FlickerRatio);
 				if (added && light.SpriteShadowOwner is { } owner)
 					gpuLightEmitters.Add(owner);
 			}
@@ -2638,6 +2639,7 @@ public sealed partial class GameView
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
 	internal ReadOnlySpan<GpuLighting.GpuLight> SceneLights => gpuLighting is { } lighting ? lighting.Lights : default;
+	internal ReadOnlySpan<float> SceneLightFlickers => gpuLighting is { } lighting ? lighting.Flickers : default;
 	readonly ProceduralWallRenderer? proceduralWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	bool hasProceduralWalls;

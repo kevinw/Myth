@@ -4,14 +4,15 @@ using Foster.Framework;
 namespace Myth;
 
 // A disembodied sculpted head. It drifts asleep until it sees the player, then its eyes light (glowing into the room)
-// and it flies at them along a flow field around the room's solids, mouth working. Each hit caves a big dent into
+// and it flies at them along a flow field around the room's solids, mouth working. Now and then, close with a clear
+// line, it stops, draws back trembling with its eyes flaring, and lunges. Each hit caves a big dent into
 // it, sends it sailing, wobbles it like jelly and knocks chunks off; the third drops it, eyes out, to lie darkened in
 // the background.
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy | ActorTag.Flying, BoundsX = -12, BoundsY = -12, BoundsW = 24,
 	BoundsH = 24, LivePositionEditable = true)]
 public sealed class FloatingHead : Actor
 {
-	enum State { Asleep, Noticing, Hunting, Knocked, Falling, Remains }
+	enum State { Asleep, Noticing, Hunting, Windup, Dashing, Knocked, Falling, Remains }
 
 	[I(5, 32)] public float Radius = 12;
 	internal static ContentRef<HeadShapeContent> ElderHead => new("elder");
@@ -25,6 +26,14 @@ public sealed class FloatingHead : Actor
 	static float HuntSpeed => 48f;
 	static float HuntAcceleration => 170f;
 	static float AsleepBob => 5f;
+
+	static float DashInterval => 3.5f; // average seconds of hunting between dashes
+	static float DashRange => 110f;
+	static float DashWindup => 0.55f;
+	static float DashAimLock => 0.75f; // fraction of the windup after which it stops tracking the player
+	static float DashRecoil => 18f;
+	static float DashSpeedScale => 3f;
+	static float DashDistance => 80f;
 
 	static float KnockbackSpeed => 210f;
 	static float KnockbackLift => 70f;
@@ -52,6 +61,11 @@ public sealed class FloatingHead : Actor
 	static Color RemainsTint => new(0x4a4656);
 	static float RemainsFade => 0.8f;
 
+	static float FaceResponse => 10f; // per second, how fast its face eases toward its mood
+	static Expression HuntingFace => new(0.4f, -0.1f, 0.35f, -0.3f); // sizing you up, one brow cocked
+	static Expression AsleepFace => new(BrowRaise: -0.4f, Smile: 0.2f);
+	static Expression DeadFace => new(-0.3f, -0.6f, 0, -0.2f);
+
 	static int CellSize => 8;
 	static float PathRefresh => 0.25f;
 
@@ -63,6 +77,10 @@ public sealed class FloatingHead : Actor
 	float yaw, yawVelocity, pitch, pitchVelocity, roll, rollVelocity;
 	float wobble, wobblePhase;
 	float darken;
+	float charge; // 0 .. 1 over a dash windup, held through the dash
+	Expression face;
+	float dashTimer;
+	Vector2 dashDirection, dashFrom;
 	// Per axis (side walls, floor/ceiling): which way the nearest wall face or slope lies, or the last thing it hit, and
 	// how far (px) from the center, MaxValue when out of reach.
 	readonly (Vector2 Toward, float Gap)[] walls = new (Vector2, float)[2];
@@ -88,7 +106,7 @@ public sealed class FloatingHead : Actor
 		Depth = -5;
 	}
 
-	internal override bool ContactDamageEnabled => state is State.Noticing or State.Hunting;
+	internal override bool ContactDamageEnabled => state is State.Noticing or State.Hunting or State.Windup or State.Dashing;
 	public override string HitSoundType => "flesh";
 	Vector2 Center => Position;
 
@@ -118,7 +136,7 @@ public sealed class FloatingHead : Actor
 			case State.Asleep:
 				Velocity = new(Calc.Approach(Velocity.X, (home.X - Position.X) * 2, 40 * Time.Delta),
 					MathF.Sin(Timer * 1.6f) * AsleepBob + (home.Y - Position.Y));
-				if (player != null && Time.OnInterval(0.2f) && CanSee(toPlayer))
+				if (player != null && Time.OnInterval(0.2f) && CanSee(toPlayer, SightRange))
 					Enter(State.Noticing);
 				break;
 
@@ -136,6 +154,28 @@ public sealed class FloatingHead : Actor
 				if (player != null)
 					Hunt(player, toPlayer);
 				mouth = 0.35f + 0.25f * MathF.Sin(Timer * 7);
+				dashTimer -= Time.Delta;
+				if (dashTimer <= 0 && CanSee(toPlayer, DashRange))
+					Enter(State.Windup);
+				break;
+
+			case State.Windup:
+				// It draws back from the player, clenched and trembling, aim locking just before it goes.
+				charge = Math.Clamp(stateTime / DashWindup, 0, 1);
+				if (charge < DashAimLock)
+					dashDirection = toPlayer.Normalized(dashDirection);
+				Velocity = Calc.Approach(Velocity, -dashDirection * DashRecoil, 300 * Time.Delta);
+				mouth = Calc.Approach(mouth, 0, Time.Delta * 6);
+				wobble = MathF.Max(wobble, 0.025f * charge);
+				if (stateTime >= DashWindup)
+					Enter(State.Dashing);
+				break;
+
+			case State.Dashing:
+				Velocity = dashDirection * HuntSpeed * DashSpeedScale;
+				mouth = Calc.Approach(mouth, 1, Time.Delta * 8);
+				if (Vector2.Distance(Center, dashFrom) >= DashDistance)
+					Enter(State.Hunting);
 				break;
 
 			case State.Knocked:
@@ -162,7 +202,10 @@ public sealed class FloatingHead : Actor
 		}
 		if (state != State.Asleep && state != State.Noticing && state < State.Falling)
 			eyes = Calc.Approach(eyes, 1, Time.Delta * 2);
+		if (state is not State.Windup and not State.Dashing)
+			charge = Calc.Approach(charge, 0, Time.Delta * 3);
 		UpdateLook(toPlayer);
+		face = Expression.Lerp(face, Mood, 1 - MathF.Exp(-FaceResponse * Time.Delta));
 		wobble *= MathF.Exp(-WobbleDecay * Time.Delta);
 		if (wobble < 0.004f)
 			wobble = 0;
@@ -205,6 +248,13 @@ public sealed class FloatingHead : Actor
 	{
 		impactVelocity[axis] += MathF.Abs(speed) * ImpactSquash;
 		walls[axis].Toward = axis == 0 ? new(MathF.Sign(speed), 0) : new(0, MathF.Sign(speed));
+		// Grazing the floor or a wall slides along it; only running into it head-on ends a dash.
+		if (state == State.Dashing && MathF.Abs(dashDirection[axis]) > 0.5f)
+		{
+			wobble = MathF.Max(wobble, WobbleKick * 0.6f);
+			Game.Shake(0.1f, 1);
+			Enter(State.Hunting);
+		}
 	}
 
 	void Enter(State next)
@@ -216,16 +266,39 @@ public sealed class FloatingHead : Actor
 			Squish = new(1.3f, 0.75f);
 			AudioEvent("rig_puppet/swing");
 		}
+		else if (next == State.Hunting && dashTimer <= 0)
+			dashTimer = DashInterval * Game.rng.Float(0.6f, 1.4f);
+		else if (next == State.Windup)
+			Squish = new(1.15f, 0.85f);
+		else if (next == State.Dashing)
+		{
+			dashFrom = Center;
+			Squish = new(0.8f, 1.2f);
+			wobble = MathF.Max(wobble, WobbleKick * 0.5f);
+			AudioEvent("rig_puppet/swing");
+		}
 	}
 
-	bool CanSee(Vector2 toPlayer) => toPlayer.LengthSquared() < SightRange * SightRange && ClearLine(Center, Center + toPlayer, new(0, 0, 1, 1));
+	// What it feels, by state; the windup sours toward rage as it charges.
+	Expression Mood => state switch
+	{
+		State.Asleep => AsleepFace,
+		State.Noticing => Expression.Surprised,
+		State.Hunting => HuntingFace,
+		State.Windup => Expression.Lerp(HuntingFace, Expression.Angry, charge),
+		State.Dashing => Expression.Angry,
+		State.Knocked => Expression.Pained,
+		_ => DeadFace,
+	};
+
+	bool CanSee(Vector2 toPlayer, float range) => toPlayer.LengthSquared() < range * range && ClearLine(Center, Center + toPlayer, new(0, 0, 1, 1));
 
 	// Facing follows the player, springy, so a hit's spin swings through and settles.
 	void UpdateLook(Vector2 toPlayer)
 	{
 		var dead = state >= State.Falling;
 		var targetYaw = dead || state == State.Asleep ? 0 : Math.Clamp(toPlayer.X / 60, -1, 1) * 0.75f;
-		var targetPitch = dead || state == State.Asleep ? 0 : Math.Clamp(-toPlayer.Y / 80, -1, 1) * 0.35f;
+		var targetPitch = dead || state == State.Asleep ? 0 : Math.Clamp(-toPlayer.Y / 80, -1, 1) * 0.35f - charge * 0.3f; // winding up tucks the chin
 		Spring.Step(ref yaw, ref yawVelocity, targetYaw, dead ? 0 : 60, dead ? 2 : 9, Time.Delta);
 		Spring.Step(ref pitch, ref pitchVelocity, targetPitch, dead ? 0 : 60, dead ? 2 : 9, Time.Delta);
 		if (state == State.Falling)
@@ -384,6 +457,7 @@ public sealed class FloatingHead : Actor
 		rollVelocity += MathF.Sign(away.X) * SpinKick * 0.6f;
 		pitchVelocity -= SpinKick * 0.4f;
 		mouth = 1;
+		face = Expression.Pained;
 		Squish = new(0.75f, 1.25f);
 		Game.Particles?.Emit(chunkEffect, at, 18, Calc.Angle(away + new Vector2(0, -0.5f)), 1, 0.9f);
 		Velocity = away * KnockbackSpeed - Vector2.UnitY * KnockbackLift;
@@ -401,6 +475,7 @@ public sealed class FloatingHead : Actor
 		AudioEvent("enemies/drone/death");
 		Velocity *= 1.3f;
 		Mask = Masks.None;
+		Tags &= ~ActorTag.Flying;
 		Enter(State.Falling);
 		Game.KillForThisSession(this);
 	}
@@ -418,7 +493,7 @@ public sealed class FloatingHead : Actor
 
 	SculptedHead CurrentHead()
 	{
-		head ??= new(Game.Manager.GraphicsDevice);
+		head ??= new(Game.Manager.GraphicsDevice, outline: false);
 		var near = Color.Lerp(HeadColor, RemainsTint, darken * 0.5f);
 		var far = RigDraw.Multiply(near, new Color(0x705c8c));
 		var center = (Vector2)RenderPosition;
@@ -434,10 +509,10 @@ public sealed class FloatingHead : Actor
 			if (toward != Vector2.Zero && (wall < ContactReach || squash != 1))
 				contacts[contactCount++] = new(toward, MathF.Min(wall, 10), squash);
 		}
-		head.Render(Assets.GetHeadShape(HeadShapeId), Radius, yaw, pitch, roll, mouth, near, Color.Lerp(near, far, 0.5f), far,
-			eyes > 0.02f ? Color.Lerp(Color.Black, EyeColor, eyes) : default, BodyShadeMode.Banded, new(0, 0.5f, 1, 0),
+		head.Render(Assets.GetHeadShape(HeadShapeId), Radius, yaw, pitch, roll, face with { MouthOpen = mouth }, near, Color.Lerp(near, far, 0.5f), far,
+			eyes > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, charge * 0.4f), eyes) : default, BodyShadeMode.Banded, new(0, 0.5f, 1, 0),
 			lights[..HumanoidRigVisual.GatherLights(Game, lights, center, Radius)], center, dents.AsSpan(0, dentCount),
-			wobble, wobblePhase, BruiseColor, contacts[..contactCount]);
+			wobble, wobblePhase, BruiseColor, contacts[..contactCount], Squish);
 		return head;
 	}
 
@@ -446,16 +521,14 @@ public sealed class FloatingHead : Actor
 	void DrawTexture(Batcher batcher, Texture? texture, Color color)
 	{
 		if (texture != null)
-			batcher.Image(texture, Vector2.Zero, new Vector2(head!.Size * 0.5f), Squish, 0, color);
+			batcher.Image(texture, Vector2.Zero, new Vector2(head!.Size / 2), Vector2.One, 0, color);
 	}
 
 	public override void Render(Batcher batcher)
 	{
 		if (SpriteBlinkHidden && state < State.Falling)
 			return;
-		var sculpt = CurrentHead();
-		DrawTexture(batcher, sculpt.MaskTexture, RigDraw.Multiply(new Color(0x171d27), Tint));
-		DrawTexture(batcher, sculpt.ColorTexture, Tint);
+		DrawTexture(batcher, CurrentHead().ColorTexture, Tint);
 	}
 
 	public override void RenderNormals(Batcher batcher) => DrawTexture(batcher, CurrentHead().NormalTexture, Color.White);
@@ -469,6 +542,6 @@ public sealed class FloatingHead : Actor
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
 		if (eyes > 0.05f)
-			action(Center, Radius * 4 * eyes, 0.9f * eyes, 8, EyeColor);
+			action(Center, Radius * 4 * eyes * (1 + charge * 0.6f), 0.9f * eyes, 8, EyeColor);
 	}
 }

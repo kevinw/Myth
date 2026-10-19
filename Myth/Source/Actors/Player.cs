@@ -1344,12 +1344,16 @@ public abstract partial class Pawn : Actor
 				return;
 			if (climbIndex < 0)
 			{
-				// Climbed past the anchor: pop up off the top (lands you on the ledge when there is one).
-				ExitClimb();
-				Squish = new Vector2(0.65f, 1.4f);
-				StartJump(JumpForce * 0.85f, JumpTime * 0.8f);
-				OnPawnJump();
-				return;
+				// Climbed past the anchor: pop up off the top onto a ledge beside it; with no ledge, hold at the top.
+				climbIndex = 0;
+				if (LedgeAtRopeTop(rope.Sample(chain, 0)))
+				{
+					ExitClimb();
+					Squish = new Vector2(0.65f, 1.4f);
+					StartJump(JumpForce * 0.85f, JumpTime * 0.8f);
+					OnPawnJump();
+					return;
+				}
 			}
 			if (climbIndex > Rope.LastIndex(chain))
 			{
@@ -1422,7 +1426,7 @@ public abstract partial class Pawn : Actor
 
 		if (chain.Pinned && input.MoveY > 0) {
 			PlayPawnAnimation("climb_down");
-		} else if (chain.Pinned && input.MoveY < 0) {
+		} else if (chain.Pinned && input.MoveY < 0 && climbIndex > 0) {
 			PlayPawnAnimation("climb");
 		} else {
 			PlayPawnAnimation(ropeIsFalling ? "climb_fall" : "climb_idle");
@@ -1459,6 +1463,14 @@ public abstract partial class Pawn : Actor
 				RopeCreakMinRumble, RopeCreakMaxRumble), 0, RopeCreakRumbleDuration);
 		}
 		ropeCreakSide = side;
+	}
+
+	// Standing on the anchor is clear, and there's floor just beside it to land on.
+	bool LedgeAtRopeTop(Vector2 anchor)
+	{
+		var standing = Hitbox.Rect + new Point2(anchor.RoundToPoint2().X - Hitbox.Rect.Center.X, (int)anchor.Y - Hitbox.Rect.Bottom);
+		var floor = new RectInt(standing.Left - standing.Width / 2, standing.Bottom, standing.Width * 2, 1);
+		return !Game.OverlapsRoomCollision(this, standing) && Game.OverlapsRoomCollision(this, floor);
 	}
 
 	bool TryRopeHandoff(Vector2 grip, int directionY)

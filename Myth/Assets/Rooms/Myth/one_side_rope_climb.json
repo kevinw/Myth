@@ -1,5 +1,5 @@
 {
-  "position": [680, -8],
+  "position": [720, -8],
   "size": [40, 54],
   "backdropColor": "260E43",
   "ambientColor": "C8C8C8",
@@ -163,6 +163,23 @@
       "CookieCutoff": 0.045,
       "Radius": 256,
       "Intensity": 1.106
+    },
+    {
+      "Id": "6aaecdfe613a063f",
+      "Type": "FloatingHead",
+      "Position": [148, 357],
+      "HeadColor": "C700A4",
+      "EyeColor": "DBD9D7",
+      "HeadShapeId": "stock",
+      "Radius": 23.199
+    },
+    {
+      "Id": "bd59c717f7a830d4",
+      "Type": "Light",
+      "Position": [146, 431],
+      "Radius": 85.873,
+      "Intensity": 0.486,
+      "DrawSprite": false
     }
   ]
 }

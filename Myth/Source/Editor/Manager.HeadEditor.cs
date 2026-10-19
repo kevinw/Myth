@@ -109,7 +109,7 @@ public partial class Manager
 		{
 			var thumbnail = headThumbnails.TryGetValue(id, out var cached) ? cached
 				: headThumbnails[id] = new SculptedHead(GraphicsDevice);
-			thumbnail.Render(Assets.HeadShapes[id], HeadThumbnailRadius, -0.6f, 0, 0, 0, HeadNear, HeadCore, HeadFar, HeadEye);
+			thumbnail.Render(Assets.HeadShapes[id], HeadThumbnailRadius, -0.6f, 0, 0, default, HeadNear, HeadCore, HeadFar, HeadEye);
 			if (column++ % perRow != 0)
 				SameLine();
 			if (ImGuiSubtextureButton($"##head-{id}", new Subtexture(thumbnail.ColorTexture!), id, id == headEditorId,
@@ -130,7 +130,7 @@ public partial class Manager
 	void DrawHeadPreview(HeadShape shape)
 	{
 		headPreview ??= new SculptedHead(GraphicsDevice);
-		headPreview.Render(shape, HeadPreviewRadius, headPreviewYaw, 0, 0, headPreviewMouth, HeadNear, HeadCore, HeadFar, HeadEye);
+		headPreview.Render(shape, HeadPreviewRadius, headPreviewYaw, 0, 0, new Expression(MouthOpen: headPreviewMouth), HeadNear, HeadCore, HeadFar, HeadEye);
 		var size = headPreview.Size * Scale;
 		SetCursorPosX(GetCursorPosX() + MathF.Max(0, (GetContentRegionAvail().X - size) * 0.5f));
 		var at = GetCursorScreenPos();

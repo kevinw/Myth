@@ -37,6 +37,8 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Surface;  // metallic, roughness, specular
     float4 Deform;   // x = wobble amplitude (radii), y = wobble phase, z = dent count, w = contact count
     float4 Bruise;   // what a dent's floor shades toward, by alpha
+    float4 Stretch;  // xy = squash and stretch on screen, 1 = none
+    float4 Face;     // expression, -1 .. 1: brow tilt (+ inner ends down), brow raise, brow skew (+ head's right up), smile
     float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
     float4 Dents[MAX_DENTS]; // head-local center, radius: spheres carved out of the head
     float4 Contacts[MAX_CONTACTS * 2]; // (head-local normal toward a wall, the wall's distance), (squash along it, 0, 0, 0)
@@ -101,6 +103,12 @@ float sd_capsule(float3 p, float3 a, float3 b, float radius)
     float3 ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return length(pa - ba * h) - radius;
+}
+
+// Start to end through middle as two capsules; one straight capsule when middle sits on the line.
+float sd_bent_capsule(float3 p, float3 start, float3 middle, float3 end, float radius, bool bent)
+{
+    return bent ? min(sd_capsule(p, start, middle, radius), sd_capsule(p, middle, end, radius)) : sd_capsule(p, start, end, radius);
 }
 
 float sd_cylinder(float3 p, float3 a, float3 b, float radius)
@@ -177,7 +185,14 @@ float shape_distance(float3 p)
     float jaw = sd_ellipsoid(p - float3(0.0, -Jaw.w, Jaw2.x), Jaw.xyz);
     float d = smooth_union(cranium, jaw, max(0.01, Jaw2.y));
     if (Jaw2.z > 0.0)
-        d = smooth_union(d, sd_capsule(p, float3(-Jaw2.w, Brow.x, Brow.y), float3(Jaw2.w, Brow.x, Brow.y), Jaw2.z), 0.1);
+    {
+        // Tilt pulls the inner ends down and forward over the sockets (anger) or up (worry); raise lifts the whole
+        // brow; skew lifts one side and drops the other.
+        float ends = Brow.x + Face.y * 0.08 + Face.x * 0.03;
+        float3 middle = float3(0.0, Brow.x + Face.y * 0.08 - Face.x * 0.14, Brow.y + max(Face.x, 0.0) * 0.06);
+        d = smooth_union(d, sd_bent_capsule(p, float3(-Jaw2.w, ends - Face.z * 0.08, Brow.y), middle,
+            float3(Jaw2.w, ends + Face.z * 0.08, Brow.y), Jaw2.z, Face.x != 0.0), 0.1);
+    }
     float noseSize = Brow.z;
     if (noseSize > 0.0)
     {
@@ -209,8 +224,11 @@ float shape_distance(float3 p)
     if (Eyes.z > 0.0)
         d = smooth_subtract(d, min(sd_sphere(p - socket(-1.0), Eyes.z), sd_sphere(p - socket(1.0), Eyes.z)), 0.05);
     if (Mouth.x > 0.0)
-        d = smooth_subtract(d, sd_capsule(p, float3(-Mouth.x, Mouth.y, 0.86), float3(Mouth.x, Mouth.y, 0.86),
-            Mouth.z + mouthOpen * 0.14), 0.04);
+    {
+        float3 corner = float3(Mouth.x, Mouth.y + Face.w * 0.07, 0.86);
+        d = smooth_subtract(d, sd_bent_capsule(p, corner * float3(-1.0, 1.0, 1.0), float3(0.0, Mouth.y - Face.w * 0.03, 0.86),
+            corner, Mouth.z + mouthOpen * 0.14, Face.w != 0.0), 0.04);
+    }
     for (int i = 0; i < (int)Deform.z; i++)
         d = smooth_subtract(d, sd_sphere(p - Dents[i].xyz, Dents[i].w), 0.06);
     return d;
@@ -237,12 +255,13 @@ float blanch(float3 p)
     return amount;
 }
 
+// A pupil on each socket's floor, so the glow sits deep in the eye and a lowered brow hides it.
 bool in_eye_glow(float3 p)
 {
-    float glow = Eyes.z * 0.45;
-    float3 back = float3(0.0, -0.02, Eyes.z * 0.4);
-    float3 l = p - (socket(-1.0) - back);
-    float3 r = p - (socket(1.0) - back);
+    float glow = Eyes.z * 0.5;
+    float3 floor = float3(0.0, -0.02, Eyes.z);
+    float3 l = p - (socket(-1.0) - floor);
+    float3 r = p - (socket(1.0) - floor);
     return Eyes.z > 0.0 && (dot(l, l) < glow * glow || dot(r, r) < glow * glow);
 }
 
@@ -281,7 +300,8 @@ HeadOutput fragment_main(VsOutput input)
 
     float half_size = Frame.x;
     float radius = Frame.y;
-    float2 across = float2(input.position.x - half_size, -(input.position.y - half_size)) / radius;
+    // Squash and stretch: each pixel marches the unstretched head where it lands, so nothing is resampled.
+    float2 across = float2(input.position.x - half_size, -(input.position.y - half_size)) / radius / Stretch.xy;
     float depth = Extent * Extent - dot(across, across);
     if (depth <= 0.0)
         return output;
@@ -308,12 +328,13 @@ HeadOutput fragment_main(VsOutput input)
         return output;
 
     float3 normal = surface_normal(position);
-    float3 viewNormal = normalize(to_view(normal));
+    float3 viewNormal = to_view(normal);
+    viewNormal = normalize(float3(viewNormal.xy / Stretch.xy, viewNormal.z));
     output.Normal = float4(viewNormal.x * 0.5 + 0.5, -viewNormal.y * 0.5 + 0.5, viewNormal.z * 0.5 + 0.5, 1.0);
     float occlusion = clamp(head_distance(position + normal * 0.22) / 0.22, 0.0, 1.0);
     // The shared shading works in pixels with y down.
     float3 screenNormal = float3(viewNormal.x, -viewNormal.y, viewNormal.z);
-    float3 viewPosition = to_view(position) * radius;
+    float3 viewPosition = to_view(position) * radius * float3(Stretch.xy, 1.0);
     float3 pixel = float3(half_size + viewPosition.x, half_size - viewPosition.y, viewPosition.z);
     float threshold = sculpted_threshold(input.position.xy);
     float light = sculpted_light(screenNormal, occlusion, Surface.x, 0.0);

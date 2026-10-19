@@ -32,6 +32,11 @@ public sealed class RigPuppetProp : RigActor, IAttachmentRotation
 	[I(16, 320)] public float LookRange = 96;
 	[I(5, 90)] public float LookMaxTurn = 50; // degrees the head tilts off the body's facing
 	[I(0.2f, 10)] public float LookSpeed = 1.5f;
+	[InspectorGroup("Expression")] [I(-1, 1)] public float BrowTilt;
+	[I(-1, 1)] public float BrowRaise;
+	[I(-1, 1)] public float BrowSkew;
+	[I(-1, 1)] public float Smile;
+	[I(0, 1)] public float MouthOpen;
 
 	// Kept on the idle the props always started from: it fixes the neural skin's UV layout.
 	protected override string InitialClip => "Zombie_Idle_Loop";
@@ -99,6 +104,7 @@ public sealed class RigPuppetProp : RigActor, IAttachmentRotation
 
 	void SamplePose(bool resetDynamics = false)
 	{
+		visual.Face = new(BrowTilt, BrowRaise, BrowSkew, Smile, MouthOpen);
 		visual.Play(visual.TryGetClip(PoseAnimationName, out _) ? PoseAnimationName : InitialClip, blend: false);
 		visual.Time = visual.ActiveClip.Duration * Math.Clamp(PoseProgress, 0, 1);
 		if (resetDynamics)

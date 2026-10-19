@@ -100,6 +100,7 @@ sealed class GpuLighting : IDisposable
 	readonly UniformBuffer depthUniforms = new();
 	readonly UniformBuffer maskUniforms = new();
 	readonly GpuLight[] lights = new GpuLight[MaxLights];
+	readonly float[] flickers = new float[MaxLights]; // each light's breathing, scaled into its radius and intensity
 	readonly GpuSporeFogVolume[] sporeFogVolumes = new GpuSporeFogVolume[MaxSporeFogVolumes];
 	GpuSegment[] segments = new GpuSegment[256];
 	Shader? depthShader;
@@ -129,6 +130,7 @@ sealed class GpuLighting : IDisposable
 
 	// The lights gathered for the frame being lit; actors drawing before the next Begin see last frame's.
 	internal ReadOnlySpan<GpuLight> Lights => lights.AsSpan(0, lightCount);
+	internal ReadOnlySpan<float> Flickers => flickers.AsSpan(0, lightCount);
 
 	public void Begin(in Rect visibleWorld)
 	{
@@ -164,7 +166,8 @@ sealed class GpuLighting : IDisposable
 		float shadowSourceRadius,
 		float shadowSoftness,
 		float shadowNoise,
-		float shadowNoiseSpeed)
+		float shadowNoiseSpeed,
+		float flicker = 1)
 	{
 		if (lightCount >= lights.Length || radius <= 0 || intensity <= 0)
 			return false;
@@ -179,6 +182,7 @@ sealed class GpuLighting : IDisposable
 			return false;
 
 		var value = (Vector4)color;
+		flickers[lightCount] = flicker;
 		lights[lightCount++] = new(
 			position,
 			radius,
