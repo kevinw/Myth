@@ -41,18 +41,9 @@ public sealed class FloatingHead : Actor
 	static float KnockbackTime => 0.55f;
 	static float WallRestitution => 0.6f;
 
-	static float DentRadius => 0.45f; // head radii
-	static float DentDepth => 0.26f;
 	static float WobbleKick => 0.09f;
-	static float WobbleDecay => 4.5f;
-	static float WobbleRate => 30f;
 	static float SpinKick => 5f; // radians/sec of yaw and roll a hit throws in
 
-	static float ContactReach => 1f; // radii: walls nearer than this press into the head
-	static float PressSquash => 0.7f; // squash per radius pressed in
-	static float ImpactSquash => 0.025f; // squash spring kick per px/sec of impact
-	static float SquashStiffness => 260f;
-	static float SquashDamping => 9f;
 	static float RemainsSag => 0.12f;
 
 	static float FallGravity => 520f;
@@ -63,8 +54,8 @@ public sealed class FloatingHead : Actor
 
 	static float FaceResponse => 10f; // per second, how fast its face eases toward its mood
 	static Expression HuntingFace => new(0.4f, -0.1f, 0.35f, -0.3f); // sizing you up, one brow cocked
-	static Expression AsleepFace => new(BrowRaise: -0.4f, Smile: 0.2f);
-	static Expression DeadFace => new(-0.3f, -0.6f, 0, -0.2f);
+	static Expression AsleepFace => new(BrowRaise: -0.4f, Smile: 0.2f, LidClose: 1);
+	static Expression DeadFace => new(-0.3f, -0.6f, 0, -0.2f, LidClose: 0.7f);
 
 	static int CellSize => 8;
 	static float PathRefresh => 0.25f;
@@ -74,21 +65,12 @@ public sealed class FloatingHead : Actor
 	float stateTime;
 	float eyes; // 0 dark .. 1 lit
 	float mouth;
-	float yaw, yawVelocity, pitch, pitchVelocity, roll, rollVelocity;
-	float wobble, wobblePhase;
 	float darken;
 	float charge; // 0 .. 1 over a dash windup, held through the dash
-	Expression face;
 	float dashTimer;
 	Vector2 dashDirection, dashFrom;
-	// Per axis (side walls, floor/ceiling): which way the nearest wall face or slope lies, or the last thing it hit, and
-	// how far (px) from the center, MaxValue when out of reach.
-	readonly (Vector2 Toward, float Gap)[] walls = new (Vector2, float)[2];
-	Vector2 impact, impactVelocity; // extra squash along each axis, sprung, so impacts compress and rebound
 	Vector2 home;
-	readonly Vector4[] dents = new Vector4[SculptedHead.MaxDents];
-	int dentCount;
-	SculptedHead? head;
+	readonly HeadSculpt sculpt;
 	int chunkEffect = -1;
 
 	// The flow field: each cell's step count to the player's cell, -1 unreachable; blocked is where the head won't fit.
@@ -104,6 +86,7 @@ public sealed class FloatingHead : Actor
 	{
 		Mask = Masks.Enemy;
 		Depth = -5;
+		sculpt = new(this);
 	}
 
 	internal override bool ContactDamageEnabled => state is State.Noticing or State.Hunting or State.Windup or State.Dashing;
@@ -122,8 +105,7 @@ public sealed class FloatingHead : Actor
 	public override void Destroyed()
 	{
 		ReleaseParticleEffect(ref chunkEffect);
-		head?.Dispose();
-		head = null;
+		sculpt.Dispose();
 	}
 
 	public override void Update()
@@ -166,7 +148,7 @@ public sealed class FloatingHead : Actor
 					dashDirection = toPlayer.Normalized(dashDirection);
 				Velocity = Calc.Approach(Velocity, -dashDirection * DashRecoil, 300 * Time.Delta);
 				mouth = Calc.Approach(mouth, 0, Time.Delta * 6);
-				wobble = MathF.Max(wobble, 0.025f * charge);
+				sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.025f * charge);
 				if (stateTime >= DashWindup)
 					Enter(State.Dashing);
 				break;
@@ -189,7 +171,7 @@ public sealed class FloatingHead : Actor
 				Velocity.Y += FallGravity * Time.Delta;
 				Velocity.X *= MathF.Exp(-0.8f * Time.Delta);
 				// It rolls along with what it travels.
-				rollVelocity = Calc.Approach(rollVelocity, Velocity.X / Radius, 20 * Time.Delta);
+				sculpt.RollVelocity = Calc.Approach(sculpt.RollVelocity, Velocity.X / Radius, 20 * Time.Delta);
 				eyes = Calc.Approach(eyes, 0, Time.Delta * 3);
 				mouth = Calc.Approach(mouth, 1, Time.Delta * 4);
 				break;
@@ -205,53 +187,27 @@ public sealed class FloatingHead : Actor
 		if (state is not State.Windup and not State.Dashing)
 			charge = Calc.Approach(charge, 0, Time.Delta * 3);
 		UpdateLook(toPlayer);
-		face = Expression.Lerp(face, Mood, 1 - MathF.Exp(-FaceResponse * Time.Delta));
-		wobble *= MathF.Exp(-WobbleDecay * Time.Delta);
-		if (wobble < 0.004f)
-			wobble = 0;
-		wobblePhase += WobbleRate * Time.Delta;
-		Spring.Step(ref impact, ref impactVelocity, state == State.Remains ? new(0, RemainsSag) : Vector2.Zero,
-			SquashStiffness, SquashDamping, Time.Delta);
+		sculpt.Face = Expression.Lerp(sculpt.Face, Mood, 1 - MathF.Exp(-FaceResponse * Time.Delta)) with { MouthOpen = mouth };
+		sculpt.GazeTarget = state is State.Asleep or >= State.Falling || player == null ? null : Center + toPlayer;
+		sculpt.ImpactRest = state == State.Remains ? new(0, RemainsSag) : Vector2.Zero;
+		sculpt.Radius = Radius;
+		sculpt.ShapeId = HeadShapeId;
+		sculpt.Near = Color.Lerp(HeadColor, RemainsTint, darken * 0.5f);
+		sculpt.Eye = eyes > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, charge * 0.4f), eyes) : default;
+		sculpt.Bruise = BruiseColor;
+		sculpt.Tint = Color.Lerp(Color.White, RemainsTint, darken);
+		sculpt.Step();
 		base.Update();
-		FindWalls();
-	}
-
-	static readonly Point2[] Sides = [new(-1, 0), new(1, 0), new(0, -1), new(0, 1)];
-
-	void FindWalls()
-	{
-		walls[0].Gap = walls[1].Gap = float.MaxValue;
-		var half = Hitbox.Rect.Width / 2;
-		foreach (var side in Sides)
-			for (var gap = half; gap < Radius * ContactReach; gap++)
-			{
-				var probe = Hitbox.Rect + Position + side * (gap - half + 1);
-				if (!Game.OverlapsRoomCollision(this, probe))
-					continue;
-				var axis = side.X != 0 ? 0 : 1;
-				var wall = ((Vector2)side, (float)gap);
-				// Slopes are floors and ceilings: the vertical probe presses it flat along the slope's own normal.
-				if (Game.TryFindSurface(this, probe, side, 0, out var hit) && hit.Slope is { } slope)
-				{
-					if (axis == 0)
-						break;
-					Game.CollisionRoomFor(this)!.GetSlopeSurface(slope, out var left, out _);
-					wall = (-hit.Normal, Vector2.Dot(Center - left, hit.Normal));
-				}
-				if (wall.Item2 < walls[axis].Gap)
-					walls[axis] = wall;
-				break;
-			}
+		sculpt.FindWalls();
 	}
 
 	void Impact(int axis, float speed)
 	{
-		impactVelocity[axis] += MathF.Abs(speed) * ImpactSquash;
-		walls[axis].Toward = axis == 0 ? new(MathF.Sign(speed), 0) : new(0, MathF.Sign(speed));
+		sculpt.Impact(axis, speed);
 		// Grazing the floor or a wall slides along it; only running into it head-on ends a dash.
 		if (state == State.Dashing && MathF.Abs(dashDirection[axis]) > 0.5f)
 		{
-			wobble = MathF.Max(wobble, WobbleKick * 0.6f);
+			sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * 0.6f);
 			Game.Shake(0.1f, 1);
 			Enter(State.Hunting);
 		}
@@ -274,7 +230,7 @@ public sealed class FloatingHead : Actor
 		{
 			dashFrom = Center;
 			Squish = new(0.8f, 1.2f);
-			wobble = MathF.Max(wobble, WobbleKick * 0.5f);
+			sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * 0.5f);
 			AudioEvent("rig_puppet/swing");
 		}
 	}
@@ -299,14 +255,13 @@ public sealed class FloatingHead : Actor
 		var dead = state >= State.Falling;
 		var targetYaw = dead || state == State.Asleep ? 0 : Math.Clamp(toPlayer.X / 60, -1, 1) * 0.75f;
 		var targetPitch = dead || state == State.Asleep ? 0 : Math.Clamp(-toPlayer.Y / 80, -1, 1) * 0.35f - charge * 0.3f; // winding up tucks the chin
-		Spring.Step(ref yaw, ref yawVelocity, targetYaw, dead ? 0 : 60, dead ? 2 : 9, Time.Delta);
-		Spring.Step(ref pitch, ref pitchVelocity, targetPitch, dead ? 0 : 60, dead ? 2 : 9, Time.Delta);
+		sculpt.Look(targetYaw, targetPitch, dead ? 0 : 60, dead ? 2 : 9);
 		if (state == State.Falling)
-			roll += rollVelocity * Time.Delta;
+			sculpt.Roll += sculpt.RollVelocity * Time.Delta;
 		else if (state == State.Remains)
-			rollVelocity = 0;
+			sculpt.RollVelocity = 0;
 		else
-			Spring.Step(ref roll, ref rollVelocity, 0, 50, 7, Time.Delta);
+			Spring.Step(ref sculpt.Roll, ref sculpt.RollVelocity, 0, 50, 7, Time.Delta);
 	}
 
 	// Straight at the player when the way is clear, otherwise down the flow field.
@@ -413,7 +368,7 @@ public sealed class FloatingHead : Actor
 		if (state is State.Knocked or State.Falling)
 		{
 			Velocity.X = -Velocity.X * WallRestitution;
-			wobble = MathF.Max(wobble, WobbleKick * 0.5f);
+			sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * 0.5f);
 		}
 		else
 			StopX();
@@ -426,7 +381,7 @@ public sealed class FloatingHead : Actor
 		{
 			Game.Shake(0.15f, 1.5f);
 			AudioEvent("boss/stomp");
-			wobble = MathF.Max(wobble, WobbleKick * Math.Clamp(Velocity.Y / 300, 0.3f, 1));
+			sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * Math.Clamp(Velocity.Y / 300, 0.3f, 1));
 			Squish = new(1.25f, 0.8f);
 			if (Velocity.Y < 60)
 			{
@@ -451,13 +406,13 @@ public sealed class FloatingHead : Actor
 			return;
 		var at = hitInfo.AttackBox.Rect.Center;
 		var away = (Center - (Vector2)hitInfo.By.Position).Normalized(-Vector2.UnitY);
-		Dent(at);
-		wobble = WobbleKick;
-		yawVelocity += MathF.Sign(away.X) * SpinKick;
-		rollVelocity += MathF.Sign(away.X) * SpinKick * 0.6f;
-		pitchVelocity -= SpinKick * 0.4f;
+		sculpt.Dent(at);
+		sculpt.Wobble = WobbleKick;
+		sculpt.YawVelocity += MathF.Sign(away.X) * SpinKick;
+		sculpt.RollVelocity += MathF.Sign(away.X) * SpinKick * 0.6f;
+		sculpt.PitchVelocity -= SpinKick * 0.4f;
 		mouth = 1;
-		face = Expression.Pained;
+		sculpt.Face = Expression.Pained;
 		Squish = new(0.75f, 1.25f);
 		Game.Particles?.Emit(chunkEffect, at, 18, Calc.Angle(away + new Vector2(0, -0.5f)), 1, 0.9f);
 		Velocity = away * KnockbackSpeed - Vector2.UnitY * KnockbackLift;
@@ -480,63 +435,17 @@ public sealed class FloatingHead : Actor
 		Game.KillForThisSession(this);
 	}
 
-	// Carves a dent where the hit lands on the visible surface, in head-local space so it turns with the head.
-	void Dent(Vector2 worldPoint)
-	{
-		var across = (worldPoint - Center) / Radius * new Vector2(1, -1);
-		if (!SculptedHead.Raycast(Assets.GetHeadShape(HeadShapeId), across, yaw, pitch, roll, out var point, out var normal))
-			return;
-		if (dentCount == dents.Length)
-			Array.Copy(dents, 1, dents, 0, --dentCount);
-		dents[dentCount++] = new(point + normal * (DentRadius - DentDepth), DentRadius);
-	}
-
-	SculptedHead CurrentHead()
-	{
-		head ??= new(Game.Manager.GraphicsDevice, outline: false);
-		var near = Color.Lerp(HeadColor, RemainsTint, darken * 0.5f);
-		var far = RigDraw.Multiply(near, new Color(0x705c8c));
-		var center = (Vector2)RenderPosition;
-		Span<BodyLight> lights = stackalloc BodyLight[SculptedBody.MaxLights];
-		// Walls in reach press it flat and squash it; impacts squash it further, then it springs back.
-		Span<Vector4> contacts = stackalloc Vector4[SculptedHead.MaxContacts];
-		var contactCount = 0;
-		for (var axis = 0; axis < 2; axis++)
-		{
-			var (toward, gap) = walls[axis];
-			var wall = gap / Radius;
-			var squash = MathF.Round(Math.Clamp(1 - MathF.Max(0, ContactReach - wall) * PressSquash - impact[axis], 0.55f, 1.3f) * 64) / 64;
-			if (toward != Vector2.Zero && (wall < ContactReach || squash != 1))
-				contacts[contactCount++] = new(toward, MathF.Min(wall, 10), squash);
-		}
-		head.Render(Assets.GetHeadShape(HeadShapeId), Radius, yaw, pitch, roll, face with { MouthOpen = mouth }, near, Color.Lerp(near, far, 0.5f), far,
-			eyes > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, charge * 0.4f), eyes) : default, BodyShadeMode.Banded, new(0, 0.5f, 1, 0),
-			lights[..HumanoidRigVisual.GatherLights(Game, lights, center, Radius)], center, dents.AsSpan(0, dentCount),
-			wobble, wobblePhase, BruiseColor, contacts[..contactCount], Squish);
-		return head;
-	}
-
-	Color Tint => Color.Lerp(Color.White, RemainsTint, darken);
-
-	void DrawTexture(Batcher batcher, Texture? texture, Color color)
-	{
-		if (texture != null)
-			batcher.Image(texture, Vector2.Zero, new Vector2(head!.Size / 2), Vector2.One, 0, color);
-	}
-
 	public override void Render(Batcher batcher)
 	{
-		if (SpriteBlinkHidden && state < State.Falling)
-			return;
-		DrawTexture(batcher, CurrentHead().ColorTexture, Tint);
+		if (!SpriteBlinkHidden || state >= State.Falling)
+			sculpt.Render(batcher);
 	}
 
-	public override void RenderNormals(Batcher batcher) => DrawTexture(batcher, CurrentHead().NormalTexture, Color.White);
-	public override void RenderEmissive(Batcher batcher) => DrawTexture(batcher, CurrentHead().SpecularTexture, Tint);
-	public override void RenderShadow(Batcher batcher, Color color) => DrawTexture(batcher, CurrentHead().MaskTexture, color);
-	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
-
-	public override Rect GetVisualBounds() => Rect.CenteredAt(Center, new Vector2(Radius * 3.2f));
+	public override void RenderNormals(Batcher batcher) => sculpt.RenderNormals(batcher);
+	public override void RenderEmissive(Batcher batcher) => sculpt.RenderEmissive(batcher);
+	public override void RenderShadow(Batcher batcher, Color color) => sculpt.RenderShadow(batcher, color);
+	public override void RenderReflection(Batcher batcher, Color color) => sculpt.RenderShadow(batcher, color);
+	public override Rect GetVisualBounds() => sculpt.VisualBounds;
 
 	// The lit eyes throw their color into the room.
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)

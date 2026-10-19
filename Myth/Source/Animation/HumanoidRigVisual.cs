@@ -1846,7 +1846,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// The scene lights that reach most strongly into `reach` pixels around a world point, strongest first.
 	int GatherLights(Span<BodyLight> into, Vector2 center, float reach) => GatherLights(owner.Game, into, center, reach);
 
-	internal static int GatherLights(Game game, Span<BodyLight> into, Vector2 center, float reach)
+	// inside: lights nearer the center than this are skipped -- a light within a head can't light its own surface.
+	internal static int GatherLights(Game game, Span<BodyLight> into, Vector2 center, float reach, float inside = 0)
 	{
 		if (game.View is not { } view)
 			return 0;
@@ -1856,6 +1857,8 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		for (var i = 0; i < flickers.Length; i++)
 		{
 			var light = view.SceneLights[i];
+			if (Vector2.DistanceSquared(light.Position, center) < inside * inside)
+				continue;
 			var score = light.ColorIntensity.W * Math.Clamp(1 - (Vector2.Distance(light.Position, center) - reach) / light.Radius, 0, 1);
 			if (score <= 0 || count == into.Length && score <= scores[count - 1])
 				continue;

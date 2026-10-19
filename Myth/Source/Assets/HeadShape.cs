@@ -36,13 +36,27 @@ public sealed class HeadShape
 	public float EyeHeight { get; set; } = 0.06f;
 	public float EyeSize { get; set; } = 0.25f;
 	public float EyeDepth { get; set; } = 0.72f;
+	public float EyeballSize { get; set; } = 0.17f; // 0 leaves bare sockets
+	public float IrisSize { get; set; } = 0.55f;
+	public float LidDroop { get; set; } = 0.3f; // how far the lids rest closed
 
 	public float MouthWidth { get; set; } = 0.3f;
 	public float MouthHeight { get; set; } = -0.52f;
 	public float MouthSize { get; set; } = 0.05f;
+	public float LipSize { get; set; } = 0.035f; // the band around the mouth's cut that reads as lips
+	public float TeethSize { get; set; } = 0.07f;
+	public float BrowHair { get; set; } = 0.04f; // how far over the brow its hair grows
+
+	public Color HairColor { get; set; } = new(0x2e2320);
+	public Color LipColor { get; set; } = new(0x6e3433);
+	public Color TeethColor { get; set; } = new(0xcfbf8a);
+	public Color ScleraColor { get; set; } = new(0xd8cba0);
+	public Color IrisColor { get; set; } = new(0x5b6a35);
 
 	public float EarSize { get; set; }
 	public float EarHeight { get; set; }
+
+	public List<HeadAdornment> Adornments { get; set; } = [];
 
 	// Bumped by every edit, so rendered heads know to redraw.
 	[JsonIgnore] public int Version { get; set; }
@@ -57,6 +71,27 @@ public sealed class HeadShape
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 		File.WriteAllText(path, JsonSerializer.Serialize(this, HeadShapeJsonContext.Default.HeadShape) + "\n");
 	}
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<AdornmentKind>))]
+public enum AdornmentKind { Ring, Stud, Horn }
+
+// Jewelry and growths worn on a head, in head radii. A ring hangs from its point, its plane facing front at Yaw 0 and the
+// side at 90, and swings as the head moves; a stud is a ball; a horn grows Size long from its point along Yaw and Pitch
+// (degrees), tapering from Thickness. Mirror adds the same on the other side.
+public sealed class HeadAdornment
+{
+	public AdornmentKind Kind { get; set; }
+	public float X { get; set; }
+	public float Y { get; set; }
+	public float Z { get; set; }
+	public float Size { get; set; } = 0.12f;
+	public float Thickness { get; set; } = 0.025f;
+	public float Yaw { get; set; }
+	public float Pitch { get; set; }
+	public bool Mirror { get; set; } = true;
+	public bool Metal { get; set; } = true;
+	public Color Color { get; set; } = new(0xc9a548);
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)]

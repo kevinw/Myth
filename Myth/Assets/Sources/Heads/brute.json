@@ -20,5 +20,46 @@
   "EyeDepth": 0.74,
   "MouthWidth": 0.44,
   "MouthHeight": -0.56,
-  "MouthSize": 0.06
+  "MouthSize": 0.06,
+  "Adornments": [
+    {
+      "Kind": "Ring",
+      "X": 0.98,
+      "Y": -0.32,
+      "Z": 0.05,
+      "Size": 0.17,
+      "Thickness": 0.035,
+      "Yaw": 90,
+      "Pitch": 0,
+      "Mirror": true,
+      "Metal": true,
+      "Color": "C9A548FF"
+    },
+    {
+      "Kind": "Stud",
+      "X": 0.38,
+      "Y": 0.36,
+      "Z": 0.9,
+      "Size": 0.045,
+      "Thickness": 0.02,
+      "Yaw": 0,
+      "Pitch": 0,
+      "Mirror": false,
+      "Metal": true,
+      "Color": "C9A548FF"
+    },
+    {
+      "Kind": "Horn",
+      "X": 0.42,
+      "Y": 0.72,
+      "Z": 0.05,
+      "Size": 0.5,
+      "Thickness": 0.12,
+      "Yaw": 70,
+      "Pitch": 50,
+      "Mirror": true,
+      "Metal": false,
+      "Color": "E2D6B8FF"
+    }
+  ]
 }

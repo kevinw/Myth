@@ -34,15 +34,22 @@ public partial class Manager
 		("Jaw", nameof(HeadShape.JawForward), -0.2f, 0.6f), ("Jaw", nameof(HeadShape.JawBlend), 0.01f, 0.6f),
 		("Brow", nameof(HeadShape.BrowSize), 0f, 0.35f), ("Brow", nameof(HeadShape.BrowWidth), 0.1f, 0.8f),
 		("Brow", nameof(HeadShape.BrowHeight), -0.1f, 0.6f), ("Brow", nameof(HeadShape.BrowForward), 0.4f, 1.1f),
+		("Brow", nameof(HeadShape.BrowHair), 0f, 0.12f),
 		("Nose", nameof(HeadShape.NoseSize), 0f, 0.35f), ("Nose", nameof(HeadShape.NoseLength), 0f, 0.8f),
 		("Nose", nameof(HeadShape.NoseHeight), -0.3f, 0.5f), ("Nose", nameof(HeadShape.NoseDroop), -0.3f, 0.8f),
 		("Nose", nameof(HeadShape.NoseFlat), 0f, 1f), ("Nose", nameof(HeadShape.NostrilSize), 0f, 0.15f),
 		("Eyes", nameof(HeadShape.EyeSpacing), 0.1f, 0.6f), ("Eyes", nameof(HeadShape.EyeHeight), -0.3f, 0.5f),
 		("Eyes", nameof(HeadShape.EyeSize), 0f, 0.45f), ("Eyes", nameof(HeadShape.EyeDepth), 0.4f, 1f),
+		("Eyes", nameof(HeadShape.EyeballSize), 0f, 0.4f), ("Eyes", nameof(HeadShape.IrisSize), 0.1f, 1.2f),
+		("Eyes", nameof(HeadShape.LidDroop), 0f, 1f),
 		("Mouth", nameof(HeadShape.MouthWidth), 0f, 0.6f), ("Mouth", nameof(HeadShape.MouthHeight), -0.9f, -0.1f),
-		("Mouth", nameof(HeadShape.MouthSize), 0.01f, 0.2f),
+		("Mouth", nameof(HeadShape.MouthSize), 0.01f, 0.2f), ("Mouth", nameof(HeadShape.LipSize), 0f, 0.1f),
+		("Mouth", nameof(HeadShape.TeethSize), 0f, 0.2f),
 		("Ears", nameof(HeadShape.EarSize), 0f, 0.5f), ("Ears", nameof(HeadShape.EarHeight), -0.4f, 0.4f),
 	];
+
+	static readonly PropertyInfo[] HeadColors =
+		typeof(HeadShape).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(property => property.PropertyType == typeof(Color)).ToArray();
 
 	static bool headKnobsChecked;
 
@@ -167,7 +174,92 @@ public partial class Manager
 			if (IsItemDeactivatedAfterEdit())
 				shape.Save(HeadShapePath(id));
 		}
+		DrawHeadAdornments(id, shape);
+		SeparatorText("Colors");
+		foreach (var property in HeadColors)
+		{
+			var color = ((Color)property.GetValue(shape)!).ToVector3();
+			if (ColorEdit3(property.Name, ref color, ImGuiColorEditFlags.NoInputs))
+			{
+				property.SetValue(shape, new Color(color));
+				shape.Version++;
+				InvalidateHeadUsers(id);
+			}
+			if (IsItemDeactivatedAfterEdit())
+				shape.Save(HeadShapePath(id));
+		}
 	}
+
+	void DrawHeadAdornments(string id, HeadShape shape)
+	{
+		SeparatorText("Adornments");
+		var changed = false;
+		var released = false;
+		var remove = -1;
+		for (var i = 0; i < shape.Adornments.Count; i++)
+		{
+			var adornment = shape.Adornments[i];
+			PushID(i);
+			var kind = (int)adornment.Kind;
+			SetNextItemWidth(110);
+			if (Combo("##Kind", ref kind, AdornmentKinds, AdornmentKinds.Length))
+				(adornment.Kind, changed) = ((AdornmentKind)kind, true);
+			SameLine();
+			var mirror = adornment.Mirror;
+			if (Checkbox("Mirror", ref mirror))
+				(adornment.Mirror, changed) = (mirror, true);
+			SameLine();
+			var metal = adornment.Metal;
+			if (Checkbox("Metal", ref metal))
+				(adornment.Metal, changed) = (metal, true);
+			SameLine();
+			var color = adornment.Color.ToVector3();
+			if (ColorEdit3("##Color", ref color, ImGuiColorEditFlags.NoInputs))
+				(adornment.Color, changed) = (new Color(color), true);
+			SameLine();
+			if (SmallButton("x"))
+				remove = i;
+			changed |= Knob("X", adornment.X, -1.2f, 1.2f, v => adornment.X = v);
+			changed |= Knob("Y", adornment.Y, -1.2f, 1.2f, v => adornment.Y = v);
+			changed |= Knob("Z", adornment.Z, -1.2f, 1.2f, v => adornment.Z = v);
+			changed |= Knob("Size", adornment.Size, 0.01f, 0.8f, v => adornment.Size = v);
+			changed |= Knob("Thickness", adornment.Thickness, 0.005f, 0.3f, v => adornment.Thickness = v);
+			changed |= Knob("Yaw", adornment.Yaw, -180, 180, v => adornment.Yaw = v);
+			if (adornment.Kind == AdornmentKind.Horn)
+				changed |= Knob("Pitch", adornment.Pitch, -90, 90, v => adornment.Pitch = v);
+			PopID();
+		}
+		if (Button("Add adornment"))
+		{
+			shape.Adornments.Add(new() { X = 0.8f, Y = -0.1f, Z = 0.1f, Yaw = 90 });
+			changed = true;
+		}
+		if (remove >= 0)
+		{
+			shape.Adornments.RemoveAt(remove);
+			changed = true;
+		}
+		if (changed)
+		{
+			shape.Version++;
+			InvalidateHeadUsers(id);
+		}
+		// Discrete edits save at once; sliders save when let go.
+		if (changed && !IsAnyItemActive() || released)
+			shape.Save(HeadShapePath(id));
+
+		bool Knob(string label, float value, float min, float max, Action<float> set)
+		{
+			SetNextItemWidth(-140);
+			var moved = SliderFloat(label, ref value, min, max, "%.3f");
+			if (moved)
+				set(value);
+			released |= IsItemDeactivatedAfterEdit();
+			return moved;
+		}
+	}
+
+	static readonly string[] AdornmentKinds = Enum.GetNames<AdornmentKind>();
 
 	// The edit view draws rooms from cached previews; rooms with an actor wearing this head redraw theirs.
 	void InvalidateHeadUsers(string id)

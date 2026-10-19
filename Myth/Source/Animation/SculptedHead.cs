@@ -5,23 +5,26 @@ namespace Myth;
 
 // A face, each axis -1 .. 1 except MouthOpen (0 closed .. 1 wide). BrowTilt: + inner ends down (anger), - up (worry).
 // BrowRaise: the whole brow up (surprise) or down (squint). BrowSkew: + the head's right brow up and left down.
-// Smile: + corners up, - a frown.
+// Smile: + corners up, - a frown. LidClose: -1 wide .. 1 shut, added to the head shape's resting droop. GazeX, GazeY:
+// where the pupils lean, head-local, -1 .. 1.
 public readonly record struct Expression(float BrowTilt = 0, float BrowRaise = 0, float BrowSkew = 0, float Smile = 0,
-	float MouthOpen = 0)
+	float MouthOpen = 0, float LidClose = 0, float GazeX = 0, float GazeY = 0)
 {
-	public static Expression Angry => new(1, -0.3f, 0, -1);
-	public static Expression Surprised => new(0, 1, 0, 0, 0.6f);
-	public static Expression Afraid => new(-1, 1, 0, -0.3f, 0.5f);
-	public static Expression Sad => new(-1, 0, 0, -0.6f);
-	public static Expression Smug => new(0, -0.3f, 0.3f, 0.5f);
-	public static Expression Pained => new(-1, -0.5f, 0, -0.4f, 0.7f);
-	public static Expression Skeptical => new(0.2f, 0, 1, -0.2f);
+	public static Expression Angry => new(1, -0.3f, 0, -1, LidClose: 0.25f);
+	public static Expression Surprised => new(0, 1, 0, 0, 0.6f, -1);
+	public static Expression Afraid => new(-1, 1, 0, -0.3f, 0.5f, -0.8f);
+	public static Expression Sad => new(-1, 0, 0, -0.6f, LidClose: 0.3f);
+	public static Expression Smug => new(0, -0.3f, 0.3f, 0.5f, LidClose: 0.35f);
+	public static Expression Pained => new(-1, -0.5f, 0, -0.4f, 0.7f, 0.6f);
+	public static Expression Skeptical => new(0.2f, 0, 1, -0.2f, LidClose: 0.2f);
 
 	public static Expression Lerp(Expression a, Expression b, float t) => new(float.Lerp(a.BrowTilt, b.BrowTilt, t),
 		float.Lerp(a.BrowRaise, b.BrowRaise, t), float.Lerp(a.BrowSkew, b.BrowSkew, t), float.Lerp(a.Smile, b.Smile, t),
-		float.Lerp(a.MouthOpen, b.MouthOpen, t));
+		float.Lerp(a.MouthOpen, b.MouthOpen, t), float.Lerp(a.LidClose, b.LidClose, t), float.Lerp(a.GazeX, b.GazeX, t),
+		float.Lerp(a.GazeY, b.GazeY, t));
 
-	internal Expression Quantized() => new(Step(BrowTilt), Step(BrowRaise), Step(BrowSkew), Step(Smile), Step(MouthOpen));
+	internal Expression Quantized() => new(Step(BrowTilt), Step(BrowRaise), Step(BrowSkew), Step(Smile), Step(MouthOpen),
+		Step(LidClose), Step(GazeX), Step(GazeY));
 	static float Step(float value) => MathF.Round(value * 32) / 32;
 }
 
@@ -32,14 +35,18 @@ public readonly record struct Expression(float BrowTilt = 0, float BrowRaise = 0
 // Expression bends the brow and mouth, dents carve spheres out of it and a wobble warps it like jelly. Head-local units are head radii: x is the head's right, y up, z out of the face.
 // Re-renders only when its inputs change. The CPU version below is the reference the shape is verified against
 // (Verify) and where hits land (Raycast); keep the two in step.
-sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposable
+// extent: how far (radii) the shape can reach past the radius; morphs that grow it out need more.
+sealed class SculptedHead(GraphicsDevice device, bool outline = true, float extent = SculptedHead.DefaultExtent) : IDisposable
 {
-	const float Extent = 1.45f; // the shape's reach past the radius (nose, jaw), in radii
+	public const float DefaultExtent = 1.45f; // the shape's reach past the radius (nose, jaw), in radii
+	const float SplitGap = 0.35f; // radii each half slides out, fully split
+	const float CoreRadius = 0.42f;
 	const int MaxSteps = 40;
 	const float MaxStretch = 1.35f; // the most a squash or stretch can grow the head along an axis
 	const int MaxLights = SculptedBody.MaxLights;
 	public const int MaxDents = 4;
 	public const int MaxContacts = 2;
+	public const int MaxAdornments = 6;
 
 	static readonly BlendMode Overwrite = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly TextureSampler Nearest = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
@@ -77,13 +84,14 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 		Color near, Color core, Color far, Color eye, BodyShadeMode mode = BodyShadeMode.Banded, Vector4 surface = default,
 		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default, ReadOnlySpan<Vector4> dents = default,
 		float wobble = 0, float wobblePhase = 0, Color bruise = default, ReadOnlySpan<Vector4> contacts = default,
-		Vector2? stretch = null)
+		Vector2? stretch = null, Vector4 morph = default, Vector2 swing = default)
 	{
 		dents = dents[..Math.Min(dents.Length, MaxDents)];
 		face = face.Quantized();
+		morph = (morph * 32).Round() / 32;
 		var squish = (Vector2.Clamp(stretch ?? Vector2.One, new(1 / MaxStretch), new(MaxStretch)) * 64).Round() / 64;
 		contacts = contacts[..Math.Min(contacts.Length, MaxContacts)];
-		var size = TextureSize(radius);
+		var size = TextureSize(radius, extent);
 		var textureWorld = (worldCenter - new Vector2(size * 0.5f)).RoundToPoint2();
 		var shading = new HashCode();
 		shading.Add(mode);
@@ -102,6 +110,9 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 		foreach (var contact in contacts)
 			shading.Add(contact);
 		shading.Add(squish);
+		shading.Add(morph);
+		swing = (swing * 32).Round() / 32;
+		shading.Add(swing);
 		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
 			face, near, core, far, eye, shading.ToHashCode());
 		if (marched != null && key == last)
@@ -121,7 +132,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 		for (var i = 0; i < contacts.Length; i++)
 			headContacts[i] = new(Vector3.TransformNormal(new(contacts[i].X, -contacts[i].Y, 0), toHead), contacts[i].Z, contacts[i].W);
 #if DEBUG
-		lastInputs = (radius, yaw, pitch, roll, face, dents.ToArray(), wobble, wobblePhase, headContacts.ToArray(), squish);
+		lastInputs = (radius, yaw, pitch, roll, face, morph, swing, dents.ToArray(), wobble, wobblePhase, headContacts.ToArray(), squish);
 #endif
 		var s = shape;
 		var lightCount = Math.Min(lights.Length, MaxLights);
@@ -133,7 +144,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 			ToView0 = new(toView.M11, toView.M12, toView.M13, 0),
 			ToView1 = new(toView.M21, toView.M22, toView.M23, 0),
 			ToView2 = new(toView.M31, toView.M32, toView.M33, 0),
-			Frame = new(size * 0.5f, radius, face.MouthOpen, 0),
+			Frame = new(size * 0.5f, radius, face.MouthOpen, extent),
 			Cranium = new(s.CraniumWidth, s.CraniumHeight, s.CraniumDepth, s.CraniumLift),
 			Jaw = new(s.JawWidth, s.JawHeight, s.JawDepth, s.JawDrop),
 			Jaw2 = new(s.JawForward, s.JawBlend, s.BrowSize, s.BrowWidth),
@@ -151,7 +162,15 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 			Deform = new(wobble, wobblePhase, dents.Length, contacts.Length),
 			Bruise = (Vector4)bruise,
 			Stretch = new(squish, 0, 0),
+			Morph = morph,
 			Face = new(face.BrowTilt, face.BrowRaise, face.BrowSkew, face.Smile),
+			Look = new(Math.Clamp(s.LidDroop + face.LidClose, 0, 1), face.GazeX * 0.6f, face.GazeY * 0.5f, 0),
+			Features = new(MathF.Min(s.EyeballSize, s.EyeSize * 0.9f), s.IrisSize, s.TeethSize, s.LipSize),
+			Hair = new(s.HairColor.ToVector3(), s.BrowHair),
+			Lips = (Vector4)s.LipColor,
+			Teeth = (Vector4)s.TeethColor,
+			Sclera = (Vector4)s.ScleraColor,
+			Iris = (Vector4)s.IrisColor,
 		};
 		for (var i = 0; i < dents.Length; i++)
 			uniforms.Dents[i] = dents[i];
@@ -160,6 +179,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 			uniforms.Contacts[i * 2] = new(headContacts[i].Normal, headContacts[i].Wall);
 			uniforms.Contacts[i * 2 + 1] = new(headContacts[i].Squash, 0, 0, 0);
 		}
+		uniforms.Adorn = new(PackAdornments(s, uniforms.Adornments), swing.X, swing.Y, 0);
 		for (var i = 0; i < lightCount; i++)
 		{
 			var light = lights[i];
@@ -191,10 +211,11 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	struct HeadUniforms
 	{
 		public Vector4 ToHead0, ToHead1, ToHead2, ToView0, ToView1, ToView2, Frame, Cranium, Jaw, Jaw2, Brow, Nose, Eyes,
-			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise, Stretch, Face;
+			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise, Stretch, Morph, Face, Look, Features, Hair, Lips, Teeth, Sclera, Iris, Adorn;
 		public LightArray Lights;
 		public DentArray Dents;
 		public ContactArray Contacts;
+		public AdornmentArray Adornments;
 	}
 
 	[System.Runtime.CompilerServices.InlineArray(MaxLights * 2)]
@@ -206,13 +227,36 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	[System.Runtime.CompilerServices.InlineArray(MaxContacts * 2)]
 	struct ContactArray { Vector4 first; }
 
+	[System.Runtime.CompilerServices.InlineArray(MaxAdornments * 4)]
+	struct AdornmentArray { Vector4 first; }
+
+	// Each adornment (and its mirror) as four rows: (point, kind), (ring axis or horn direction, size), (color, metal),
+	// (thickness, 0, 0, 0). Returns how many slots it filled.
+	static int PackAdornments(HeadShape s, Span<Vector4> into)
+	{
+		var count = 0;
+		foreach (var adornment in s.Adornments)
+			for (var side = 1; side >= (adornment.Mirror ? -1 : 1) && count < MaxAdornments; side -= 2, count++)
+			{
+				var (yaw, pitch) = (adornment.Yaw * MathF.PI / 180, adornment.Pitch * MathF.PI / 180);
+				var direction = adornment.Kind == AdornmentKind.Ring ? new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw))
+					: new Vector3(MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), MathF.Cos(yaw) * MathF.Cos(pitch));
+				var flip = new Vector3(side, 1, 1);
+				into[count * 4] = new(new Vector3(adornment.X, adornment.Y, adornment.Z) * flip, (float)adornment.Kind);
+				into[count * 4 + 1] = new(direction * flip, adornment.Size);
+				into[count * 4 + 2] = new(adornment.Color.ToVector3(), adornment.Metal ? 1 : 0);
+				into[count * 4 + 3] = new(adornment.Thickness, 0, 0, 0);
+			}
+		return count;
+	}
+
 	// A wall the head's pressed against, head-local: the normal toward it, its distance (radii), the squash along it.
 	readonly record struct Contact(Vector3 Normal, float Wall, float Squash);
 
 	static float Quantize(float angle) => MathF.Round(angle * 180 / MathF.PI * 2) / 2;
 
 	// Even, so a centered draw's origin lands on a texel corner and nearest sampling maps texels 1:1.
-	static int TextureSize(float radius) => ((int)MathF.Ceiling(radius * Extent * MaxStretch) + 2) * 2;
+	static int TextureSize(float radius, float extent) => ((int)MathF.Ceiling(radius * extent * MaxStretch) + 2) * 2;
 
 	// View space: x right, y up, z toward the viewer. Head-local -> view is roll (screen) * pitch * yaw.
 	internal static (Matrix4x4 ToView, Matrix4x4 ToHead) Rotations(float yaw, float pitch, float roll)
@@ -223,7 +267,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	}
 
 #if DEBUG
-	(float Radius, float Yaw, float Pitch, float Roll, Expression Face, Vector4[] Dents, float Wobble, float Phase,
+	(float Radius, float Yaw, float Pitch, float Roll, Expression Face, Vector4 Morph, Vector2 Swing, Vector4[] Dents, float Wobble, float Phase,
 		Contact[] Contacts, Vector2 Stretch) lastInputs;
 
 	// Compares the last GPU render against the CPU reference: per texture, how many pixels differ by more than a
@@ -232,9 +276,9 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	{
 		if (marched == null || last.Shape is not { } shape)
 			return "nothing rendered yet";
-		var (radius, yaw, pitch, roll, face, dents, wobble, phase, contacts, stretch) = lastInputs;
-		var (normals, mask) = RenderReference(new(shape, face, dents, wobble, phase, contacts), radius, yaw, pitch, roll,
-			stretch, Reach);
+		var (radius, yaw, pitch, roll, face, morph, swing, dents, wobble, phase, contacts, stretch) = lastInputs;
+		var (normals, mask) = RenderReference(new(shape, face, morph, swing, dents, wobble, phase, contacts), radius, yaw, pitch, roll,
+			stretch, Reach, extent);
 		var report = new System.Text.StringBuilder($"{Size}x{Size}");
 		Compare("normal", NormalTexture!, normals);
 		Compare("mask", MaskTexture!, mask);
@@ -269,9 +313,9 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 
 	// The CPU ray-march the shaders mirror, pixel for pixel.
 	static (Color[] Normals, Color[] Mask) RenderReference(Field s, float radius, float yaw, float pitch, float roll,
-		Vector2 stretch, int reach)
+		Vector2 stretch, int reach, float extent)
 	{
-		var size = TextureSize(radius);
+		var size = TextureSize(radius, extent);
 		var normals = new Color[size * size];
 		var mask = new Color[size * size];
 		var hit = new bool[size * size];
@@ -284,7 +328,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 				var i = y * size + x;
 				// Rays that miss the bounding sphere can't hit; the rest start where they enter it.
 				var across = new Vector2((x + 0.5f - half) / radius, -(y + 0.5f - half) / radius) / stretch;
-				var depth = Extent * Extent - across.LengthSquared();
+				var depth = extent * extent - across.LengthSquared();
 				if (depth <= 0)
 					continue;
 				depth = MathF.Sqrt(depth);
@@ -340,7 +384,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	}
 #endif
 
-	readonly record struct Field(HeadShape Shape, Expression Face, Vector4[] Dents, float Wobble, float Phase, Contact[] Contacts);
+	readonly record struct Field(HeadShape Shape, Expression Face, Vector4 Morph, Vector2 Swing, Vector4[] Dents, float Wobble, float Phase, Contact[] Contacts);
 
 	// Where a view ray through `across` (radii from the center, y up) first meets the head, in head-local units, and the
 	// surface normal there. Falls back toward the center when it misses the silhouette.
@@ -351,17 +395,17 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 		var rayDirection = Vector3.TransformNormal(-Vector3.UnitZ, toHead);
 		for (var attempt = 0; attempt <= 8; attempt++, across *= 0.8f)
 		{
-			var depth = Extent * Extent - across.LengthSquared();
+			var depth = DefaultExtent * DefaultExtent - across.LengthSquared();
 			if (depth <= 0)
 				continue;
 			depth = MathF.Sqrt(depth);
 			point = Vector3.Transform(new Vector3(across, depth), toHead);
 			for (var (step, travelled) = (0, 0f); step < MaxSteps && travelled < depth * 2; step++)
 			{
-				var distance = Distance(point, shape, default);
+				var distance = Distance(point, shape, default, default, default);
 				if (distance < 0.004f)
 				{
-					normal = SurfaceNormal(point, new(shape, default, [], 0, 0, []));
+					normal = SurfaceNormal(point, new(shape, default, default, default, [], 0, 0, []));
 					return true;
 				}
 				point += rayDirection * distance;
@@ -388,21 +432,28 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 			q = (q - contact.Normal * along) * MathF.Sqrt(contact.Squash) + contact.Normal * (anchor + (along - anchor) / contact.Squash);
 			scale *= MathF.Min(contact.Squash, 1 / MathF.Sqrt(contact.Squash));
 		}
-		var w = Wobble(q, f);
-		var d = Distance(w, f.Shape, f.Face);
-		foreach (var dent in f.Dents)
-			d = SmoothSubtract(d, Sphere(w - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
-		d *= scale;
+		var d = MorphedDistance(q, f) * scale;
 		foreach (var contact in f.Contacts)
 			d = SmoothSubtract(d, contact.Wall - Vector3.Dot(p, contact.Normal), 0.08f);
 		return d;
 	}
 
-	static float Distance(Vector3 p, HeadShape s, Expression face)
+	static float Distance(Vector3 p, HeadShape s, Expression face, Vector4 morph, Vector2 swing)
 	{
 		var cranium = Ellipsoid(p - new Vector3(0, s.CraniumLift, -0.08f), new Vector3(s.CraniumWidth, s.CraniumHeight, s.CraniumDepth));
 		var jaw = Ellipsoid(p - new Vector3(0, -s.JawDrop, s.JawForward), new Vector3(s.JawWidth, s.JawHeight, s.JawDepth));
 		var d = SmoothUnion(cranium, jaw, MathF.Max(0.01f, s.JawBlend));
+		if (morph.Y > 0)
+			d = SmoothUnion(d, MathF.Min(Sphere(p - new Vector3(-0.5f, -0.22f, 0.5f), 0.3f * morph.Y),
+				Sphere(p - new Vector3(0.5f, -0.22f, 0.5f), 0.3f * morph.Y)), 0.15f);
+		if (morph.X > 0)
+		{
+			var a = morph.X;
+			var top = new Vector3(0, -s.JawDrop - s.JawHeight, s.JawForward * 0.5f);
+			var neck = RoundBox(p - top + new Vector3(0, 0.14f * a, 0), new Vector3(0.35f, 0.16f, 0.32f) * a, 0.04f * a);
+			var block = RoundBox(p - top + new Vector3(0, 0.48f * a, 0), new Vector3(0.85f, 0.2f, 0.6f) * a, 0.05f * a);
+			d = SmoothUnion(d, SmoothUnion(neck, block, 0.06f * a), 0.1f);
+		}
 		if (s.BrowSize > 0)
 		{
 			var ends = s.BrowHeight + face.BrowRaise * 0.08f + face.BrowTilt * 0.03f;
@@ -438,13 +489,59 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 			d = SmoothUnion(d, ears, 0.05f);
 		}
 		if (s.EyeSize > 0)
+		{
 			d = SmoothSubtract(d, MathF.Min(Sphere(p - Socket(s, -1), s.EyeSize), Sphere(p - Socket(s, 1), s.EyeSize)), 0.05f);
+			var eyeball = MathF.Min(s.EyeballSize, s.EyeSize * 0.9f);
+			if (eyeball > 0)
+			{
+				// Eyeballs sit back in the sockets, the lids slide down over them from above as they close.
+				var close = Math.Clamp(s.LidDroop + face.LidClose, 0, 1);
+				var lid = eyeball * 1.12f;
+				foreach (var side in (ReadOnlySpan<float>)[-1, 1])
+				{
+					var q = p - Socket(s, side) + new Vector3(0, 0, (s.EyeSize - eyeball) * 0.5f);
+					d = MathF.Min(d, MathF.Min(Sphere(q, eyeball), MathF.Max(Sphere(q, lid), lid * (1 - 2 * close) - q.Y)));
+				}
+			}
+		}
 		if (s.MouthWidth > 0)
 		{
+			var radius = s.MouthSize + face.MouthOpen * 0.14f;
 			var corner = new Vector3(s.MouthWidth, s.MouthHeight + face.Smile * 0.07f, 0.86f);
 			d = SmoothSubtract(d, BentCapsule(p, corner * new Vector3(-1, 1, 1), new(0, s.MouthHeight - face.Smile * 0.03f, 0.86f),
-				corner, s.MouthSize + face.MouthOpen * 0.14f, face.Smile != 0), 0.04f);
+				corner, radius, face.Smile != 0), 0.04f);
+			if (s.TeethSize > 0)
+			{
+				// Upper teeth hang from the top of the mouth's cut, lower stand on its floor; clenched they fill the slit.
+				var half = new Vector3(s.MouthWidth * 0.8f, s.TeethSize * 0.5f, 0.05f);
+				var upper = RoundBox(p - new Vector3(0, s.MouthHeight + radius - s.TeethSize * 0.5f, 0.8f), half, 0.015f);
+				var lower = RoundBox(p - new Vector3(0, s.MouthHeight - radius + s.TeethSize * 0.5f, 0.8f), half, 0.015f);
+				d = MathF.Min(d, MathF.Min(upper, lower));
+			}
 		}
+		Span<Vector4> adornments = stackalloc Vector4[MaxAdornments * 4];
+		for (var i = PackAdornments(s, adornments) - 1; i >= 0; i--)
+			d = MathF.Min(d, Adornment(p, adornments.Slice(i * 4, 4), swing));
+		return d;
+	}
+
+	// Split open, each half keeps only its own side, and a glowing core hangs in the gap.
+	static float MorphedDistance(Vector3 p, Field f)
+	{
+		if (f.Morph.Z <= 0)
+			return FaceDistance(p, f);
+		var q = Unsplit(p, f.Morph.Z);
+		return MathF.Min(MathF.Max(FaceDistance(q, f), -q.X * MathF.Sign(p.X)), Sphere(p, CoreRadius * f.Morph.Z));
+	}
+
+	static Vector3 Unsplit(Vector3 p, float split) => p - new Vector3(MathF.Sign(p.X) * split * SplitGap, 0, 0);
+
+	static float FaceDistance(Vector3 p, Field f)
+	{
+		var w = Wobble(p, f);
+		var d = Distance(w, f.Shape, f.Face, f.Morph, f.Swing);
+		foreach (var dent in f.Dents)
+			d = SmoothSubtract(d, Sphere(w - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
 		return d;
 	}
 
@@ -460,6 +557,52 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true) : IDisposa
 	}
 
 	static float Sphere(Vector3 p, float radius) => p.Length() - radius;
+
+	static float Adornment(Vector3 p, ReadOnlySpan<Vector4> rows, Vector2 swing)
+	{
+		var at = new Vector3(rows[0].X, rows[0].Y, rows[0].Z);
+		var direction = new Vector3(rows[1].X, rows[1].Y, rows[1].Z);
+		var (size, thickness) = (rows[1].W, rows[3].X);
+		switch (rows[0].W)
+		{
+			case < 0.5f:
+				var q = p - (at + Vector3.Normalize(new Vector3(swing.X, -1, swing.Y)) * size);
+				var along = Vector3.Dot(q, direction);
+				return new Vector2((q - direction * along).Length() - size, along).Length() - thickness;
+			case < 1.5f:
+				return Sphere(p - at, size);
+			default:
+				return RoundCone(p, at, at + direction * size, thickness, thickness * 0.15f);
+		}
+	}
+
+	static float RoundCone(Vector3 p, Vector3 a, Vector3 b, float r1, float r2)
+	{
+		var ba = b - a;
+		var l2 = Vector3.Dot(ba, ba);
+		var rr = r1 - r2;
+		var a2 = l2 - rr * rr;
+		var il2 = 1 / l2;
+		var pa = p - a;
+		var y = Vector3.Dot(pa, ba);
+		var z = y - l2;
+		var xv = pa * l2 - ba * y;
+		var x2 = Vector3.Dot(xv, xv);
+		var y2 = y * y * l2;
+		var z2 = z * z * l2;
+		var k = MathF.Sign(rr) * rr * rr * x2;
+		if (MathF.Sign(z) * a2 * z2 > k)
+			return MathF.Sqrt(x2 + z2) * il2 - r2;
+		if (MathF.Sign(y) * a2 * y2 < k)
+			return MathF.Sqrt(x2 + y2) * il2 - r1;
+		return (MathF.Sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+	}
+
+	static float RoundBox(Vector3 p, Vector3 half, float rounding)
+	{
+		var q = Vector3.Abs(p) - half + new Vector3(rounding);
+		return Vector3.Max(q, Vector3.Zero).Length() + MathF.Min(MathF.Max(q.X, MathF.Max(q.Y, q.Z)), 0) - rounding;
+	}
 
 	static float Ellipsoid(Vector3 p, Vector3 radii)
 	{
