@@ -43,6 +43,8 @@ public sealed class HeadBoss : Actor
 
 	static float PuffWindup => 1.1f;
 	static float PuffSpeed => 65f;
+	static int PuffHeavyEvery => 4; // one heavy shot per this many small ones
+	static float HeavyScale => 3f; // bigger and slower by this much
 
 	static float SlamRiseTime => 1.1f;
 	static float SlamHangTime => 0.4f;
@@ -68,11 +70,16 @@ public sealed class HeadBoss : Actor
 	static float SpiralInterval => 0.08f;
 	static float SpiralTurn => 0.42f; // radians between shots
 	static float SpiralSpeed => 60f;
+	static float SplitYaw => 0.3f; // of its usual turn toward the player, fully split
+	static float CoreFlashDecay => 10f;
+	static float CoreShotWobble => 0.012f;
 
 	static float FaceResponse => 9f;
 	static float WobbleKick => 0.06f;
 	static float SpinKick => 3f;
 	static float HitShove => 70f;
+	static float ReturnedShotDamage => 5; // in plain player hits
+	static float ReturnedShotShove => 2; // times HitShove
 	static float HitContactGrace => 0.5f;
 	static Color StunTint => new(0xffb070);
 
@@ -291,6 +298,18 @@ public sealed class HeadBoss : Actor
 		var aim = ToPlayer.Normalized(Vector2.UnitY);
 		BulletPattern.FireArc(Game, Mouth.RoundToPoint2(), aim, count, MathF.Tau * (count - 1) / count, PuffSpeed * Speedup,
 			bullet => bullet.LaunchDelay = 0.05f);
+		// A slower ring of heavy shots trails the small one, seeded between its lanes.
+		var heavies = count / PuffHeavyEvery;
+		BulletPattern.FireArc(Game, Mouth.RoundToPoint2(), Rotate(aim, MathF.PI / count), heavies, MathF.Tau * (heavies - 1) / heavies, PuffSpeed * Speedup / HeavyScale,
+			static bullet =>
+			{
+				bullet.LaunchDelay = 0.05f;
+				bullet.Returnable = true;
+				bullet.SurfaceId = new("zorp");
+				bullet.Radius *= HeavyScale;
+				bullet.LifeTime *= HeavyScale;
+				bullet.WobbleAmplitude = 0;
+			});
 		Velocity = -aim * 60;
 		for (var time = 0f; time < 0.4f; time += Time.Delta)
 		{
@@ -478,18 +497,22 @@ public sealed class HeadBoss : Actor
 		morph.Z = 1;
 		var angle = Game.rng.Float(MathF.Tau);
 		var shotTimer = 0f;
+		var flash = 0f;
 		for (var time = 0f; time < SplitHoldTime; time += Time.Delta)
 		{
 			mood = Expression.Pained;
-			morph.W = 0.7f + 0.3f * MathF.Sin(time * 12);
+			flash = Calc.Approach(flash, 0, Time.Delta * CoreFlashDecay);
 			Hover(0.4f);
 			for (shotTimer -= Time.Delta; shotTimer <= 0; shotTimer += SpiralInterval / Speedup)
 			{
+				flash = 1;
+				sculpt.Wobble = MathF.Max(sculpt.Wobble, CoreShotWobble);
 				angle += SpiralTurn;
 				var direction = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
 				BulletPattern.FireArc(Game, Center.RoundToPoint2(), direction, 1, 0, SpiralSpeed * Speedup);
 				BulletPattern.FireArc(Game, Center.RoundToPoint2(), -direction, 1, 0, SpiralSpeed * Speedup);
 			}
+			morph.W = 0.55f + 0.6f * flash;
 			yield return 0;
 		}
 		for (var time = 0f; time < 0.5f; time += Time.Delta)
@@ -510,7 +533,7 @@ public sealed class HeadBoss : Actor
 		sculpt.Face = Expression.Lerp(sculpt.Face, target, 1 - MathF.Exp(-FaceResponse * Time.Delta)) with { MouthOpen = MathF.Max(mouth, pain * 0.7f) };
 		var toPlayer = ToPlayer;
 		var asleep = phase == Phase.Asleep;
-		var targetYaw = asleep ? 0 : Math.Clamp(toPlayer.X / 160, -1, 1) * 0.6f;
+		var targetYaw = asleep ? 0 : Math.Clamp(toPlayer.X / 160, -1, 1) * 0.6f * float.Lerp(1, SplitYaw, morph.Z);
 		var targetPitch = asleep ? 0 : Math.Clamp(-toPlayer.Y / 200, -1, 1) * 0.3f - (phase == Phase.Slam ? 0.15f : 0);
 		sculpt.Look(targetYaw, targetPitch, 40, 8);
 		Spring.Step(ref sculpt.Roll, ref sculpt.RollVelocity, 0, phase == Phase.Stunned ? 8 : 40, 6, Time.Delta);
@@ -555,7 +578,8 @@ public sealed class HeadBoss : Actor
 		var at = hitInfo.AttackBox.Rect.Center;
 		var away = (Center - (Vector2)hitInfo.By.Position).Normalized(-Vector2.UnitY);
 		var onCore = phase == Phase.Split && Vector2.Distance(at, Center) < Radius * 0.7f;
-		var damage = phase == Phase.Stunned ? StunDamage : onCore ? CoreDamage : 1;
+		var returned = hitInfo.By is PatternProjectile { Returned: true };
+		var damage = returned ? ReturnedShotDamage : phase == Phase.Stunned ? StunDamage : onCore ? CoreDamage : 1;
 		sculpt.Dent(at, DentScale);
 		sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * (damage > 1 ? 1.5f : 1));
 		sculpt.YawVelocity += MathF.Sign(away.X) * SpinKick;
@@ -565,7 +589,7 @@ public sealed class HeadBoss : Actor
 		contactGrace = HitContactGrace;
 		Game.Particles?.Emit(chunkEffect, at, damage > 1 ? 24 : 10, Calc.Angle(away + new Vector2(0, -0.5f)), 1, 0.9f);
 		if (phase != Phase.Stunned)
-			Velocity += away * HitShove;
+			Velocity += away * HitShove * (returned ? ReturnedShotShove : 1);
 		Health = Math.Max(0, Health - (int)damage);
 		if (Health <= 0)
 		{

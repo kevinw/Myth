@@ -22,7 +22,12 @@ public class PatternProjectile : Actor
 	[I(0, MathF.Tau)] public float WobblePhase;
 	[I(0.5f, 12)] public float LifeTime = 4;
 	[I(0, 2)] public float SurfaceWorldMotionScale = 0.5f;
+	[I(0, 1)] public float Glow = 0.75f; // how much of it glows unlit, over its lit color
 	public bool PopOnDestroy = true;
+	public bool Returnable; // a player's attack bats it back, at enemies
+	public bool Returned { get; private set; }
+	static float ReturnSpeed => 170f;
+	static float ReturnLifeTime => 3f;
 	public override string HitSoundType => "";
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
@@ -32,7 +37,6 @@ public class PatternProjectile : Actor
 
 	public PatternProjectile()
 	{
-		Hitbox = new(new RectInt(-4, -4, 8, 8));
 		Mask = Masks.Enemy;
 		Depth = -5;
 		Sprite = null;
@@ -41,6 +45,8 @@ public class PatternProjectile : Actor
 	public override void Added()
 	{
 		base.Added();
+		var size = 2 * (int)MathF.Ceiling(Radius + 1);
+		Hitbox = new(RectInt.Centered(size, size));
 		sparkEffect = AcquireParticleEffect("sparks");
 		DrawScale = 0.01f;
 	}
@@ -67,6 +73,8 @@ public class PatternProjectile : Actor
 		}
 
 		base.Update();
+		if (Returned && Game.OverlapsFirstCombat(Hitbox.Rect + Position, Masks.Enemy) is { } enemy)
+			Hit(enemy, Hitbox);
 		if (Timer > LifeTime)
 			Game.Destroy(this);
 		DrawScale = Calc.Approach(DrawScale, 1.0f, Time.Delta * 1.5f);
@@ -75,7 +83,25 @@ public class PatternProjectile : Actor
 	public override void OnCollideX() => Pop();
 	public override void OnCollideY() => Pop();
 	public override void OnPerformHit(Actor hitting) => Pop();
-	internal override void OnWasHit(HitInfo hitInfo) => Pop();
+	internal override void OnWasHit(HitInfo hitInfo)
+	{
+		if (!Returnable || Returned || hitInfo.By is not Player)
+		{
+			Pop();
+			return;
+		}
+		var away = (Vector2)(Position - hitInfo.By.Position) - hitInfo.By.Hitbox.Rect.Center;
+		var angle = MathF.Round(Calc.Angle(away) / (MathF.PI / 4)) * (MathF.PI / 4);
+		Direction = Calc.AngleToVector(angle);
+		Returned = true;
+		Mask = Masks.None;
+		Speed = ReturnSpeed;
+		WobbleAmplitude = 0;
+		LaunchDelay = 0;
+		flightTimer = 0;
+		LifeTime = Timer + ReturnLifeTime;
+		AudioEvent("bubble");
+	}
 
 	void Pop()
 	{
@@ -97,53 +123,61 @@ public class PatternProjectile : Actor
 	public override void Render(Batcher batcher)
 	{
 		batcher.Circle(Vector2.Zero, DrawRadius + 1, CircleSegments, EdgeColor);
-		if (Assets.GetSurface(SurfaceId) == null)
+		if (Assets.GetSurface(SurfaceId) is { } surface)
+			RenderSphere(batcher, surface, 1);
+		else
 			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
 	}
 
 	float DrawRadius => Radius * DrawScale;
 	float DrawScale = 1.0f;
-	
+
 	public override void RenderEmissive(Batcher batcher)
 	{
+		if (Assets.GetSurface(SurfaceId) is { } surface)
+			RenderSphere(batcher, surface, Glow);
+		else
+			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
+	}
+
+	public override void RenderNormals(Batcher batcher) => RigDraw.DrawSphereNormals(batcher, Vector2.Zero, DrawRadius + 1, CircleSegments, 1, 0, 0);
+
+	// The surface wrapped onto a ball: rings whose texture runs the arc length over the curve, bunching at the rim.
+	void RenderSphere(Batcher batcher, Surface surface, float opacity)
+	{
+		const int Rings = 3;
 		var launch = Math.Clamp(flightTimer / 0.18f, 0, 1);
 		var stretch = flightTimer <= 0 ? 1 : float.Lerp(1.55f, 1, launch);
 		var squash = flightTimer <= 0 ? 1 : float.Lerp(0.68f, 1, launch);
-		if (Assets.GetSurface(SurfaceId) is { } surface)
-		{
-			Span<Surface.Vertex> fan = stackalloc Surface.Vertex[CircleSegments * 3];
-			BuildFan(fan, DrawRadius, stretch, squash);
-			surface.Render(batcher, fan, Time.SecondsF);
-		}
-		else
-		{
-			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
-		}
-	}
-
-	void BuildFan(Span<Surface.Vertex> fan, float radius, float stretch, float squash)
-	{
 		var forward = Direction.LengthSquared() <= 0.0001f ? Vector2.UnitX : Vector2.Normalize(Direction);
 		var side = new Vector2(-forward.Y, forward.X);
 		var worldOrigin = (Vector2)Position * SurfaceWorldMotionScale;
-		for (var i = 0; i < CircleSegments; i++)
-		{
-			var a = PointOnCircle(i);
-			var b = PointOnCircle((i + 1) % CircleSegments);
-			var t = i * 3;
-			fan[t + 0] = new Surface.Vertex(Vector2.Zero, worldOrigin);
-			fan[t + 1] = new Surface.Vertex(a, worldOrigin + a);
-			fan[t + 2] = new Surface.Vertex(b, worldOrigin + b);
-		}
+		var radius = DrawRadius;
+		Span<Surface.Vertex> mesh = stackalloc Surface.Vertex[CircleSegments * (Rings * 2 - 1) * 3];
+		var n = 0;
+		for (var ring = 0; ring < Rings; ring++)
+			for (var i = 0; i < CircleSegments; i++)
+			{
+				var a0 = Point(ring, i);
+				var b0 = Point(ring + 1, i);
+				var b1 = Point(ring + 1, i + 1);
+				mesh[n++] = a0; mesh[n++] = b0; mesh[n++] = b1;
+				if (ring == 0)
+					continue;
+				mesh[n++] = a0; mesh[n++] = b1; mesh[n++] = Point(ring, i + 1);
+			}
+		surface.Render(batcher, mesh, Time.SecondsF, opacity);
 
-		Vector2 PointOnCircle(int index)
+		Surface.Vertex Point(int ring, int index)
 		{
 			var angle = index * MathF.Tau / CircleSegments;
-			return forward * (MathF.Cos(angle) * radius * stretch) + side * (MathF.Sin(angle) * radius * squash);
+			var s = ring / (float)Rings;
+			var around = forward * MathF.Cos(angle) + side * MathF.Sin(angle);
+			var pos = forward * (MathF.Cos(angle) * stretch) + side * (MathF.Sin(angle) * squash);
+			return new(pos * (radius * s), worldOrigin + around * (radius * MathF.Asin(s)));
 		}
 	}
 
-	public override void RenderNormals(Batcher batcher) { }
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 }
