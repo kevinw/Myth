@@ -89,6 +89,7 @@ public sealed class HeadBoss : Actor
 	float cooldown;
 	float phaseTime;
 	float eyes; // 0 dark .. 1 lit
+	float litEyes; // as drawn: lit in the editor
 	float mouth;
 	float pain; // a hit's wince, fading
 	float contactGrace;
@@ -550,7 +551,7 @@ public sealed class HeadBoss : Actor
 		sculpt.Bruise = BruiseColor;
 		// Each stage runs its eyes hotter.
 		var heat = (Stage - 1) * 0.25f + morph.W * 0.3f;
-		var lit = editor ? 1 : eyes;
+		var lit = litEyes = editor ? 1 : eyes;
 		sculpt.Eye = lit > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, heat), lit) : default;
 		sculpt.Tint = phase == Phase.Stunned ? Color.Lerp(Color.White, StunTint, 0.5f + 0.5f * MathF.Sin(Timer * 7)) : Color.White;
 		sculpt.Morph = morph;
@@ -641,13 +642,20 @@ public sealed class HeadBoss : Actor
 	public override void RenderReflection(Batcher batcher, Color color) => sculpt.RenderShadow(batcher, color);
 	public override Rect GetVisualBounds() => sculpt.VisualBounds;
 
-	// The eyes tint the room; the slam's landing spot glows on the floor, brighter as the anvil grows; the bared core
+	static float EyeLightReach => 3.2f; // radii
+	static float EyeLightIntensity => 0.13f;
+
+	// Each eye tints the room, dimming as its lids close; the slam's landing spot glows on the floor, brighter as the anvil grows; the bared core
 	// blazes.
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
-		// Its eyes tint the room, dimly: any brighter and the lighting pass blows a glowing patch across its own face.
-		if (eyes > 0.05f)
-			action(Center, Radius * 4.5f * eyes, 0.22f * eyes, 10, EyeColor);
+		// Dimly: any brighter and the lighting pass blows glowing patches across its own face.
+		for (var side = -1; side <= 1; side += 2)
+		{
+			var (at, open) = sculpt.EyeLight(side);
+			if (litEyes * open > 0.05f)
+				action(at, Radius * EyeLightReach * litEyes, EyeLightIntensity * litEyes * open, 10, EyeColor);
+		}
 		if (slamMark is { } mark)
 			action(mark, Radius * (0.6f + morph.X), 0.6f + morph.X, 4, SlamWaveColor);
 		if (morph.W > 0.05f)

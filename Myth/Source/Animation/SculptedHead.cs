@@ -523,6 +523,10 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 
 	static Vector3 Socket(HeadShape s, float side) => new(s.EyeSpacing * side, s.EyeHeight, s.EyeDepth);
 
+	// Where an eye (side -1 or 1) sits in view space, in radii, y up: turned with the head and slid out with its half.
+	internal static Vector3 EyeInView(HeadShape s, float side, float yaw, float pitch, float roll, float split)
+		=> Vector3.Transform(Socket(s, side) + new Vector3(side * split * SplitGap, 0, 0), Rotations(yaw, pitch, roll).ToView);
+
 	// Where p sits on the resting flesh: dragged back by each jiggle around its anchor, then wobbling, all over or fading
 	// out from wobbleAt. Rigid parts ride: carried whole by the flesh at their anchor, Flesh(anchor) - anchor.
 	static Vector3 Flesh(Vector3 p, ReadOnlySpan<Vector4> jiggles, float wobble, float phase, Vector3 wobbleAt)

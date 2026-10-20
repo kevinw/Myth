@@ -33,6 +33,7 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	static float DentRadius => 0.45f; // head radii
 	static float DentDepth => 0.26f;
 	static float BlinkTime => 0.12f;
+	static float BlinkLight => 0.35f; // of an eye's light left through a blink
 	static float SwingFromAcceleration => 1 / 500f; // per px/sec², how far hanging rings lean away from a lurch
 	static float SwingFromTurn => 0.08f; // per radian/sec of yaw
 	static float SwingStiffness => 70f;
@@ -71,6 +72,15 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	Game Game => owner.Game;
 	Time Time => owner.Time;
 	Vector2 Center => owner.Position;
+
+	// Where an eye (side -1 or 1) sits in the world, and how much light gets out: 0 shut, 1 open, past that wide, dimmed
+	// through a blink.
+	public (Vector2 At, float Open) EyeLight(float side)
+	{
+		var eye = SculptedHead.EyeInView(Assets.GetHeadShape(ShapeId), side, Yaw, Pitch, Roll, Morph.Z);
+		var open = Math.Clamp(1 - Face.LidClose, 0, 1.3f) * (blinkTimer < 0 ? BlinkLight : 1);
+		return (Center + new Vector2(eye.X, -eye.Y) * owner.Squish * Radius, open);
+	}
 
 	public void Step()
 	{
