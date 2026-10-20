@@ -56,7 +56,18 @@ public sealed class HeadShape
 	public float EarSize { get; set; }
 	public float EarHeight { get; set; }
 
+	public float FleshSoftness { get; set; } = 1; // how far the jowls, ears, nose and brow lag and bounce; 0 rigid
+
 	public List<HeadAdornment> Adornments { get; set; } = [];
+
+	// A pattern from the texture bucket (e.g. "patterns/pattern_79") stuck to the skin, spreading out from the face's
+	// midline: painted in PatternColor, or glowing.
+	public string Pattern { get; set; } = "";
+	public bool PatternInvert { get; set; }
+	public float PatternScale { get; set; } = 1.5f;
+	public float PatternSpread { get; set; } = 1;
+	public float PatternGlow { get; set; }
+	public Color PatternColor { get; set; } = new(0x2a1c18);
 
 	// Bumped by every edit, so rendered heads know to redraw.
 	[JsonIgnore] public int Version { get; set; }

@@ -698,6 +698,10 @@ public class Actor
 		Play();
 	}
 
+	// Copies the actor's settings into whatever draws it, each frame just before rendering, in the editor too (where
+	// Update never runs); editor: drawn in the editor, posed for placing rather than as play begins.
+	internal virtual void SyncVisual(bool editor) { }
+
 	// A render-only displacement: the crusher's windup tremble, say. It never touches Position, so collision,
 	// audio and particles keep reading one sim truth while every render pass draws from RenderPosition.
 	internal virtual Vector2 LocalVisualOffset => Vector2.Zero;

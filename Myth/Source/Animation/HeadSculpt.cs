@@ -20,6 +20,8 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	public float Wobble, WobblePhase;
 	public Vector2 ImpactRest; // the squash the impact spring settles back to
 	public Vector2? GazeTarget; // a world point the pupils follow, over the face's own gaze
+	public Vector2 PatternBoost; // how much further the head shape's pattern spreads and glows
+	public float VisualFPS; // how often it re-marches; 0 for every frame
 
 	static float WobbleDecay => 4.5f;
 	static float WobbleRate => 30f;
@@ -35,6 +37,18 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	static float SwingFromTurn => 0.08f; // per radian/sec of yaw
 	static float SwingStiffness => 70f;
 	static float SwingDamping => 2.5f;
+	// Flesh that lags and bounces, each part its own (stiffness, damping), softened by the shape's FleshSoftness.
+	static float JowlStiffness => 55f;
+	static float JowlDamping => 3.5f;
+	static float EarStiffness => 30f;
+	static float EarDamping => 2.2f;
+	static float NoseStiffness => 130f;
+	static float NoseDamping => 6f;
+	static float BrowStiffness => 210f;
+	static float BrowDamping => 9f;
+	static float JiggleInertia => 0.1f; // how much of a lurch or spin (radii/sec at the part) the flesh lags behind
+	static float JiggleFromHit => 1.5f; // radii/sec a hit shoves the flesh nearest it
+	static float JiggleFromFace => 0.7f; // how much of an expression's move the brow, jowls and cheeks lag behind
 
 	// Per axis (side walls, floor/ceiling): which way the nearest wall face or slope lies, or the last thing it hit, and
 	// how far (px) from the center, MaxValue when out of reach.
@@ -45,6 +59,14 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	SculptedHead? head;
 	float blinkTimer = 2; // until the next blink, then (negative) how long it's been shut
 	Vector2 swing, swingVelocity, lastVelocity; // hanging rings: (sideways, front-back) lean, sprung
+	// Per SculptedHead.FleshAnchors part, head-local: how far the flesh is dragged, sprung back to rest.
+	readonly Vector3[] jiggle = new Vector3[SculptedHead.MaxJiggles], jiggleVelocity = new Vector3[SculptedHead.MaxJiggles];
+	Vector3 lastSpin;
+	Expression lastFace;
+	float lastPuff;
+	Vector3 wobbleAt; // head-local point the last hit's wobble spreads from
+	float visualTimer;
+	bool visualDue = true;
 
 	Game Game => owner.Game;
 	Time Time => owner.Time;
@@ -54,7 +76,7 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	{
 		Wobble *= MathF.Exp(-WobbleDecay * Time.Delta);
 		if (Wobble < 0.004f)
-			Wobble = 0;
+			(Wobble, wobbleAt) = (0, Vector3.Zero);
 		WobblePhase += WobbleRate * Time.Delta;
 		Spring.Step(ref impact, ref impactVelocity, ImpactRest, SquashStiffness, SquashDamping, Time.Delta);
 		// Rings hang from the head like pendulums: a lurch leans them back against it, a turn flings them round.
@@ -62,9 +84,50 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		lastVelocity = owner.Velocity;
 		var lean = Vector2.Clamp(new(-acceleration.X * SwingFromAcceleration, YawVelocity * SwingFromTurn), new(-1.2f), new(1.2f));
 		Spring.Step(ref swing, ref swingVelocity, lean, SwingStiffness, SwingDamping, Time.Delta);
+		Jiggle(acceleration * Time.Delta);
+		visualTimer += Time.Delta;
+		if (VisualFPS <= 0 || visualTimer >= 1 / VisualFPS)
+			(visualTimer, visualDue) = (VisualFPS <= 0 ? 0 : visualTimer % (1 / VisualFPS), true);
 		blinkTimer -= Time.Delta;
 		if (blinkTimer < -BlinkTime)
 			blinkTimer = Game.rng.Float(1.5f, 5);
+	}
+
+	// The flesh lags behind a lurch (px/sec this step) and the head's spin, and behind the brow, mouth and cheeks as
+	// they move, then springs back.
+	void Jiggle(Vector2 lurch)
+	{
+		var shape = Assets.GetHeadShape(ShapeId);
+		var softness = shape.FleshSoftness;
+		Span<Vector4> anchors = stackalloc Vector4[SculptedHead.MaxJiggles];
+		SculptedHead.FleshAnchors(shape, anchors);
+		var (_, toHead) = SculptedHead.Rotations(Yaw, Pitch, Roll);
+		var shove = Vector3.TransformNormal(new(lurch.X, -lurch.Y, 0), toHead) / Radius;
+		var spin = new Vector3(PitchVelocity, YawVelocity, -RollVelocity);
+		var face = Face;
+		jiggle[5].Y -= ((face.BrowRaise - lastFace.BrowRaise) * 0.08f - (face.BrowTilt - lastFace.BrowTilt) * 0.14f) * JiggleFromFace;
+		for (var side = 0; side < 2; side++)
+			jiggle[side] += new Vector3((side * 2 - 1) * -(Morph.Y - lastPuff) * 0.2f, (face.MouthOpen - lastFace.MouthOpen) * 0.1f, 0) * JiggleFromFace;
+		for (var i = 0; i < jiggle.Length; i++)
+		{
+			if (anchors[i].W <= 0 || softness <= 0)
+			{
+				(jiggle[i], jiggleVelocity[i]) = (Vector3.Zero, Vector3.Zero);
+				continue;
+			}
+			var (stiffness, damping) = i switch
+			{
+				< 2 => (JowlStiffness, JowlDamping),
+				< 4 => (EarStiffness, EarDamping),
+				4 => (NoseStiffness, NoseDamping),
+				_ => (BrowStiffness, BrowDamping),
+			};
+			jiggleVelocity[i] -= (shove + Vector3.Cross(spin - lastSpin, new(anchors[i].X, anchors[i].Y, anchors[i].Z))) * JiggleInertia;
+			Spring.Step(ref jiggle[i], ref jiggleVelocity[i], Vector3.Zero, stiffness / (softness * softness), damping / softness, Time.Delta);
+			if (jiggle[i].LengthSquared() < 1e-5f && jiggleVelocity[i].LengthSquared() < 1e-4f)
+				(jiggle[i], jiggleVelocity[i]) = (Vector3.Zero, Vector3.Zero);
+		}
+		(lastSpin, lastFace, lastPuff) = (spin, face, Morph.Y);
 	}
 
 	// Springs the turn toward a target; stiffness 0 lets it coast.
@@ -109,19 +172,30 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		walls[axis].Toward = axis == 0 ? new(MathF.Sign(speed), 0) : new(0, MathF.Sign(speed));
 	}
 
-	// Carves a dent where a hit lands on the visible surface, in head-local space so it turns with the head.
-	public void Dent(Vector2 worldPoint)
+	// Carves a dent where a hit lands on the visible surface, in head-local space so it turns with the head; scale sizes it.
+	public void Dent(Vector2 worldPoint, float scale = 1)
 	{
 		var across = (worldPoint - Center) / Radius * new Vector2(1, -1);
-		if (!SculptedHead.Raycast(Assets.GetHeadShape(ShapeId), across, Yaw, Pitch, Roll, out var point, out var normal))
+		var shape = Assets.GetHeadShape(ShapeId);
+		if (!SculptedHead.Raycast(shape, across, Yaw, Pitch, Roll, out var point, out var normal))
 			return;
+		// The wobble spreads from the hit, and the flesh nearest it is shoved in.
+		wobbleAt = point;
+		Span<Vector4> anchors = stackalloc Vector4[SculptedHead.MaxJiggles];
+		SculptedHead.FleshAnchors(shape, anchors);
+		for (var i = 0; i < jiggle.Length; i++)
+			jiggleVelocity[i] -= normal * JiggleFromHit *
+				Math.Clamp(1 - Vector3.Distance(point, new(anchors[i].X, anchors[i].Y, anchors[i].Z)) / (anchors[i].W + 0.5f), 0, 1);
 		if (dentCount == dents.Length)
 			Array.Copy(dents, 1, dents, 0, --dentCount);
-		dents[dentCount++] = new(point + normal * (DentRadius - DentDepth), DentRadius);
+		dents[dentCount++] = new(point + normal * (DentRadius - DentDepth) * scale, DentRadius * scale);
 	}
 
 	SculptedHead Current()
 	{
+		if (VisualFPS > 0 && head?.ColorTexture != null && !visualDue)
+			return head;
+		visualDue = false;
 		head ??= new(Game.Manager.GraphicsDevice, outline: false, extent);
 		var far = RigDraw.Multiply(Near, new Color(0x5e4f90));
 		var center = (Vector2)owner.RenderPosition;
@@ -148,7 +222,8 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		}
 		head.Render(Assets.GetHeadShape(ShapeId), Radius, Yaw, Pitch, Roll, face, Near, Color.Lerp(Near, far, 0.5f), far, Eye,
 			BodyShadeMode.Banded, new(0, 0.5f, 1, 0), lights[..HumanoidRigVisual.GatherLights(Game, lights, center, Radius, inside: Radius)],
-			center, dents.AsSpan(0, dentCount), Wobble, WobblePhase, Bruise, contacts[..contactCount], owner.Squish, Morph, swing);
+			center, dents.AsSpan(0, dentCount), Wobble, WobblePhase, Bruise, contacts[..contactCount], owner.Squish, Morph, swing, PatternBoost,
+			jiggle, wobbleAt);
 		return head;
 	}
 

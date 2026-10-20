@@ -47,9 +47,13 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	public const int MaxDents = 4;
 	public const int MaxContacts = 2;
 	public const int MaxAdornments = 6;
+	public const int MaxJiggles = 6;
+	const float WobbleReach = 0.9f; // radii a hit's wobble spreads
+	const float MaxJiggle = 0.35f; // of its reach, the furthest a jiggle drags the flesh, so the march stays safe
 
 	static readonly BlendMode Overwrite = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly TextureSampler Nearest = new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp);
+	static readonly TextureSampler Tiled = new(TextureFilter.Linear, TextureWrap.Repeat, TextureWrap.Repeat);
 
 	readonly Batcher batcher = new(device, "SculptedHead");
 	readonly Material headMaterial = new(null, LoadShader(device, "SculptedHead"));
@@ -80,11 +84,14 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	// wobble: how far (radii) the jelly warp pushes the surface, at wobblePhase. contacts: walls it's pressed against,
 	// (screen normal toward the wall, y down; the wall's distance from the center in radii; squash along it, 1 = none).
 	// stretch: screen-space squash and stretch, marched rather than scaled, so the pixels stay crisp; clamped to MaxStretch.
+	// jiggle: head-local offsets the flesh around each of the FleshAnchors is dragged by. wobbleAt: head-local point the
+	// wobble spreads from, zero for all over.
 	public void Render(HeadShape shape, float radius, float yaw, float pitch, float roll, Expression face,
 		Color near, Color core, Color far, Color eye, BodyShadeMode mode = BodyShadeMode.Banded, Vector4 surface = default,
 		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default, ReadOnlySpan<Vector4> dents = default,
 		float wobble = 0, float wobblePhase = 0, Color bruise = default, ReadOnlySpan<Vector4> contacts = default,
-		Vector2? stretch = null, Vector4 morph = default, Vector2 swing = default)
+		Vector2? stretch = null, Vector4 morph = default, Vector2 swing = default, Vector2 patternBoost = default,
+		ReadOnlySpan<Vector3> jiggle = default, Vector3 wobbleAt = default)
 	{
 		dents = dents[..Math.Min(dents.Length, MaxDents)];
 		face = face.Quantized();
@@ -104,6 +111,13 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			shading.Add(textureWorld);
 		shading.Add(wobble);
 		shading.Add(wobble > 0 ? wobblePhase : 0);
+		wobbleAt = wobble > 0 ? (wobbleAt * 32).Round() / 32 : Vector3.Zero;
+		shading.Add(wobbleAt);
+		Span<Vector4> jiggles = stackalloc Vector4[MaxJiggles * 2];
+		var jiggleCount = PackJiggles(shape, jiggle, jiggles);
+		jiggles = jiggles[..(jiggleCount * 2)];
+		foreach (var row in jiggles)
+			shading.Add(row);
 		shading.Add(bruise);
 		foreach (var dent in dents)
 			shading.Add(dent);
@@ -113,6 +127,13 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 		shading.Add(morph);
 		swing = (swing * 32).Round() / 32;
 		shading.Add(swing);
+		// The pattern spreads and glows past the shape's resting amounts by patternBoost (spread, glow).
+		var pattern = shape.Pattern is { Length: > 0 } patternKey ? Assets.Textures2D?.Get(patternKey)?.Texture : null;
+		var spread = pattern == null ? 0 : MathF.Round(Math.Clamp(shape.PatternSpread + patternBoost.X, 0, 1) * 32) / 32;
+		var glow = MathF.Round(MathF.Max(0, shape.PatternGlow + patternBoost.Y) * 32) / 32;
+		shading.Add(pattern);
+		shading.Add(spread);
+		shading.Add(glow);
 		var key = (shape, shape.Version, MathF.Round(radius * 4) / 4, Quantize(yaw), Quantize(pitch), Quantize(roll),
 			face, near, core, far, eye, shading.ToHashCode());
 		if (marched != null && key == last)
@@ -132,7 +153,8 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 		for (var i = 0; i < contacts.Length; i++)
 			headContacts[i] = new(Vector3.TransformNormal(new(contacts[i].X, -contacts[i].Y, 0), toHead), contacts[i].Z, contacts[i].W);
 #if DEBUG
-		lastInputs = (radius, yaw, pitch, roll, face, morph, swing, dents.ToArray(), wobble, wobblePhase, headContacts.ToArray(), squish);
+		lastInputs = (radius, yaw, pitch, roll, face, morph, swing, dents.ToArray(), wobble, wobblePhase, wobbleAt, jiggles.ToArray(),
+			headContacts.ToArray(), squish);
 #endif
 		var s = shape;
 		var lightCount = Math.Min(lights.Length, MaxLights);
@@ -163,6 +185,9 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			Bruise = (Vector4)bruise,
 			Stretch = new(squish, 0, 0),
 			Morph = morph,
+			Pattern = new(shape.PatternScale, spread, glow, shape.PatternInvert ? 1 : 0),
+			PatternColor = (Vector4)shape.PatternColor,
+			Flesh = new(wobbleAt, jiggleCount),
 			Face = new(face.BrowTilt, face.BrowRaise, face.BrowSkew, face.Smile),
 			Look = new(Math.Clamp(s.LidDroop + face.LidClose, 0, 1), face.GazeX * 0.6f, face.GazeY * 0.5f, 0),
 			Features = new(MathF.Min(s.EyeballSize, s.EyeSize * 0.9f), s.IrisSize, s.TeethSize, s.LipSize),
@@ -180,6 +205,19 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			uniforms.Contacts[i * 2 + 1] = new(headContacts[i].Squash, 0, 0, 0);
 		}
 		uniforms.Adorn = new(PackAdornments(s, uniforms.Adornments), swing.X, swing.Y, 0);
+		for (var i = 0; i < (int)uniforms.Adorn.X; i++)
+		{
+			var at = Xyz(uniforms.Adornments[i * 4]);
+			var ride = Flesh(at, jiggles, wobble, wobblePhase, wobbleAt) - at;
+			uniforms.Adornments[i * 4 + 3] = new(uniforms.Adornments[i * 4 + 3].X, ride.X, ride.Y, ride.Z);
+		}
+		for (var i = 0; i < 4; i++)
+		{
+			var at = RideAnchor(s, i);
+			uniforms.Rides[i] = new(Flesh(at, jiggles, wobble, wobblePhase, wobbleAt) - at, 0);
+		}
+		for (var i = 0; i < jiggles.Length; i++)
+			uniforms.Jiggles[i] = jiggles[i];
 		for (var i = 0; i < lightCount; i++)
 		{
 			var light = lights[i];
@@ -189,7 +227,15 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 		headMaterial.Fragment.SetUniformBuffer(uniforms);
 		batcher.PushBlend(Overwrite);
 		batcher.PushMaterial(headMaterial);
-		batcher.Rect(new Rect(0, 0, size, size), Color.White);
+		// The pattern rides in as the quad's texture, which the shader samples in head space.
+		if (pattern != null)
+		{
+			batcher.PushSampler(Tiled);
+			batcher.Image(pattern, Vector2.Zero, Vector2.Zero, new Vector2(size) / new Vector2(pattern.Width, pattern.Height), 0, Color.White);
+			batcher.PopSampler();
+		}
+		else
+			batcher.Rect(new Rect(0, 0, size, size), Color.White);
 		batcher.PopMaterial();
 		batcher.PopBlend();
 		batcher.Render(marched);
@@ -211,11 +257,13 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	struct HeadUniforms
 	{
 		public Vector4 ToHead0, ToHead1, ToHead2, ToView0, ToView1, ToView2, Frame, Cranium, Jaw, Jaw2, Brow, Nose, Eyes,
-			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise, Stretch, Morph, Face, Look, Features, Hair, Lips, Teeth, Sclera, Iris, Adorn;
+			Mouth, Ears, Near, Core, Far, Eye, Shading, Surface, Deform, Bruise, Stretch, Morph, Face, Look, Features, Hair, Lips, Teeth, Sclera, Iris, Adorn, Pattern, PatternColor, Flesh;
 		public LightArray Lights;
 		public DentArray Dents;
 		public ContactArray Contacts;
 		public AdornmentArray Adornments;
+		public RideArray Rides;
+		public JiggleArray Jiggles;
 	}
 
 	[System.Runtime.CompilerServices.InlineArray(MaxLights * 2)]
@@ -229,6 +277,58 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 
 	[System.Runtime.CompilerServices.InlineArray(MaxAdornments * 4)]
 	struct AdornmentArray { Vector4 first; }
+
+	[System.Runtime.CompilerServices.InlineArray(4)]
+	struct RideArray { Vector4 first; }
+
+	[System.Runtime.CompilerServices.InlineArray(MaxJiggles * 2)]
+	struct JiggleArray { Vector4 first; }
+
+	// The flesh that jiggles, head-local (anchor, reach), reach 0 where the shape has none: left and right jowls, left
+	// and right ears, the nose's tip, the brow's middle.
+	public static void FleshAnchors(HeadShape s, Span<Vector4> into)
+	{
+		var jaw = new Vector3(0, -s.JawDrop, s.JawForward) + new Vector3(s.JawWidth * 0.62f, -s.JawHeight * 0.25f, s.JawDepth * 0.45f);
+		var ear = new Vector3(s.CraniumWidth, s.EarHeight, -0.05f);
+		var flip = new Vector3(-1, 1, 1);
+		into[0] = new(jaw * flip, s.JawWidth * 0.55f);
+		into[1] = new(jaw, s.JawWidth * 0.55f);
+		into[2] = new(ear * flip, s.EarSize > 0 ? s.EarSize * 1.4f + 0.1f : 0);
+		into[3] = new(ear, into[2].W);
+		into[4] = new(0, s.NoseHeight - s.NoseDroop, 0.88f + s.NoseLength, s.NoseSize > 0 ? s.NoseSize * 2 + 0.12f : 0);
+		into[5] = new(0, s.BrowHeight, s.BrowForward, s.BrowSize > 0 ? MathF.Max(s.BrowWidth, 0.3f) : 0);
+	}
+
+	// The anchors and offsets of the jiggles that move, as shader rows, each offset clamped to MaxJiggle of its reach.
+	// Returns how many.
+	static int PackJiggles(HeadShape s, ReadOnlySpan<Vector3> jiggle, Span<Vector4> into)
+	{
+		Span<Vector4> anchors = stackalloc Vector4[MaxJiggles];
+		FleshAnchors(s, anchors);
+		var count = 0;
+		for (var i = 0; i < Math.Min(jiggle.Length, MaxJiggles); i++)
+		{
+			var reach = anchors[i].W;
+			var offset = (jiggle[i] * 64).Round() / 64;
+			if (reach <= 0 || offset == Vector3.Zero)
+				continue;
+			if (offset.Length() > reach * MaxJiggle)
+				offset = Vector3.Normalize(offset) * reach * MaxJiggle;
+			into[count * 2] = anchors[i];
+			into[count++ * 2 + 1] = new(offset, 0);
+		}
+		return count;
+	}
+
+	// Where the rigid parts riding the flesh hang from: left eye, right eye, teeth, anvil.
+	static Vector3 RideAnchor(HeadShape s, int i) => i switch
+	{
+		< 2 => Socket(s, i * 2 - 1) - new Vector3(0, 0, (s.EyeSize - MathF.Min(s.EyeballSize, s.EyeSize * 0.9f)) * 0.5f),
+		2 => new(0, s.MouthHeight, 0.8f),
+		_ => new(0, -s.JawDrop - s.JawHeight, s.JawForward * 0.5f),
+	};
+
+	static Vector3 Xyz(Vector4 v) => new(v.X, v.Y, v.Z);
 
 	// Each adornment (and its mirror) as four rows: (point, kind), (ring axis or horn direction, size), (color, metal),
 	// (thickness, 0, 0, 0). Returns how many slots it filled.
@@ -268,7 +368,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 
 #if DEBUG
 	(float Radius, float Yaw, float Pitch, float Roll, Expression Face, Vector4 Morph, Vector2 Swing, Vector4[] Dents, float Wobble, float Phase,
-		Contact[] Contacts, Vector2 Stretch) lastInputs;
+		Vector3 WobbleAt, Vector4[] Jiggles, Contact[] Contacts, Vector2 Stretch) lastInputs;
 
 	// Compares the last GPU render against the CPU reference: per texture, how many pixels differ by more than a
 	// rounding step, and the worst channel difference. With a directory, writes both versions as PNGs side by side.
@@ -276,8 +376,8 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	{
 		if (marched == null || last.Shape is not { } shape)
 			return "nothing rendered yet";
-		var (radius, yaw, pitch, roll, face, morph, swing, dents, wobble, phase, contacts, stretch) = lastInputs;
-		var (normals, mask) = RenderReference(new(shape, face, morph, swing, dents, wobble, phase, contacts), radius, yaw, pitch, roll,
+		var (radius, yaw, pitch, roll, face, morph, swing, dents, wobble, phase, wobbleAt, jiggles, contacts, stretch) = lastInputs;
+		var (normals, mask) = RenderReference(new(shape, face, morph, swing, dents, wobble, phase, wobbleAt, jiggles, contacts), radius, yaw, pitch, roll,
 			stretch, Reach, extent);
 		var report = new System.Text.StringBuilder($"{Size}x{Size}");
 		Compare("normal", NormalTexture!, normals);
@@ -343,7 +443,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 						found = true;
 						break;
 					}
-					distance *= s.Wobble > 0 ? 0.7f : 1;
+					distance *= s.Jiggles.Length > 0 ? 0.6f : s.Wobble > 0 ? 0.7f : 1;
 					position += rayDirection * distance;
 					travelled += distance;
 				}
@@ -384,7 +484,11 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	}
 #endif
 
-	readonly record struct Field(HeadShape Shape, Expression Face, Vector4 Morph, Vector2 Swing, Vector4[] Dents, float Wobble, float Phase, Contact[] Contacts);
+	readonly record struct Field(HeadShape Shape, Expression Face, Vector4 Morph, Vector2 Swing, Vector4[] Dents, float Wobble, float Phase,
+		Vector3 WobbleAt, Vector4[] Jiggles, Contact[] Contacts)
+	{
+		public static Field Resting(HeadShape shape) => new(shape, default, default, default, [], 0, 0, default, [], []);
+	}
 
 	// Where a view ray through `across` (radii from the center, y up) first meets the head, in head-local units, and the
 	// surface normal there. Falls back toward the center when it misses the silhouette.
@@ -393,6 +497,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	{
 		var (_, toHead) = Rotations(yaw, pitch, roll);
 		var rayDirection = Vector3.TransformNormal(-Vector3.UnitZ, toHead);
+		var resting = Field.Resting(shape);
 		for (var attempt = 0; attempt <= 8; attempt++, across *= 0.8f)
 		{
 			var depth = DefaultExtent * DefaultExtent - across.LengthSquared();
@@ -402,10 +507,10 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			point = Vector3.Transform(new Vector3(across, depth), toHead);
 			for (var (step, travelled) = (0, 0f); step < MaxSteps && travelled < depth * 2; step++)
 			{
-				var distance = Distance(point, shape, default, default, default);
+				var distance = FaceDistance(point, resting);
 				if (distance < 0.004f)
 				{
-					normal = SurfaceNormal(point, new(shape, default, default, default, [], 0, 0, []));
+					normal = SurfaceNormal(point, resting);
 					return true;
 				}
 				point += rayDirection * distance;
@@ -418,8 +523,24 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 
 	static Vector3 Socket(HeadShape s, float side) => new(s.EyeSpacing * side, s.EyeHeight, s.EyeDepth);
 
-	static Vector3 Wobble(Vector3 p, Field f) => p + f.Wobble * new Vector3(MathF.Sin(p.Y * 5 + f.Phase),
-		MathF.Sin(p.Z * 5 + f.Phase + 2.1f), MathF.Sin(p.X * 5 + f.Phase + 4.2f));
+	// Where p sits on the resting flesh: dragged back by each jiggle around its anchor, then wobbling, all over or fading
+	// out from wobbleAt. Rigid parts ride: carried whole by the flesh at their anchor, Flesh(anchor) - anchor.
+	static Vector3 Flesh(Vector3 p, ReadOnlySpan<Vector4> jiggles, float wobble, float phase, Vector3 wobbleAt)
+	{
+		var q = p;
+		for (var i = 0; i < jiggles.Length; i += 2)
+		{
+			var s = Math.Clamp(1 - Vector3.Distance(p, Xyz(jiggles[i])) / jiggles[i].W, 0, 1);
+			q -= Xyz(jiggles[i + 1]) * (s * s * (3 - 2 * s));
+		}
+		if (wobble <= 0)
+			return q;
+		var amount = wobbleAt != Vector3.Zero ? wobble * Math.Clamp(1 - Vector3.Distance(q, wobbleAt) / WobbleReach, 0, 1) : wobble;
+		return q + amount * new Vector3(MathF.Sin(q.Y * 5 + phase), MathF.Sin(q.Z * 5 + phase + 2.1f), MathF.Sin(q.X * 5 + phase + 4.2f));
+	}
+
+	static Vector3 Flesh(Vector3 p, Field f) => Flesh(p, f.Jiggles, f.Wobble, f.Phase, f.WobbleAt);
+	static Vector3 Ride(Vector3 at, Field f) => Flesh(at, f) - at;
 
 	// Squashed toward each contact's wall, bulging the rest to keep the volume, then flattened where it meets the wall.
 	static float Distance(Vector3 p, Field f)
@@ -438,8 +559,10 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 		return d;
 	}
 
-	static float Distance(Vector3 p, HeadShape s, Expression face, Vector4 morph, Vector2 swing)
+	static float FaceDistance(Vector3 raw, Field f)
 	{
+		var (s, face, morph) = (f.Shape, f.Face, f.Morph);
+		var p = Flesh(raw, f);
 		var cranium = Ellipsoid(p - new Vector3(0, s.CraniumLift, -0.08f), new Vector3(s.CraniumWidth, s.CraniumHeight, s.CraniumDepth));
 		var jaw = Ellipsoid(p - new Vector3(0, -s.JawDrop, s.JawForward), new Vector3(s.JawWidth, s.JawHeight, s.JawDepth));
 		var d = SmoothUnion(cranium, jaw, MathF.Max(0.01f, s.JawBlend));
@@ -448,11 +571,18 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 				Sphere(p - new Vector3(0.5f, -0.22f, 0.5f), 0.3f * morph.Y)), 0.15f);
 		if (morph.X > 0)
 		{
+			// A waisted neck flaring into a block, a horn out one side, a stepped heel on the other, a studded striking face.
 			var a = morph.X;
-			var top = new Vector3(0, -s.JawDrop - s.JawHeight, s.JawForward * 0.5f);
-			var neck = RoundBox(p - top + new Vector3(0, 0.14f * a, 0), new Vector3(0.35f, 0.16f, 0.32f) * a, 0.04f * a);
-			var block = RoundBox(p - top + new Vector3(0, 0.48f * a, 0), new Vector3(0.85f, 0.2f, 0.6f) * a, 0.05f * a);
-			d = SmoothUnion(d, SmoothUnion(neck, block, 0.06f * a), 0.1f);
+			var top = RideAnchor(s, 3);
+			var q = raw + Ride(top, f) - top;
+			var neck = RoundBox(q + new Vector3(0, 0.16f, 0) * a, new Vector3(0.26f, 0.18f, 0.24f) * a, 0.05f * a);
+			var block = RoundBox(q + new Vector3(0.08f, 0.54f, 0) * a, new Vector3(0.8f, 0.22f, 0.52f) * a, 0.05f * a);
+			var horn = RoundCone(q, new Vector3(0.6f, -0.46f, 0) * a, new Vector3(1.4f, -0.34f, 0) * a, 0.17f * a, 0.03f * a);
+			var heel = RoundBox(q + new Vector3(0.95f, 0.42f, 0) * a, new Vector3(0.14f, 0.1f, 0.4f) * a, 0.03f * a);
+			var spacing = 0.5f * a;
+			var stud = new Vector3(q.X - Math.Clamp(MathF.Round(q.X / spacing), -1, 1) * spacing, q.Y + 0.76f * a, MathF.Abs(q.Z) - 0.28f * a);
+			var studs = RoundCone(stud, Vector3.Zero, new Vector3(0, -0.16f * a, 0), 0.1f * a, 0.025f * a);
+			d = SmoothUnion(d, MathF.Min(SmoothUnion(SmoothUnion(neck, block, 0.08f * a), MathF.Min(horn, heel), 0.05f * a), studs), 0.1f);
 		}
 		if (s.BrowSize > 0)
 		{
@@ -497,9 +627,10 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 				// Eyeballs sit back in the sockets, the lids slide down over them from above as they close.
 				var close = Math.Clamp(s.LidDroop + face.LidClose, 0, 1);
 				var lid = eyeball * 1.12f;
-				foreach (var side in (ReadOnlySpan<float>)[-1, 1])
+				for (var side = 0; side < 2; side++)
 				{
-					var q = p - Socket(s, side) + new Vector3(0, 0, (s.EyeSize - eyeball) * 0.5f);
+					var at = RideAnchor(s, side);
+					var q = raw + Ride(at, f) - at;
 					d = MathF.Min(d, MathF.Min(Sphere(q, eyeball), MathF.Max(Sphere(q, lid), lid * (1 - 2 * close) - q.Y)));
 				}
 			}
@@ -514,14 +645,17 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			{
 				// Upper teeth hang from the top of the mouth's cut, lower stand on its floor; clenched they fill the slit.
 				var half = new Vector3(s.MouthWidth * 0.8f, s.TeethSize * 0.5f, 0.05f);
-				var upper = RoundBox(p - new Vector3(0, s.MouthHeight + radius - s.TeethSize * 0.5f, 0.8f), half, 0.015f);
-				var lower = RoundBox(p - new Vector3(0, s.MouthHeight - radius + s.TeethSize * 0.5f, 0.8f), half, 0.015f);
+				var teeth = raw + Ride(RideAnchor(s, 2), f);
+				var upper = RoundBox(teeth - new Vector3(0, s.MouthHeight + radius - s.TeethSize * 0.5f, 0.8f), half, 0.015f);
+				var lower = RoundBox(teeth - new Vector3(0, s.MouthHeight - radius + s.TeethSize * 0.5f, 0.8f), half, 0.015f);
 				d = MathF.Min(d, MathF.Min(upper, lower));
 			}
 		}
+		foreach (var dent in f.Dents)
+			d = SmoothSubtract(d, Sphere(p - Xyz(dent), dent.W), 0.06f);
 		Span<Vector4> adornments = stackalloc Vector4[MaxAdornments * 4];
 		for (var i = PackAdornments(s, adornments) - 1; i >= 0; i--)
-			d = MathF.Min(d, Adornment(p, adornments.Slice(i * 4, 4), swing));
+			d = MathF.Min(d, Adornment(raw + Ride(Xyz(adornments[i * 4]), f), adornments.Slice(i * 4, 4), f.Swing));
 		return d;
 	}
 
@@ -535,15 +669,6 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 	}
 
 	static Vector3 Unsplit(Vector3 p, float split) => p - new Vector3(MathF.Sign(p.X) * split * SplitGap, 0, 0);
-
-	static float FaceDistance(Vector3 p, Field f)
-	{
-		var w = Wobble(p, f);
-		var d = Distance(w, f.Shape, f.Face, f.Morph, f.Swing);
-		foreach (var dent in f.Dents)
-			d = SmoothSubtract(d, Sphere(w - new Vector3(dent.X, dent.Y, dent.Z), dent.W), 0.06f);
-		return d;
-	}
 
 	static Vector3 SurfaceNormal(Vector3 p, Field s)
 	{

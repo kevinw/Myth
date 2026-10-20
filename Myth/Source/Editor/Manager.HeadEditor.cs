@@ -46,6 +46,9 @@ public partial class Manager
 		("Mouth", nameof(HeadShape.MouthSize), 0.01f, 0.2f), ("Mouth", nameof(HeadShape.LipSize), 0f, 0.1f),
 		("Mouth", nameof(HeadShape.TeethSize), 0f, 0.2f),
 		("Ears", nameof(HeadShape.EarSize), 0f, 0.5f), ("Ears", nameof(HeadShape.EarHeight), -0.4f, 0.4f),
+		("Flesh", nameof(HeadShape.FleshSoftness), 0f, 2.5f),
+		("Pattern", nameof(HeadShape.PatternScale), 0.2f, 6f), ("Pattern", nameof(HeadShape.PatternSpread), 0f, 1f),
+		("Pattern", nameof(HeadShape.PatternGlow), 0f, 2f),
 	];
 
 	static readonly PropertyInfo[] HeadColors =
@@ -174,6 +177,7 @@ public partial class Manager
 			if (IsItemDeactivatedAfterEdit())
 				shape.Save(HeadShapePath(id));
 		}
+		DrawHeadPattern(id, shape);
 		DrawHeadAdornments(id, shape);
 		SeparatorText("Colors");
 		foreach (var property in HeadColors)
@@ -188,6 +192,29 @@ public partial class Manager
 			if (IsItemDeactivatedAfterEdit())
 				shape.Save(HeadShapePath(id));
 		}
+	}
+
+	void DrawHeadPattern(string id, HeadShape shape)
+	{
+		var changed = false;
+		SetNextItemWidth(-140);
+		if (BeginCombo("Pattern", shape.Pattern is { Length: > 0 } name ? name : "none"))
+		{
+			if (Selectable("none", shape.Pattern.Length == 0))
+				(shape.Pattern, changed) = ("", true);
+			foreach (var key in Assets.Textures2D?.Order ?? [])
+				if (Selectable(key, key == shape.Pattern))
+					(shape.Pattern, changed) = (key, true);
+			EndCombo();
+		}
+		var invert = shape.PatternInvert;
+		if (Checkbox("Invert pattern", ref invert))
+			(shape.PatternInvert, changed) = (invert, true);
+		if (!changed)
+			return;
+		shape.Version++;
+		InvalidateHeadUsers(id);
+		shape.Save(HeadShapePath(id));
 	}
 
 	void DrawHeadAdornments(string id, HeadShape shape)

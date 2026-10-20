@@ -99,6 +99,7 @@ public sealed class FloatingHead : Actor
 		Hitbox = new(new RectInt(-half, -half, half * 2, half * 2));
 		home = Position;
 		chunkEffect = AcquireParticleEffect("head_chunks");
+		SyncVisual(false);
 		base.Added();
 	}
 
@@ -190,15 +191,21 @@ public sealed class FloatingHead : Actor
 		sculpt.Face = Expression.Lerp(sculpt.Face, Mood, 1 - MathF.Exp(-FaceResponse * Time.Delta)) with { MouthOpen = mouth };
 		sculpt.GazeTarget = state is State.Asleep or >= State.Falling || player == null ? null : Center + toPlayer;
 		sculpt.ImpactRest = state == State.Remains ? new(0, RemainsSag) : Vector2.Zero;
-		sculpt.Radius = Radius;
-		sculpt.ShapeId = HeadShapeId;
-		sculpt.Near = Color.Lerp(HeadColor, RemainsTint, darken * 0.5f);
-		sculpt.Eye = eyes > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, charge * 0.4f), eyes) : default;
-		sculpt.Bruise = BruiseColor;
-		sculpt.Tint = Color.Lerp(Color.White, RemainsTint, darken);
 		sculpt.Step();
 		base.Update();
 		sculpt.FindWalls();
+	}
+
+	// In the editor it's drawn awake, eyes lit, rather than asleep as play begins.
+	internal override void SyncVisual(bool editor)
+	{
+		sculpt.Radius = Radius;
+		sculpt.ShapeId = HeadShapeId;
+		sculpt.Near = Color.Lerp(HeadColor, RemainsTint, darken * 0.5f);
+		var lit = editor ? 1 : eyes;
+		sculpt.Eye = lit > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, charge * 0.4f), lit) : default;
+		sculpt.Bruise = BruiseColor;
+		sculpt.Tint = Color.Lerp(Color.White, RemainsTint, darken);
 	}
 
 	void Impact(int axis, float speed)

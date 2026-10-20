@@ -129,7 +129,7 @@ public class RigPuppet : RigActor
 		SyncRuff();
 	}
 
-	protected override void SyncVisual()
+	protected override void SyncRigVisual()
 	{
 		// The walk plays at whatever rate makes its planted feet keep pace with the ground, at any size.
 		var stride = visual.WalkGroundSpeed(WalkAnimationName) * Rig.PixelsPerMeter;
@@ -267,7 +267,7 @@ public class RigPuppet : RigActor
 				visual.Play(walking ? WalkName() : IdleName(), seededPhase: Rig.SeedAnimationPhase);
 		}
 
-		SyncVisual();
+		SyncRigVisual();
 		var directive = Directive;
 		var directed = abilityActive || scripted || turnTaking;
 		visual.Update(grounded,

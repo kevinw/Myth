@@ -72,7 +72,7 @@ public abstract class RigActor : Actor, INeuralTextureAgent
 	void CreateVisual()
 	{
 		visual = new(this, Rig, Neural, NeuralReactions);
-		SyncVisual();
+		SyncRigVisual();
 		visual.Initialize(InitialClip);
 		visualReady = true;
 		VisualCreated();
@@ -81,7 +81,7 @@ public abstract class RigActor : Actor, INeuralTextureAgent
 	protected virtual void VisualCreated() { }
 
 	// Pushes the actor's state into the visual before it updates.
-	protected virtual void SyncVisual() { }
+	protected virtual void SyncRigVisual() { }
 
 	public override void Update()
 	{
@@ -211,7 +211,7 @@ public abstract class RigActor : Actor, INeuralTextureAgent
 
 	void SyncPreviewVisual()
 	{
-		SyncVisual();
+		SyncRigVisual();
 		visual.PlaybackSpeed = AnimationPreviewSpeed;
 	}
 #endif

@@ -7,20 +7,23 @@
   "JawDepth": 0.86,
   "JawDrop": 0.42,
   "JawForward": 0.34,
-  "BrowSize": 0.24,
+  "BrowSize": 0.17,
   "BrowWidth": 0.52,
-  "BrowHeight": 0.22,
+  "BrowHeight": 0.36,
   "BrowForward": 0.86,
   "NoseSize": 0.18,
   "NoseLength": 0.18,
   "NoseDroop": 0.18,
-  "EyeSize": 0.18,
-  "EyeSpacing": 0.3,
-  "EyeHeight": 0.04,
-  "EyeDepth": 0.74,
+  "EyeSize": 0.22,
+  "EyeSpacing": 0.32,
+  "EyeballSize": 0.2,
+  "LidDroop": 0.1,
+  "EyeHeight": 0.02,
+  "EyeDepth": 0.8,
   "MouthWidth": 0.44,
   "MouthHeight": -0.56,
   "MouthSize": 0.06,
+  "FleshSoftness": 1.4,
   "Adornments": [
     {
       "Kind": "Ring",
@@ -61,5 +64,11 @@
       "Metal": false,
       "Color": "E2D6B8FF"
     }
-  ]
+  ],
+  "Pattern": "patterns/pattern_79",
+  "PatternInvert": false,
+  "PatternScale": 1.4,
+  "PatternSpread": 0.12,
+  "PatternGlow": 0,
+  "PatternColor": "3A2018FF"
 }

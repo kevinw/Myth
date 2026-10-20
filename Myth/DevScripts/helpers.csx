@@ -25,7 +25,7 @@ string VerifyHeads(string? directory = null) => string.Join("\n", All<RigActor>(
 // an actor's sculpted head textures (color | normal | mask) side by side, each texel scale x scale, as a PNG
 string HeadShot(Actor actor, string path = "obj/head-shot.png", int scale = 8)
 {
-	var head = actor switch { FloatingHead f => f.head, RigActor r => r.visual.sculptedHead, _ => null };
+	var head = actor switch { FloatingHead f => f.sculpt.head, HeadBoss b => b.sculpt.head, RigActor r => r.visual.sculptedHead, _ => null };
 	if (head?.ColorTexture is not { } color)
 		return "no sculpted head";
 	Texture[] textures = [color, head.NormalTexture!, head.MaskTexture!];

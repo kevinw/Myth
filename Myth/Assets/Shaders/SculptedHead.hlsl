@@ -12,6 +12,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 #define MAX_DENTS 4
 #define MAX_CONTACTS 2
 #define MAX_ADORNMENTS 6
+#define MAX_JIGGLES 6
 
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
@@ -49,10 +50,15 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Sclera;
     float4 Iris;
     float4 Adorn;    // x = count, yz = how far hanging rings swing (head-local x, z)
+    float4 Pattern;  // x = repeats per radius, y = spread out from the face's midline (0 none .. 1 all over), z = glow, w = 1 inverted
+    float4 PatternColor;
+    float4 Flesh;    // xyz = head-local point the wobble spreads from (0 = all over), w = jiggle count
     float4 Lights[MAX_LIGHTS * 2]; // (texture-space position, height, radius), (color * intensity, 0)
     float4 Dents[MAX_DENTS]; // head-local center, radius: spheres carved out of the head
     float4 Contacts[MAX_CONTACTS * 2]; // (head-local normal toward a wall, the wall's distance), (squash along it, 0, 0, 0)
-    float4 Adornments[MAX_ADORNMENTS * 4]; // (point, kind: 0 ring, 1 stud, 2 horn), (ring axis or horn direction, size), (color, metal), (thickness, 0, 0, 0)
+    float4 Adornments[MAX_ADORNMENTS * 4]; // (point, kind: 0 ring, 1 stud, 2 horn), (ring axis or horn direction, size), (color, metal), (thickness, how far the flesh carries it)
+    float4 Rides[4]; // how far the flesh carries the rigid parts riding on it: left eye, right eye, teeth, anvil
+    float4 Jiggles[MAX_JIGGLES * 2]; // (head-local anchor, reach), (offset, 0): flesh dragged along around an anchor
 };
 
 Texture2D Texture : register(t0, space2);
@@ -96,6 +102,7 @@ struct HeadOutput
 static const float SplitGap = 0.35; // radii each half slides out, fully split
 static const float CoreRadius = 0.42;
 static const float3 Iron = float3(0.35, 0.36, 0.44);
+static const float WobbleReach = 0.9; // radii a hit's wobble spreads
 static const int MaxSteps = 40;
 
 float3 to_head(float3 v) { return v.x * ToHead0.xyz + v.y * ToHead1.xyz + v.z * ToHead2.xyz; }
@@ -178,7 +185,22 @@ float smooth_subtract(float a, float b, float k)
 
 float3 socket(float side) { return float3(Eyes.x * side, Eyes.y, Eyes.w); }
 
-float3 wobble(float3 p) { return p + Deform.x * sin(p.yzx * 5.0 + Deform.y + float3(0.0, 2.1, 4.2)); }
+// Where p sits on the resting flesh: dragged back by each jiggle around its anchor, then wobbling, all over or
+// fading out from a hit. Rigid parts (eyes, teeth, adornments, the anvil) don't bend with it; they ride, carried
+// whole by the flesh at their anchor.
+float3 flesh(float3 p)
+{
+    float3 q = p;
+    for (int i = 0; i < (int)Flesh.w; i++)
+    {
+        float s = saturate(1.0 - length(p - Jiggles[i * 2].xyz) / Jiggles[i * 2].w);
+        q -= Jiggles[i * 2 + 1].xyz * s * s * (3.0 - 2.0 * s);
+    }
+    if (Deform.x <= 0.0)
+        return q;
+    float amount = any(Flesh.xyz != 0.0) ? Deform.x * saturate(1.0 - length(q - Flesh.xyz) / WobbleReach) : Deform.x;
+    return q + amount * sin(q.yzx * 5.0 + Deform.y + float3(0.0, 2.1, 4.2));
+}
 
 // How close p is to a dent's floor: 1 at its center, falling off toward the rim, 0 away from it.
 float in_dent(float3 p)
@@ -239,17 +261,19 @@ float sd_mouth(float3 p)
 
 // Eyeballs sit back in the sockets, the lids slide down over them from above as they close.
 float3 eyeball(float side) { return socket(side) - float3(0.0, 0.0, (Eyes.z - Features.x) * 0.5); }
-float sd_eyeballs(float3 p) { return min(sd_sphere(p - eyeball(-1.0), Features.x), sd_sphere(p - eyeball(1.0), Features.x)); }
+float3 in_eye(float3 p, float side) { return p + Rides[side < 0.0 ? 0 : 1].xyz - eyeball(side); }
+float sd_eyeballs(float3 p) { return min(sd_sphere(in_eye(p, -1.0), Features.x), sd_sphere(in_eye(p, 1.0), Features.x)); }
 float sd_lid(float3 q)
 {
     float r = Features.x * 1.12;
     return max(sd_sphere(q, r), r * (1.0 - 2.0 * Look.x) - q.y);
 }
-float sd_lids(float3 p) { return min(sd_lid(p - eyeball(-1.0)), sd_lid(p - eyeball(1.0))); }
+float sd_lids(float3 p) { return min(sd_lid(in_eye(p, -1.0)), sd_lid(in_eye(p, 1.0))); }
 
 // Upper teeth hang from the top of the mouth's cut, lower stand on its floor; clenched they fill the slit.
 float sd_teeth(float3 p)
 {
+    p += Rides[2].xyz;
     float h = Features.z;
     float r = mouth_radius();
     float3 half_size = float3(Mouth.x * 0.8, h * 0.5, 0.05);
@@ -260,6 +284,7 @@ float sd_teeth(float3 p)
 
 float sd_adornment(float3 p, int i)
 {
+    p += Adornments[i * 4 + 3].yzw;
     float3 at = Adornments[i * 4].xyz;
     float kind = Adornments[i * 4].w;
     float3 direction = Adornments[i * 4 + 1].xyz;
@@ -277,22 +302,32 @@ float sd_adornment(float3 p, int i)
     return sd_round_cone(p, at, at + direction * size, thickness, thickness * 0.15);
 }
 
-// The anvil hangs from the jaw's underside, a neck flaring into a wide striking block, growing with Morph.x.
+// The anvil hangs from the jaw's underside, growing with Morph.x: a waisted neck flaring into a block, a horn tapering
+// out one side, a stepped heel on the other, and a studded striking face underneath. p from where it hangs.
+float3 in_anvil(float3 p) { return p + Rides[3].xyz - float3(0.0, -Jaw.w - Jaw.y, Jaw2.x * 0.5); }
 float sd_anvil(float3 p)
 {
+    float3 q = in_anvil(p);
     float a = Morph.x;
-    float3 top = float3(0.0, -Jaw.w - Jaw.y, Jaw2.x * 0.5);
-    float neck = sd_round_box(p - top + float3(0.0, 0.14 * a, 0.0), float3(0.35, 0.16, 0.32) * a, 0.04 * a);
-    float block = sd_round_box(p - top + float3(0.0, 0.48 * a, 0.0), float3(0.85, 0.2, 0.6) * a, 0.05 * a);
-    return smooth_union(neck, block, 0.06 * a);
+    float neck = sd_round_box(q + float3(0.0, 0.16, 0.0) * a, float3(0.26, 0.18, 0.24) * a, 0.05 * a);
+    float block = sd_round_box(q + float3(0.08, 0.54, 0.0) * a, float3(0.8, 0.22, 0.52) * a, 0.05 * a);
+    float horn = sd_round_cone(q, float3(0.6, -0.46, 0.0) * a, float3(1.4, -0.34, 0.0) * a, 0.17 * a, 0.03 * a);
+    float heel = sd_round_box(q + float3(0.95, 0.42, 0.0) * a, float3(0.14, 0.1, 0.4) * a, 0.03 * a);
+    float spacing = 0.5 * a;
+    float3 stud = float3(q.x - clamp(round(q.x / spacing), -1.0, 1.0) * spacing, q.y + 0.76 * a, abs(q.z) - 0.28 * a);
+    float studs = sd_round_cone(stud, float3(0.0, 0.0, 0.0), float3(0.0, -0.16 * a, 0.0), 0.1 * a, 0.025 * a);
+    return min(smooth_union(smooth_union(neck, block, 0.08 * a), min(horn, heel), 0.05 * a), studs);
 }
+
+// How hot the anvil runs at p: its striking face and studs glow up from the bottom.
+float anvil_heat(float3 p) { return saturate((-in_anvil(p).y - 0.5 * Morph.x) / (0.34 * Morph.x)); }
 
 // Split open, each half slides out sideways; where p sat on the whole head.
 float3 unsplit(float3 p) { return p - float3(sign(p.x) * Morph.z * SplitGap, 0.0, 0.0); }
 
-float face_distance(float3 p)
+float face_distance(float3 raw)
 {
-    p = wobble(p);
+    float3 p = flesh(raw);
     float cranium = sd_ellipsoid(p - float3(0.0, Cranium.w, -0.08), Cranium.xyz);
     float jaw = sd_ellipsoid(p - float3(0.0, -Jaw.w, Jaw2.x), Jaw.xyz);
     float d = smooth_union(cranium, jaw, max(0.01, Jaw2.y));
@@ -300,7 +335,7 @@ float face_distance(float3 p)
         d = smooth_union(d, min(sd_sphere(p - float3(-0.5, -0.22, 0.5), 0.3 * Morph.y),
             sd_sphere(p - float3(0.5, -0.22, 0.5), 0.3 * Morph.y)), 0.15);
     if (Morph.x > 0.0)
-        d = smooth_union(d, sd_anvil(p), 0.1);
+        d = smooth_union(d, sd_anvil(raw), 0.1);
     if (Jaw2.z > 0.0)
         d = smooth_union(d, sd_brow(p), 0.1);
     float noseSize = Brow.z;
@@ -335,18 +370,18 @@ float face_distance(float3 p)
     {
         d = smooth_subtract(d, min(sd_sphere(p - socket(-1.0), Eyes.z), sd_sphere(p - socket(1.0), Eyes.z)), 0.05);
         if (Features.x > 0.0)
-            d = min(d, min(sd_eyeballs(p), sd_lids(p)));
+            d = min(d, min(sd_eyeballs(raw), sd_lids(raw)));
     }
     if (Mouth.x > 0.0)
     {
         d = smooth_subtract(d, sd_mouth(p), 0.04);
         if (Features.z > 0.0)
-            d = min(d, sd_teeth(p));
+            d = min(d, sd_teeth(raw));
     }
     for (int i = 0; i < (int)Deform.z; i++)
         d = smooth_subtract(d, sd_sphere(p - Dents[i].xyz, Dents[i].w), 0.06);
     for (int j = 0; j < (int)Adorn.x; j++)
-        d = min(d, sd_adornment(p, j));
+        d = min(d, sd_adornment(raw, j));
     return d;
 }
 
@@ -445,8 +480,8 @@ HeadOutput fragment_main(VsOutput input)
             found = true;
             break;
         }
-        // A wobbling field overstates distances; step short so rays don't tunnel.
-        distance *= Deform.x > 0.0 ? 0.7 : 1.0;
+        // Wobbling or jiggling flesh overstates distances; step short so rays don't tunnel.
+        distance *= Flesh.w > 0.0 ? 0.6 : Deform.x > 0.0 ? 0.7 : 1.0;
         position += rayDirection * distance;
         travelled += distance;
     }
@@ -469,18 +504,21 @@ HeadOutput fragment_main(VsOutput input)
     // A flat snout's end face sits a shade down from the cheeks around it.
     if (on_snout_face(face))
         light = min(light, 0.6);
-    bool iron = Morph.x > 0.0 && sd_anvil(wobble(squashed(face))) < 0.03;
-    float3 color = iron ? sculpted_color(light, Iron * 1.7, Iron * 1.25, Iron * 0.85, threshold)
+    float3 raw = squashed(face);
+    float3 feature = flesh(raw);
+    bool iron = Morph.x > 0.0 && sd_anvil(raw) < 0.03;
+    float heat = iron ? anvil_heat(raw) * Morph.x : 0.0;
+    float3 color = heat > threshold ? lerp(Eye.rgb, 1.0, 0.25)
+        : iron ? sculpted_color(light, Iron * 1.7, Iron * 1.25, Iron * 0.85, threshold)
         : sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold);
-    color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(wobble(squashed(face))) * 2.0));
+    color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(feature) * 2.0));
     if (blanch(position) > threshold)
         color = lerp(Near.rgb, 1.0, 0.25);
     float3 emit = float3(0.0, 0.0, 0.0);
-    float3 feature = wobble(squashed(face));
     float3 shadowed = Far.rgb / max(Near.rgb, 0.05); // how the skin's shadow tints, applied to each feature's color
     int adornment = -1;
     for (int j = 0; j < (int)Adorn.x; j++)
-        if (sd_adornment(feature, j) < 0.01)
+        if (sd_adornment(raw, j) < 0.01)
             adornment = j;
     if (adornment >= 0)
     {
@@ -492,11 +530,11 @@ HeadOutput fragment_main(VsOutput input)
         if (metal)
             emit = sculpted_specular(pixel, screenNormal, tint, float4(1.0, 0.25, 1.6, 0.0), threshold).rgb;
     }
-    else if (Features.x > 0.0 && Eyes.z > 0.0 && sd_eyeballs(feature) < 0.01 && sd_lids(feature) > 0.005)
+    else if (Features.x > 0.0 && Eyes.z > 0.0 && sd_eyeballs(raw) < 0.01 && sd_lids(raw) > 0.005)
     {
         // Sclera, iris and pupil by how near the hit sits to where the eye looks; a lit eye's iris glows.
-        float3 center = eyeball(feature.x < 0.0 ? -1.0 : 1.0);
-        float facing = dot(normalize(feature - center), normalize(float3(Look.y, Look.z, 1.0)));
+        float3 eye = in_eye(raw, raw.x < 0.0 ? -1.0 : 1.0);
+        float facing = dot(normalize(eye), normalize(float3(Look.y, Look.z, 1.0)));
         float iris = cos(Features.y * 0.9);
         bool glowing = Eye.a > 0.0;
         color = facing > lerp(iris, 1.0, 0.55) ? float3(0.03, 0.02, 0.02)
@@ -505,7 +543,7 @@ HeadOutput fragment_main(VsOutput input)
         if (glowing && facing > iris && facing <= lerp(iris, 1.0, 0.55))
             emit = Eye.rgb;
     }
-    else if (Features.z > 0.0 && Mouth.x > 0.0 && sd_teeth(feature) < 0.01)
+    else if (Features.z > 0.0 && Mouth.x > 0.0 && sd_teeth(raw) < 0.01)
         color = sculpted_color(light, Teeth.rgb, Teeth.rgb * 0.75, Teeth.rgb * shadowed, threshold);
     else if (Features.w > 0.0 && Mouth.x > 0.0 && sd_mouth(feature) < Features.w)
         color = sculpted_color(light, Lips.rgb, Lips.rgb * 0.75, Lips.rgb * shadowed, threshold);
@@ -515,15 +553,32 @@ HeadOutput fragment_main(VsOutput input)
         color = sculpted_color(light, Hair.rgb, Hair.rgb * 0.7, Hair.rgb * shadowed, threshold);
     else if (Features.x <= 0.0 && in_eye_glow(face) && Eye.a > 0.0)
         color = Eye.rgb;
+    else if (!iron && Pattern.y > 0.0 && abs(face.x) < Pattern.y * 1.5)
+    {
+        // A pattern projected from three sides in head space, so it sticks to the skin as the head turns, squashes
+        // and splits; thresholded crisp. Painted in its color, or burning with the eyes' as it glows.
+        float3 w = pow(abs(normal), 4.0);
+        w /= w.x + w.y + w.z;
+        float3 q = feature * Pattern.x;
+        float sample = Texture.SampleLevel(Sampler, q.yz, 0.0).r * w.x + Texture.SampleLevel(Sampler, q.xz, 0.0).r * w.y +
+            Texture.SampleLevel(Sampler, q.xy, 0.0).r * w.z;
+        if ((sample > 0.5) != (Pattern.w > 0.5))
+        {
+            float3 hot = Eye.a > 0.0 ? lerp(Eye.rgb, 1.0, 0.3) : PatternColor.rgb;
+            color = lerp(sculpted_color(light, PatternColor.rgb, PatternColor.rgb * 0.75, PatternColor.rgb * shadowed, threshold),
+                hot, saturate(Pattern.z));
+            emit = hot * Pattern.z;
+        }
+    }
     // A band of shadow inside the silhouette's edge, so it reads crisply without an outline.
     if (viewNormal.z < 0.22)
         color *= 0.72;
     output.Color = float4(color, 1.0);
     output.Specular = sculpted_specular(pixel, screenNormal, Near.rgb, Surface, threshold);
     output.Specular.rgb += emit;
-    // The anvil heats with the eyes' color as it grows.
+    // The anvil heats with the eyes' color as it grows, hottest at its striking face.
     if (iron)
-        output.Specular += float4(Eye.rgb * Morph.x * 0.45, 0.0);
+        output.Specular += float4(Eye.rgb * (Morph.x * 0.45 + heat * 0.8), 0.0);
     if (Morph.z > 0.0 && sd_sphere(position, CoreRadius * Morph.z) < 0.02)
     {
         output.Color = float4(lerp(Eye.rgb, 1.0, 0.35 + 0.4 * Morph.w), 1.0);

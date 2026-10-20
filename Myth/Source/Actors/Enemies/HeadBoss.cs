@@ -20,13 +20,15 @@ public sealed class HeadBoss : Actor
 	enum Phase { Asleep, Waking, Idle, Volley, Puff, Slam, Stunned, Weep, Split, Dying }
 
 	[I(16, 64)] public float Radius = 34;
-	internal static ContentRef<HeadShapeContent> BruteHead => new("brute");
-	public ContentRef<HeadShapeContent> HeadShapeId = BruteHead;
+	internal static ContentRef<HeadShapeContent> BigBruteHead => new("bigbrute");
+	public ContentRef<HeadShapeContent> HeadShapeId = BigBruteHead;
 	public Color HeadColor = new(0xc9a98c);
 	public Color EyeColor = new(0xff5a3c);
 	public Color BruiseColor = new(0x5a1a38);
 	[I(1, 80)] public int Health = 30;
+	[I(1, 60)] public float VisualFPS = 24; // how often the head re-marches; its springs still run every frame
 
+	static float DentScale => 1 / 3f; // of a floating head's dent
 	static float HoverHeight => 0.42f; // fraction of the room's height down from the ceiling
 	static float HoverFollow => 1.6f; // how hard it steers toward its hover spot
 	static float HoverBob => 4f;
@@ -85,6 +87,7 @@ public sealed class HeadBoss : Actor
 	float contactGrace;
 	Expression mood;
 	Vector4 morph; // anvil, cheeks, split, core glow
+	float cracks; // how far its cracks have spread past the head shape's own
 	Vector2? slamMark; // where the slam will land, glowing on the floor
 	readonly HeadSculpt sculpt;
 	readonly Coroutine attack = new();
@@ -115,6 +118,7 @@ public sealed class HeadBoss : Actor
 		Hitbox = new(new RectInt(-half, -half, half * 2, half * 2));
 		chunkEffect = AcquireParticleEffect("head_chunks");
 		emberEffect = AcquireParticleEffect("embers");
+		SyncVisual(false);
 		base.Added();
 	}
 
@@ -135,6 +139,7 @@ public sealed class HeadBoss : Actor
 			attack.Update(Time.Delta);
 		else
 			Idle();
+		cracks = Calc.Approach(cracks, phase == Phase.Split ? 1 : (Stage - 1) * 0.35f, Time.Delta * 0.5f);
 		UpdateFace();
 		base.Update();
 		sculpt.FindWalls();
@@ -454,6 +459,9 @@ public sealed class HeadBoss : Actor
 		AudioEvent("rig_puppet/surprised");
 		for (var time = 0f; time < 0.6f; time += Time.Delta)
 		{
+			// The cracks race open and blaze before it gives.
+			cracks = Calc.Approach(cracks, 1, Time.Delta * 2);
+			morph.W = time / 0.6f * 0.6f;
 			mood = Expression.Afraid;
 			Velocity = Calc.Approach(Velocity, Vector2.Zero, 300 * Time.Delta);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
@@ -507,16 +515,25 @@ public sealed class HeadBoss : Actor
 		sculpt.Look(targetYaw, targetPitch, 40, 8);
 		Spring.Step(ref sculpt.Roll, ref sculpt.RollVelocity, 0, phase == Phase.Stunned ? 8 : 40, 6, Time.Delta);
 		sculpt.GazeTarget = phase is Phase.Asleep or Phase.Stunned or Phase.Dying ? null : Center + toPlayer;
+		sculpt.Step();
+	}
+
+	// In the editor it's drawn awake, eyes lit, rather than asleep as the fight begins.
+	internal override void SyncVisual(bool editor)
+	{
 		sculpt.Radius = Radius;
 		sculpt.ShapeId = HeadShapeId;
 		sculpt.Near = HeadColor;
 		sculpt.Bruise = BruiseColor;
 		// Each stage runs its eyes hotter.
 		var heat = (Stage - 1) * 0.25f + morph.W * 0.3f;
-		sculpt.Eye = eyes > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, heat), eyes) : default;
+		var lit = editor ? 1 : eyes;
+		sculpt.Eye = lit > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, heat), lit) : default;
 		sculpt.Tint = phase == Phase.Stunned ? Color.Lerp(Color.White, StunTint, 0.5f + 0.5f * MathF.Sin(Timer * 7)) : Color.White;
 		sculpt.Morph = morph;
-		sculpt.Step();
+		// Its cracks spread out from the seam it splits along and burn hotter each stage; a hit flares them.
+		sculpt.PatternBoost = new(cracks, (Stage - 1) * 0.35f + morph.W + pain * 0.3f);
+		sculpt.VisualFPS = editor ? 0 : VisualFPS;
 	}
 
 	public override void OnCollideX()
@@ -539,7 +556,7 @@ public sealed class HeadBoss : Actor
 		var away = (Center - (Vector2)hitInfo.By.Position).Normalized(-Vector2.UnitY);
 		var onCore = phase == Phase.Split && Vector2.Distance(at, Center) < Radius * 0.7f;
 		var damage = phase == Phase.Stunned ? StunDamage : onCore ? CoreDamage : 1;
-		sculpt.Dent(at);
+		sculpt.Dent(at, DentScale);
 		sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * (damage > 1 ? 1.5f : 1));
 		sculpt.YawVelocity += MathF.Sign(away.X) * SpinKick;
 		sculpt.RollVelocity += MathF.Sign(away.X) * SpinKick * 0.5f;

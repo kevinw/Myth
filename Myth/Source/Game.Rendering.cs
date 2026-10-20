@@ -31,6 +31,8 @@ public sealed partial class GameView
 			atlasWanderOffset += AtlasWanderSpeed * Calc.Lerp(AtlasWanderInitialSpeed, 1, ramp) * Time.Delta;
 		}
 		PrepareRenderingList();
+		foreach (var actor in rendering)
+			actor.SyncVisual(game.IsEditorPreview);
 		GatherPixelSortStrokes();
 		game.VisibleWorldBounds = new Rect(RenderCamera, new Vector2(Screen.Width, Screen.Height) / zoomLevel);
 		NeuralTextureActor.DecodeVisible(Actors, game.VisibleWorldBounds);
