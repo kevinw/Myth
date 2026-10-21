@@ -1784,6 +1784,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
 
+	// The body's pieces alone, without the head.
+	public bool BodyOverlaps(in RectInt worldBounds, CombatRole role) => Body.Overlaps((Rect)(worldBounds - owner.Position), role);
+
 	public bool OverlapsCombatBounds(in RectInt worldBounds, CombatRole role = CombatRole.Vulnerable)
 	{
 		var bounds = (Rect)(worldBounds - owner.Position);

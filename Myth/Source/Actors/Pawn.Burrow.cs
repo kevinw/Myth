@@ -10,7 +10,7 @@ public abstract partial class Pawn
 	static float BurrowUpgradeSeconds => 0.5f; // each BurrowUpgrade pickup adds this much burrow time
 
 	// Max burrow time, derived from the collected BurrowUpgrade pickups (no summed save state).
-	internal float MaxBurrowDuration => BurrowDurationFor(Game);
+	internal virtual float MaxBurrowDuration => BurrowDurationFor(Game);
 	internal static float BurrowDurationFor(Game game) => BurrowDuration + game.PickupCount(PickupKind.BurrowUpgrade) * BurrowUpgradeSeconds;
 
 	// HUD readouts for the stamina bar: capacity drives its width, while fill stays depleted and

@@ -82,9 +82,9 @@ public sealed class ActorSettingsAttribute(
 	public string? TrimPrefix => trimPrefix;
 }
 
-// Starts an inspector group for this and subsequent editable fields in the declaring type.
-// Use [InspectorGroup] to return subsequent fields to the ungrouped section.
-[AttributeUsage(AttributeTargets.Field)]
+// Starts an inspector group for this and subsequent editable fields in the declaring type; on a settings property, puts
+// just that property in the group. Use [InspectorGroup] to return subsequent fields to the ungrouped section.
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class InspectorGroupAttribute(string? name = null) : Attribute
 {
 	public string? Name => name;

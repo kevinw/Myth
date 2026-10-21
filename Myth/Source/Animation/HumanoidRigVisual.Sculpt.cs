@@ -154,7 +154,7 @@ partial class HumanoidRigVisual
 			if (Vector3.Dot(forward, toes) < 0)
 				forward = -forward;
 
-			var (torso, joints) = (visual.Settings.Sculpt.TorsoColor, visual.Settings.Sculpt.JointColor);
+			var (torso, joints) = (visual.Settings.Sculpt.BodyColor, visual.Settings.Sculpt.JointColor);
 			var hips = visual.Settings.Sculpt.HipSize;
 			Add(V(visual.leftLeg.Hip), V(visual.rightLeg.Hip), 0.1f * hips, 0.1f * hips, 0, joints, Metal);
 			Add(V(visual.spine1), V(visual.spine2), 0.13f, 0.14f, blend, torso);
@@ -169,7 +169,7 @@ partial class HumanoidRigVisual
 				for (var s = -1; s <= 1; s += 2)
 				{
 					var (inner, outer) = Pec(s);
-					Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, visual.Settings.Sculpt.ChestColor);
+					Add(inner, outer, 0.06f * pecs, 0.05f * pecs, muscle, torso);
 				}
 				for (var s = -1; s <= 1; s += 2)
 				{
@@ -186,13 +186,13 @@ partial class HumanoidRigVisual
 					for (var s = -1; s <= 1; s += 2)
 					{
 						var ab = center + side * s * 0.045f * bulk;
-						Add(ab, ab, 0.04f * visual.Settings.Sculpt.Abs, 0.04f * visual.Settings.Sculpt.Abs, 0.015f * ppm, visual.Settings.Sculpt.AbsColor);
+						Add(ab, ab, 0.04f * visual.Settings.Sculpt.Abs, 0.04f * visual.Settings.Sculpt.Abs, 0.015f * ppm, torso);
 					}
 				}
 			Add(V(visual.neck), V(visual.head), 0.075f, 0.07f, blend, torso);
 			heat = 0;
-			var (arms, forearms, hands) = (visual.Settings.Sculpt.ArmColor, visual.Settings.Sculpt.ForearmColor, visual.Settings.Sculpt.HandColor);
-			var (legs, shins, feet) = (visual.Settings.Sculpt.LegColor, visual.Settings.Sculpt.ShinColor, visual.Settings.Sculpt.FootColor);
+			var (arms, forearms, hands) = (torso, visual.Settings.Sculpt.TrimColor, joints);
+			var (legs, shins, feet) = (visual.Settings.Sculpt.LegsColor, visual.Settings.Sculpt.TrimColor, joints);
 			heat = Heat(SculptRegion.LeftArm);
 			Limb(visual.leftUpperArm, visual.leftLowerArm, visual.leftHand, visual.leftPalm, 0.1f, 0.06f, 0.05f, 0.06f, 0.05f, arms, forearms, hands);
 			heat = Heat(SculptRegion.RightArm);
@@ -232,7 +232,7 @@ partial class HumanoidRigVisual
 					var glute = midline + (side * s * radius * 0.85f - forward * 0.07f - up * 0.03f) * bulk;
 					Add(glute + up * 0.02f * bulk, glute - (up * 0.06f + forward * 0.01f) * bulk, radius, radius * 0.88f, muscle, legs);
 				}
-				Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, visual.Settings.Sculpt.CalfColor); // calf, fleshed over the metal shin
+				Muscle(knee, ankle, 0.15f, 0.55f, -front, 0.05f, 0.07f, 0.045f, legs); // calf, fleshed over the metal shin
 			}
 			// Claws ride the finger joints, so they curl with the animation's grip, and run on past the fingertips.
 			if (visual.Settings.Sculpt.Claws > 0)
@@ -241,14 +241,40 @@ partial class HumanoidRigVisual
 					{
 						heat = Heat(claws == visual.leftClaws ? SculptRegion.LeftArm : SculptRegion.RightArm);
 						var (knuckle, middle, tip) = (V(claws[i]), V(claws[i + 1]), V(claws[i + 2]));
-						Add(knuckle, middle, 0.022f, 0.016f, machined, visual.Settings.Sculpt.ClawColor, Metal);
-						Add(middle, middle + (tip - middle) * (1 + visual.Settings.Sculpt.Claws * 1.5f), 0.016f, 0.003f, machined, visual.Settings.Sculpt.ClawColor, Metal);
+						Add(knuckle, middle, 0.022f, 0.016f, machined, visual.Settings.Sculpt.BladeColor, Metal);
+						Add(middle, middle + (tip - middle) * (1 + visual.Settings.Sculpt.Claws * 1.5f), 0.016f, 0.003f, machined, visual.Settings.Sculpt.BladeColor, Metal);
 					}
 			heat = Heat(SculptRegion.Torso);
 			for (var s = -1; s <= 1; s += 2)
 			{
 				var clavicle = s < 0 ? visual.leftClavicle : visual.rightClavicle;
 				Add(V(visual.neck), V(clavicle), 0.08f, 0.07f, blend, torso);
+			}
+			if (visual.Settings.Sculpt.BladeOnlyHarms)
+				for (var i = 0; i < list.Count; i++)
+					list[i] = list[i] with { Combat = BodyCombat.Vulnerable };
+			// A sword in the right fist, the blade running out past the index finger along the grip, a crossguard across it
+			// and the pommel out the other side. Only the blade hurts, and nothing of it takes hits.
+			if (visual.Settings.Sculpt.Sword > 0)
+			{
+				heat = Heat(SculptRegion.RightArm);
+				var claws = visual.rightClaws;
+				var grip = (V(claws[0]) + V(claws[6])) * 0.5f;
+				var along = Vector3.Normalize(V(claws[0]) - V(claws[6]));
+				if (!float.IsFinite(along.X))
+					along = -up;
+				var across = Vector3.Normalize(Vector3.Cross(along, Vector3.UnitZ));
+				if (!float.IsFinite(across.X))
+					across = Vector3.UnitX;
+				var (hilt, guard) = (visual.Settings.Sculpt.GripColor, grip + along * 0.06f * ppm);
+				var thin = 0.6f / bulk; // meters that draw as 0.6px, so a small figure's sword still shows
+				Add(grip - along * 0.07f * ppm, guard, MathF.Max(0.016f, thin), MathF.Max(0.016f, thin), 0, hilt, Metal);
+				Add(guard - across * 0.05f * ppm, guard + across * 0.05f * ppm, MathF.Max(0.013f, thin), MathF.Max(0.013f, thin), 0, hilt, Metal);
+				Add(guard, guard + along * visual.Settings.Sculpt.Sword * ppm, MathF.Max(0.018f, thin), MathF.Max(0.004f, thin * 0.5f), 0,
+					visual.Settings.Sculpt.BladeColor, Metal);
+				list[^3] = list[^3] with { Combat = BodyCombat.None };
+				list[^2] = list[^2] with { Combat = BodyCombat.None };
+				list[^1] = list[^1] with { Combat = BodyCombat.Harmful };
 			}
 			// Dents carve in last; a flesh dent springing back past flush bulges out for a moment instead.
 			foreach (var dent in dents)
@@ -375,7 +401,7 @@ partial class HumanoidRigVisual
 		{
 			get
 			{
-				var near = visual.Settings.Sculpt.HeadColor;
+				var near = visual.Settings.Sculpt.SkinColor;
 				var far = new Color((Vector4)near * (Vector4)visual.Settings.Sculpt.BodyShadow);
 				return (near, Color.Lerp(near, far, 0.5f), far);
 			}

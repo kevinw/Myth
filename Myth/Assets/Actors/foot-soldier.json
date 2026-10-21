@@ -1,0 +1,18 @@
+{
+  "Name": "FootSoldier",
+  "From": "Humanoid",
+  "Type": "FootSoldier",
+  "BodyStyle": "Sculpted",
+  "Sword": 0.9,
+  "BladeOnlyHarms": true,
+  "Claws": 0,
+  "NearColor": "C9A48C",
+  "CoreColor": "A07866",
+  "FarColor": "5E3E44",
+  "SkinColor": "C9A48C",
+  "BodyColor": "5A6478",
+  "LegsColor": "4A5264",
+  "TrimColor": "8A92A0",
+  "JointColor": "3A3F4A",
+  "BladeColor": "C8D4E0"
+}

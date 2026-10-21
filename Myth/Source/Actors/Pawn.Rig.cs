@@ -174,6 +174,13 @@ public abstract partial class Pawn
 		rigAttackPitch = name switch { "attack_down" => 1, "attack_up" => -1, _ => 0 };
 	}
 
+	// The editor preview never updates actors, so there the rig is posed as it's drawn; in play, Update poses it.
+	internal override void SyncVisual(bool editor)
+	{
+		if (editor)
+			UpdateRig();
+	}
+
 	void UpdateRig()
 	{
 		var settings = DrawRig;
@@ -554,10 +561,14 @@ public abstract partial class Pawn
 	internal string RigPlaying => rigPlaying;
 	internal string? RigPreview => rigPreview;
 
+	// Plays a take through once over whatever the pawn's state shows, then hands back; null hands back now. Replaying
+	// the take that just finished starts it fresh rather than counting it done.
 	internal void PreviewRigTake(string? take)
 	{
 		rigPreview = take;
 		rigRestart |= take != null;
+		if (take != null)
+			rigPlaying = "";
 	}
 
 	// Attacking, the hat swipes in the sword hand: brim in the palm, crown out along torso -> hand. Local to the pawn,

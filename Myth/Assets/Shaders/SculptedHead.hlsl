@@ -30,7 +30,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 Nose;     // nose height, nose droop, nose flat, nostril size
     float4 Eyes;     // spacing, height, size, depth
     float4 Mouth;    // width, height, size, ear size
-    float4 Ears;     // ear height
+    float4 Ears;     // x = ear height, y = anvil heat (0 cold .. 1 white-hot, rising up from its striking face)
     float4 Near;
     float4 Core;
     float4 Far;
@@ -350,8 +350,18 @@ float anvil(float3 p, out float glow)
 }
 float sd_anvil(float3 p) { float glow; return anvil(p, glow); }
 
-// How hot the anvil runs at p: its striking face and studs glow up from the bottom, fresh pieces hotter still.
-float anvil_heat(float3 p, float glow) { return max(saturate((-in_anvil(p).y - 0.5) / 0.34) * Morph.x, glow); }
+// How hot the anvil runs at p: the heat climbs from the studs' tips up toward the neck as it rises, and a fresh piece
+// runs hot until it cools.
+float anvil_heat(float3 p, float glow) { return max(saturate(Ears.y * 1.6 - (in_anvil(p).y + 0.92) / 0.6), glow); }
+
+// Glowing iron in hard bands, cherry to orange to yellow-white, the hottest tinted toward the eyes; dithered only right
+// at each band's edge. 0 is cold iron.
+static const int HeatBands = 3;
+int heat_band(float heat, float threshold) { return clamp((int)floor(heat * (HeatBands + 0.2) + (threshold - 0.5) * 0.3), 0, HeatBands); }
+float3 heat_color(int band)
+{
+    return band == 1 ? float3(0.55, 0.12, 0.08) : band == 2 ? float3(0.92, 0.38, 0.1) : lerp(float3(1.0, 0.9, 0.55), Eye.rgb, 0.15);
+}
 
 // Split open, each half slides out sideways; where p sat on the whole head.
 float3 unsplit(float3 p) { return p - float3(sign(p.x) * Morph.z * SplitGap, 0.0, 0.0); }
@@ -539,10 +549,10 @@ HeadOutput fragment_main(VsOutput input)
     float3 raw = squashed(face);
     float3 feature = flesh(raw);
     output.Position = float4(feature, 1.0);
-    float glow;
+    float glow = 0.0;
     bool iron = Morph.x > 0.0 && anvil(raw, glow) < 0.03;
-    float heat = iron ? anvil_heat(raw, glow) : 0.0;
-    float3 color = heat > threshold ? lerp(Eye.rgb, 1.0, 0.25)
+    int band = iron ? heat_band(anvil_heat(raw, glow), threshold) : 0;
+    float3 color = band > 0 ? heat_color(band)
         : iron ? sculpted_color(light, Iron * 1.7, Iron * 1.25, Iron * 0.85, threshold)
         : sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold);
     color = lerp(color, Bruise.rgb, Bruise.a * saturate(in_dent(feature) * 2.0));
@@ -610,9 +620,9 @@ HeadOutput fragment_main(VsOutput input)
     output.Color = float4(color, 1.0);
     output.Specular = sculpted_specular(pixel, screenNormal, Near.rgb, Surface, threshold);
     output.Specular.rgb += emit;
-    // The anvil heats with the eyes' color as it grows, hottest at its striking face.
-    if (iron)
-        output.Specular += float4(Eye.rgb * (Morph.x * 0.45 + heat * 0.8), 0.0);
+    // Hot iron glows by itself, brighter each band.
+    if (band > 0)
+        output.Specular += float4(heat_color(band) * (0.2 + 0.25 * band), 0.0);
     if (Morph.z > 0.0 && sd_sphere(position, CoreRadius * Morph.z) < 0.02)
     {
         output.Color = float4(lerp(Eye.rgb, 1.0, 0.35 + 0.4 * Morph.w), 1.0);

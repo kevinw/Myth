@@ -747,7 +747,8 @@ public static class ActorSpecs
 		foreach (var property in settingsType.GetProperties(flags))
 			if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0 &&
 				property.GetCustomAttribute<NoSerializeAttribute>() == null && IsSupportedType(property.PropertyType))
-				destination.Add(new(property, path, SettingsDisplayName(property.Name, settings.TrimPrefix), defaultGroup));
+				destination.Add(new(property, path, SettingsDisplayName(property.Name, settings.TrimPrefix),
+					GetMemberAttribute<InspectorGroupAttribute>(property)?.Name ?? defaultGroup));
 	}
 
 	static string SettingsDisplayName(string name, string? trimPrefix)

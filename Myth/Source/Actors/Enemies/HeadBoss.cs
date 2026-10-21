@@ -7,7 +7,7 @@ namespace Myth;
 // - Volley: squints, cocks one brow and draws back, then sweeps an arc of shots starting from the cocked brow's side.
 // - Puff: astonished, it swells and its cheeks inflate; the bigger the puff, the denser the ring it spits.
 // - Slam: rises to the ceiling over you, clenched, an iron anvil forging piece by piece from its chin, a glow marking where it'll
-//   land; then drops, quaking the floor (jump it) and, from stage 2, rolling low fire out both ways. It's left wedged
+//   land; hanging over you, the anvil heats up from its striking face, the glow below with it; then drops, quaking the floor (jump it) and, from stage 2, rolling low fire out both ways. It's left wedged
 //   and dizzy: the window to hit it hard.
 // - Weep (stage 2+): sad, it drifts across the room crying tears that fall in sheets.
 // - Split (stage 3): afraid, it cracks in half down the middle, baring a glowing core that spirals shots; the core
@@ -51,9 +51,10 @@ public sealed class HeadBoss : Actor
 	static int PuffHeavyEvery => 4; // one heavy shot per this many small ones
 	static float HeavyScale => 3f; // bigger and slower by this much
 
-	static float SlamRiseTime => 1.1f;
-	static float SlamForgeTime => 0.55f; // the anvil's assembly, within the rise
+	static float SlamRiseTime => 1.5f;
+	static float SlamForgeTime => 1.2f; // the anvil's assembly, within the rise
 	static float SlamHangTime => 0.4f;
+	static float SlamHeatTime => 0.6f; // from the anvil's last piece to white-hot, through the end of the rise and the hang
 	static float SlamClearance => 1.5f; // radii below the ceiling at the top of the rise
 	static float SlamGravity => 1400f;
 	static float SlamWaveSpeed => 150f;
@@ -88,6 +89,15 @@ public sealed class HeadBoss : Actor
 	static float ReturnedShotDamage => 5; // in plain player hits
 	static float ReturnedShotShove => 2; // times HitShove
 	static float HitContactGrace => 0.5f;
+	static float HitStunTime => 0.1f;
+	static float HeavyHitStunTime => 0.2f;
+	static float HitSquash => 87f; // px/sec of impact the blow flattens it with, struck side in
+	static float HitKick => 50f; // the screen's kick along the blow
+	static float StaggerPace => 0.25f; // how slow a hit knocks its attack, recovering over StaggerTime
+	static float StaggerTime => 0.3f;
+	static float EyeFlashDecay => 5f;
+	static float EyeFlashHeat => 0.25f; // how much whiter a hit flares its eyes
+	static float EyeFlashLight => 0.5f; // and how much brighter their light
 	static Color StunTint => new(0xffb070);
 
 	Phase phase;
@@ -104,11 +114,16 @@ public sealed class HeadBoss : Actor
 	Vector4 morph; // anvil, cheeks, split, core glow
 	float cracks; // how far its cracks have spread past the head shape's own
 	Vector2? slamMark; // where the slam will land, glowing on the floor
+	float anvilHeat;
 	readonly HeadSculpt sculpt;
 	readonly Coroutine attack = new();
 	ActorDestructionTrigger? container;
 	GlassTube? tube;
 	int strikesFelt;
+	float pace = 1; // how fast its attacks run: a hit drops it, and it recovers
+	float eyeFlash;
+	int impactFrames; // drawn as a solid silhouette for this many more frames
+	Color impactColor;
 	int chunkEffect = -1;
 	int emberEffect = -1;
 
@@ -125,6 +140,7 @@ public sealed class HeadBoss : Actor
 	public override float HitKnockback => 100f;
 	public override string HitSoundType => "flesh";
 	Vector2 Center => Position;
+	float Delta => Time.Delta * pace;
 	Vector2 Mouth => Center + new Vector2(0, Radius * 0.45f);
 	Player? Target => Game.GetFirst<Player>();
 	Vector2 ToPlayer => Target is { } player ? player.Position + player.Hitbox.Rect.Center - Center : Vector2.Zero;
@@ -155,11 +171,13 @@ public sealed class HeadBoss : Actor
 
 	public override void Update()
 	{
-		phaseTime += Time.Delta;
+		pace = Calc.Approach(pace, 1, Time.Delta / StaggerTime);
+		eyeFlash = Calc.Approach(eyeFlash, 0, Time.Delta * EyeFlashDecay);
+		phaseTime += Delta;
 		contactGrace = MathF.Max(0, contactGrace - Time.Delta);
 		pain = MathF.Max(0, pain - Time.Delta * 1.5f);
 		if (attack.Active)
-			attack.Update(Time.Delta);
+			attack.Update(Delta);
 		else
 			Idle();
 		cracks = Calc.Approach(cracks, phase == Phase.Split ? 1 : (Stage - 1) * 0.35f, Time.Delta * 0.5f);
@@ -199,7 +217,7 @@ public sealed class HeadBoss : Actor
 		Hover();
 		mood = new(0.35f, -0.1f, 0, -0.3f);
 		mouth = 0.25f + 0.15f * MathF.Sin(Timer * 3);
-		cooldown -= Time.Delta * Speedup;
+		cooldown -= Delta * Speedup;
 		if (cooldown <= 0 && Target != null)
 			Choose();
 	}
@@ -210,7 +228,7 @@ public sealed class HeadBoss : Actor
 		var arena = Arena;
 		var x = Math.Clamp(Center.X + ToPlayer.X * 0.5f, arena.Left + Radius * 1.5f, arena.Right - Radius * 1.5f);
 		var target = new Vector2(x, arena.Top + arena.Height * HoverHeight + MathF.Sin(Timer * 1.3f) * HoverBob);
-		Velocity = Calc.Approach(Velocity, (target - Center) * HoverFollow * follow, 400 * Time.Delta);
+		Velocity = Calc.Approach(Velocity, (target - Center) * HoverFollow * follow, 400 * Delta);
 	}
 
 	void Choose()
@@ -250,13 +268,13 @@ public sealed class HeadBoss : Actor
 		Enter(Phase.Waking);
 		AudioEvent("boss/start_float");
 		Squish = new(1.3f, 0.75f);
-		for (var time = 0f; time < WakeTime; time += Time.Delta)
+		for (var time = 0f; time < WakeTime; time += Delta)
 		{
 			var t = time / WakeTime;
 			eyes = Ease.Cube.Out(t);
 			mood = Expression.Surprised;
 			mouth = 0.8f * t;
-			Velocity = Calc.Approach(Velocity, Vector2.Zero, 200 * Time.Delta);
+			Velocity = Calc.Approach(Velocity, Vector2.Zero, 200 * Delta);
 			yield return 0;
 		}
 		FinishAttack();
@@ -268,7 +286,7 @@ public sealed class HeadBoss : Actor
 		sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
 		Squish = new(1.06f, 0.94f);
 		var time = 0.5f + strikes * 0.25f;
-		for (var t = 0f; t < time; t += Time.Delta)
+		for (var t = 0f; t < time; t += Delta)
 		{
 			var twitch = MathF.Sin(t / time * MathF.PI);
 			mood = new(BrowTilt: twitch * 0.8f, BrowRaise: -0.5f, Smile: 0.15f - twitch * 0.4f,
@@ -284,9 +302,9 @@ public sealed class HeadBoss : Actor
 	{
 		Enter(Phase.Waking);
 		(Mask, CollidesWithSolids) = (Masks.Enemy, true);
-		for (var time = 0f; time < FreedDropTime; time += Time.Delta)
+		for (var time = 0f; time < FreedDropTime; time += Delta)
 		{
-			Velocity = new(0, Calc.Approach(Velocity.Y, FreedDropSpeed, 600 * Time.Delta));
+			Velocity = new(0, Calc.Approach(Velocity.Y, FreedDropSpeed, 600 * Delta));
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
 			yield return 0;
 		}
@@ -303,12 +321,12 @@ public sealed class HeadBoss : Actor
 		Enter(Phase.Volley);
 		var side = Game.rng.Chance(0.5f) ? 1 : -1;
 		var windup = VolleyWindup / Speedup;
-		for (var time = 0f; time < windup; time += Time.Delta)
+		for (var time = 0f; time < windup; time += Delta)
 		{
 			var t = time / windup;
 			mood = new(0.5f, -0.7f, side, -0.3f);
-			mouth = Calc.Approach(mouth, 0, Time.Delta * 4);
-			Velocity = Calc.Approach(Velocity, -ToPlayer.Normalized() * 25, 300 * Time.Delta);
+			mouth = Calc.Approach(mouth, 0, Delta * 4);
+			Velocity = Calc.Approach(Velocity, -ToPlayer.Normalized() * 25, 300 * Delta);
 			Squish = new(1 - 0.12f * t, 1 + 0.12f * t);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.015f * t);
 			yield return 0;
@@ -338,13 +356,13 @@ public sealed class HeadBoss : Actor
 		var puff = Game.rng.Float(0.5f, 1);
 		var windup = PuffWindup / Speedup;
 		AudioEvent("rig_puppet/surprised");
-		for (var time = 0f; time < windup; time += Time.Delta)
+		for (var time = 0f; time < windup; time += Delta)
 		{
 			var t = Ease.Cube.Out(time / windup);
 			mood = new(-0.2f, 1, 0, 0.2f);
 			mouth = 0;
 			morph.Y = puff * t;
-			Velocity = Calc.Approach(Velocity, Vector2.Zero, 300 * Time.Delta);
+			Velocity = Calc.Approach(Velocity, Vector2.Zero, 300 * Delta);
 			Squish = Vector2.One * (1 + 0.18f * puff * t);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.02f * t);
 			yield return 0;
@@ -370,9 +388,9 @@ public sealed class HeadBoss : Actor
 				bullet.WobbleAmplitude = 0;
 			});
 		Velocity = -aim * 60;
-		for (var time = 0f; time < 0.4f; time += Time.Delta)
+		for (var time = 0f; time < 0.4f; time += Delta)
 		{
-			morph.Y = Calc.Approach(morph.Y, 0, Time.Delta * 4);
+			morph.Y = Calc.Approach(morph.Y, 0, Delta * 4);
 			yield return 0;
 		}
 		morph.Y = 0;
@@ -389,7 +407,7 @@ public sealed class HeadBoss : Actor
 		var rise = SlamRiseTime / Speedup;
 		AudioEvent("boss/start_float");
 		var forged = 0;
-		for (var time = 0f; time < rise; time += Time.Delta)
+		for (var time = 0f; time < rise; time += Delta)
 		{
 			var t = time / rise;
 			mood = Expression.Angry;
@@ -397,25 +415,28 @@ public sealed class HeadBoss : Actor
 			morph.X = MathF.Min(time / (SlamForgeTime / Speedup), 1);
 			for (; forged < SculptedHead.AnvilFormed(morph.X); forged++)
 				Forged(forged);
+			if (morph.X >= 1)
+				anvilHeat = Calc.Approach(anvilHeat, 1, Delta / SlamHeatTime);
 			var x = Math.Clamp(Center.X + ToPlayer.X, arena.Left + Radius, arena.Right - Radius);
-			Velocity = Calc.Approach(Velocity, (new Vector2(x, top) - Center) * 4, 600 * Time.Delta);
+			Velocity = Calc.Approach(Velocity, (new Vector2(x, top) - Center) * 4, 600 * Delta);
 			Squish = new(1 - 0.1f * t, 1 + 0.1f * t);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.02f * t);
 			slamMark = FloorBelow();
 			yield return 0;
 		}
-		for (var time = 0f; time < SlamHangTime / Speedup; time += Time.Delta)
+		for (var time = 0f; time < SlamHangTime / Speedup; time += Delta)
 		{
 			Velocity = Vector2.Zero;
+			anvilHeat = Calc.Approach(anvilHeat, 1, Delta / SlamHeatTime);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.035f);
 			yield return 0;
 		}
 		AudioEvent("rig_puppet/swing");
 		Squish = new(0.8f, 1.3f);
 		var landed = false;
-		for (var time = 0f; time < 1.5f && !landed; time += Time.Delta)
+		for (var time = 0f; time < 1.5f && !landed; time += Delta)
 		{
-			Velocity = new(0, Velocity.Y + SlamGravity * Time.Delta);
+			Velocity = new(0, Velocity.Y + SlamGravity * Delta);
 			landed = Grounded();
 			yield return 0;
 		}
@@ -481,24 +502,25 @@ public sealed class HeadBoss : Actor
 	IEnumerator<float> Stunned()
 	{
 		Enter(Phase.Stunned);
-		for (var time = 0f; time < StunTime; time += Time.Delta)
+		for (var time = 0f; time < StunTime; time += Delta)
 		{
 			// Lids sagging, pupils rolling.
 			mood = new(-0.5f, -0.6f, MathF.Sin(time * 4) * 0.8f, -0.2f, 0, 0.45f + 0.2f * MathF.Sin(time * 2.3f),
 				MathF.Sin(time * 5), MathF.Cos(time * 5));
 			mouth = 0.5f;
-			eyes = Calc.Approach(eyes, 0.25f, Time.Delta * 3);
-			morph.X = Calc.Approach(morph.X, 0, Time.Delta * 2);
+			eyes = Calc.Approach(eyes, 0.25f, Delta * 3);
+			morph.X = Calc.Approach(morph.X, 0, Delta * 2);
+			anvilHeat = Calc.Approach(anvilHeat, 0, Delta * 2);
 			Velocity = Vector2.Zero;
-			sculpt.RollVelocity += MathF.Sin(time * 3) * 2 * Time.Delta;
+			sculpt.RollVelocity += MathF.Sin(time * 3) * 2 * Delta;
 			yield return 0;
 		}
-		morph.X = 0;
+		morph.X = anvilHeat = 0;
 		AudioEvent("boss/hurt");
 		Squish = new(0.8f, 1.25f);
-		for (var time = 0f; time < 0.8f; time += Time.Delta)
+		for (var time = 0f; time < 0.8f; time += Delta)
 		{
-			eyes = Calc.Approach(eyes, 1, Time.Delta * 3);
+			eyes = Calc.Approach(eyes, 1, Delta * 3);
 			mood = Expression.Angry;
 			Hover(2);
 			yield return 0;
@@ -514,7 +536,7 @@ public sealed class HeadBoss : Actor
 		var direction = Center.X < arena.Center.X ? 1 : -1;
 		var tearTimer = 0f;
 		var eye = 0;
-		for (var time = 0f; time < WeepTime; time += Time.Delta)
+		for (var time = 0f; time < WeepTime; time += Delta)
 		{
 			mood = Expression.Sad;
 			mouth = 0.3f;
@@ -522,8 +544,8 @@ public sealed class HeadBoss : Actor
 			if (x < arena.Left + Radius * 1.5f || x > arena.Right - Radius * 1.5f)
 				direction = -direction;
 			var target = new Vector2(Center.X + direction * WeepDrift, arena.Top + arena.Height * HoverHeight * 0.7f);
-			Velocity = Calc.Approach(Velocity, new Vector2(direction * WeepDrift, (target.Y - Center.Y) * 2), 200 * Time.Delta);
-			for (tearTimer -= Time.Delta; tearTimer <= 0; tearTimer += TearInterval / Speedup)
+			Velocity = Calc.Approach(Velocity, new Vector2(direction * WeepDrift, (target.Y - Center.Y) * 2), 200 * Delta);
+			for (tearTimer -= Delta; tearTimer <= 0; tearTimer += TearInterval / Speedup)
 			{
 				eye = 1 - eye;
 				var at = Center + new Vector2((eye * 2 - 1) * Radius * 0.34f, Radius * 0.15f);
@@ -548,19 +570,19 @@ public sealed class HeadBoss : Actor
 	{
 		Enter(Phase.Split);
 		AudioEvent("rig_puppet/surprised");
-		for (var time = 0f; time < 0.6f; time += Time.Delta)
+		for (var time = 0f; time < 0.6f; time += Delta)
 		{
 			// The cracks race open and blaze before it gives.
-			cracks = Calc.Approach(cracks, 1, Time.Delta * 2);
+			cracks = Calc.Approach(cracks, 1, Delta * 2);
 			morph.W = time / 0.6f * 0.6f;
 			mood = Expression.Afraid;
-			Velocity = Calc.Approach(Velocity, Vector2.Zero, 300 * Time.Delta);
+			Velocity = Calc.Approach(Velocity, Vector2.Zero, 300 * Delta);
 			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
 			yield return 0;
 		}
 		Game.Shake(0.4f, 2.5f);
 		AudioEvent("boss/knockback");
-		for (var time = 0f; time < SplitOpenTime; time += Time.Delta)
+		for (var time = 0f; time < SplitOpenTime; time += Delta)
 		{
 			morph.Z = Ease.Back.Out(time / SplitOpenTime);
 			morph.W = time / SplitOpenTime;
@@ -570,12 +592,12 @@ public sealed class HeadBoss : Actor
 		var angle = Game.rng.Float(MathF.Tau);
 		var shotTimer = 0f;
 		var flash = 0f;
-		for (var time = 0f; time < SplitHoldTime; time += Time.Delta)
+		for (var time = 0f; time < SplitHoldTime; time += Delta)
 		{
 			mood = Expression.Pained;
-			flash = Calc.Approach(flash, 0, Time.Delta * CoreFlashDecay);
+			flash = Calc.Approach(flash, 0, Delta * CoreFlashDecay);
 			Hover(0.4f);
-			for (shotTimer -= Time.Delta; shotTimer <= 0; shotTimer += SpiralInterval / Speedup)
+			for (shotTimer -= Delta; shotTimer <= 0; shotTimer += SpiralInterval / Speedup)
 			{
 				flash = 1;
 				sculpt.Wobble = MathF.Max(sculpt.Wobble, CoreShotWobble);
@@ -587,7 +609,7 @@ public sealed class HeadBoss : Actor
 			morph.W = 0.55f + 0.6f * flash;
 			yield return 0;
 		}
-		for (var time = 0f; time < 0.5f; time += Time.Delta)
+		for (var time = 0f; time < 0.5f; time += Delta)
 		{
 			morph.Z = 1 - Ease.Cube.In(time / 0.5f);
 			morph.W = morph.Z;
@@ -621,11 +643,12 @@ public sealed class HeadBoss : Actor
 		sculpt.Near = HeadColor;
 		sculpt.Bruise = BruiseColor;
 		// Each stage runs its eyes hotter.
-		var heat = (Stage - 1) * 0.25f + morph.W * 0.3f;
+		var heat = (Stage - 1) * 0.25f + morph.W * 0.3f + eyeFlash * EyeFlashHeat;
 		var lit = litEyes = editor ? 1 : eyes;
 		sculpt.Eye = lit > 0.02f ? Color.Lerp(Color.Black, Color.Lerp(EyeColor, Color.White, heat), lit) : default;
 		sculpt.Tint = phase == Phase.Stunned ? Color.Lerp(Color.White, StunTint, 0.5f + 0.5f * MathF.Sin(Timer * 7)) : Color.White;
 		sculpt.Morph = morph;
+		sculpt.AnvilHeat = anvilHeat;
 		// Its cracks spread out from the seam it splits along and burn hotter each stage; a hit flares them.
 		sculpt.PatternBoost = new(cracks, (Stage - 1) * 0.35f + morph.W + pain * 0.3f);
 		sculpt.VisualFPS = editor ? 0 : VisualFPS;
@@ -657,10 +680,22 @@ public sealed class HeadBoss : Actor
 		sculpt.Wobble = MathF.Max(sculpt.Wobble, WobbleKick * (damage > 1 ? 1.5f : 1));
 		sculpt.YawVelocity += MathF.Sign(away.X) * SpinKick;
 		sculpt.RollVelocity += MathF.Sign(away.X) * SpinKick * 0.5f;
-		pain = damage > 1 ? 1.5f : 1;
-		Squish = new(0.85f, 1.15f);
+		var heavy = damage > 1;
+		pain = heavy ? 1.5f : 1;
+		// Flattened from the struck side as the screen kicks along the blow, its eyes flaring, a silhouette flash.
+		var squash = HitSquash * (heavy ? 1.5f : 1);
+		if (MathF.Abs(away.X) > 0.3f)
+			sculpt.Impact(0, away.X * squash);
+		if (MathF.Abs(away.Y) > 0.3f)
+			sculpt.Impact(1, away.Y * squash);
+		Game.KickRenderTarget(away * HitKick * (heavy ? 2 : 1));
+		eyeFlash = 1;
+		(impactFrames, impactColor) = heavy ? (3, Color.Lerp(EyeColor, Color.White, 0.5f)) : (2, Color.White);
+		sculpt.Redraw();
+		if (phase is not Phase.Stunned)
+			pace = StaggerPace;
 		contactGrace = HitContactGrace;
-		Game.Particles?.Emit(chunkEffect, at, damage > 1 ? 24 : 10, Calc.Angle(away + new Vector2(0, -0.5f)), 1, 0.9f);
+		Game.Particles?.Emit(chunkEffect, at, heavy ? 24 : 10, Calc.Angle(away + new Vector2(0, -0.5f)), 1, 0.9f);
 		if (phase != Phase.Stunned)
 			Velocity += away * HitShove * (returned ? ReturnedShotShove : 1);
 		Health = Math.Max(0, Health - (int)damage);
@@ -669,9 +704,9 @@ public sealed class HeadBoss : Actor
 			attack.Start(Die());
 			return;
 		}
-		Game.HitStun(damage > 1 ? 0.15f : 0.08f);
-		Game.Shake(damage > 1 ? 0.25f : 0.12f);
-		AudioEvent(damage > 1 ? "boss/hurt" : "rig_puppet/hurt");
+		Game.HitStun(heavy ? HeavyHitStunTime : HitStunTime);
+		Game.Shake(heavy ? 0.25f : 0.12f);
+		AudioEvent(heavy ? "boss/hurt" : "rig_puppet/hurt");
 	}
 
 	// Splits wide, flaring, shedding pops, then gone.
@@ -704,12 +739,21 @@ public sealed class HeadBoss : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		if (!SpriteBlinkHidden || phase == Phase.Dying)
-			sculpt.Render(batcher);
+		sculpt.Render(batcher);
+		if (impactFrames <= 0)
+			return;
+		sculpt.RenderShadow(batcher, impactColor);
+		impactFrames--;
 	}
 
 	public override void RenderNormals(Batcher batcher) => sculpt.RenderNormals(batcher);
-	public override void RenderEmissive(Batcher batcher) => sculpt.RenderEmissive(batcher);
+
+	public override void RenderEmissive(Batcher batcher)
+	{
+		sculpt.RenderEmissive(batcher);
+		if (impactFrames > 0)
+			sculpt.RenderShadow(batcher, impactColor);
+	}
 	public override void RenderShadow(Batcher batcher, Color color) => sculpt.RenderShadow(batcher, color);
 	public override void RenderReflection(Batcher batcher, Color color) => sculpt.RenderShadow(batcher, color);
 	public override Rect GetVisualBounds() => sculpt.VisualBounds;
@@ -717,7 +761,7 @@ public sealed class HeadBoss : Actor
 	static float EyeLightReach => 3.2f; // radii
 	static float EyeLightIntensity => 0.13f;
 
-	// Each eye tints the room, dimming as its lids close; the slam's landing spot glows on the floor, brighter with each anvil piece; the bared core
+	// Each eye tints the room, dimming as its lids close; the slam's landing spot glows on the floor, brighter with each anvil piece and as the anvil heats; the bared core
 	// blazes.
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
@@ -726,12 +770,12 @@ public sealed class HeadBoss : Actor
 		{
 			var (at, open) = sculpt.EyeLight(side);
 			if (litEyes * open > 0.05f)
-				action(at, Radius * EyeLightReach * litEyes, EyeLightIntensity * litEyes * open, 10, EyeColor);
+				action(at, Radius * EyeLightReach * litEyes, EyeLightIntensity * litEyes * open * (1 + eyeFlash * EyeFlashLight), 10, EyeColor);
 		}
 		if (slamMark is { } mark)
 		{
 			var forged = SculptedHead.AnvilFormed(morph.X) / (float)SculptedHead.AnvilAnchors.Length;
-			action(mark, Radius * (0.6f + forged), 0.6f + forged, 4, SlamWaveColor);
+			action(mark, Radius * (0.6f + forged + anvilHeat * 0.4f), 0.6f + forged + anvilHeat * 0.8f, 4, SlamWaveColor);
 		}
 		if (morph.W > 0.05f)
 			action(Center, Radius * 4 * morph.W, 1.4f * morph.W, 12, Color.Lerp(EyeColor, Color.White, 0.4f));

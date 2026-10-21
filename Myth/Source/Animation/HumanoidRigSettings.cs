@@ -121,6 +121,8 @@ public sealed class SculptBodySettings
 	[I(0, 2, Knob = true)] public float Glutes = 1;
 	[I(0, 2, Knob = true)] public float Codpiece = 1;
 	[I(0, 2, Knob = true)] public float Claws = 1; // length; 0 leaves plain hands
+	[I(0, 1.5f, Knob = true)] public float Sword; // meters of blade in the right fist; 0 for none
+	public bool BladeOnlyHarms; // the body only takes hits; just the sword hurts
 	[I(0.3f, 2, Knob = true)] public float BootSize = 1;
 	[I(0, 0.15f, Knob = true)] public float HeelLength = 0.04f; // meters the heel reaches back past the ankle
 	[I(0, 1, Knob = true)] public float BootHeight = 0.3f; // how far up the shin the shaft rises
@@ -129,20 +131,56 @@ public sealed class SculptBodySettings
 	[I(0, 1, Knob = true)] public float MetalRoughness = 0.3f;
 	[I(0, 3, Knob = true)] public float Specular = 1;
 	[I(0, 1, Knob = true)] public float BodyDepthShade = 0.35f;
-	[InspectorGroup("Sculpted Body Colors")] public Color HeadColor = new(0xe3ad98);
-	public Color TorsoColor = new(0xe3ad98);
-	public Color ChestColor = new(0xe3ad98);
-	public Color AbsColor = new(0xe3ad98);
-	public Color ArmColor = new(0xe3ad98);
-	public Color LegColor = new(0xe3ad98);
-	public Color CalfColor = new(0xe3ad98);
-	public Color JointColor = new(0xd8c08a);
-	public Color ForearmColor = new(0xd8c08a);
-	public Color ShinColor = new(0xd8c08a);
-	public Color HandColor = new(0xd8c08a);
-	public Color FootColor = new(0xd8c08a);
-	public Color ClawColor = new(0xe8e0c8);
+	// Seven colors, each painting its own parts of the body; Palette sets all seven from a preset.
+	[InspectorGroup("Sculpted Body Colors")] public Color SkinColor = new(0xe3ad98); // head
+	public Color BodyColor = new(0xe3ad98); // torso, chest, abs, arms
+	public Color LegsColor = new(0xe3ad98); // legs, calves
+	public Color TrimColor = new(0xd8c08a); // forearms, shins
+	public Color JointColor = new(0xd8c08a); // joints, hands, feet
+	public Color BladeColor = new(0xe8e0c8); // claws, sword
+	public Color GripColor = new(0x6a4a30); // the sword's hilt
+	// Picking a preset sets the seven colors; it reads Custom once they match none.
+	[InspectorGroup("Sculpted Body Colors")]
+	public SculptPalette Palette
+	{
+		get
+		{
+			for (var i = 1; i < Presets.Length; i++)
+				if (Presets[i] == (SkinColor, BodyColor, LegsColor, TrimColor, JointColor, BladeColor, GripColor))
+					return (SculptPalette)i;
+			return SculptPalette.Custom;
+		}
+		set
+		{
+			if (value != SculptPalette.Custom)
+				(SkinColor, BodyColor, LegsColor, TrimColor, JointColor, BladeColor, GripColor) = Presets[(int)value];
+		}
+	}
+
+	// Skin, body, legs, trim, joints, blade, grip; indexed by SculptPalette.
+	static readonly (Color, Color, Color, Color, Color, Color, Color)[] Presets =
+	[
+		default,
+		(new(0xe3ad98), new(0xe3ad98), new(0xe3ad98), new(0xd8c08a), new(0xd8c08a), new(0xe8e0c8), new(0x6a4a30)), // Brass
+		(new(0xc9a48c), new(0x5a6478), new(0x4a5264), new(0x8a92a0), new(0x3a3f4a), new(0xc8d4e0), new(0x6a4a30)), // Steel
+		(new(0xb88a6a), new(0x8a3e2a), new(0x713222), new(0xc06a3a), new(0x3e2a24), new(0xd8c0a0), new(0x4a3020)), // Rust
+		(new(0xd8b49a), new(0xe8e0d0), new(0xbeb7aa), new(0xc8b070), new(0x7a6a5a), new(0xf0f0e8), new(0x5a3a6a)), // Ivory
+		(new(0xc08a6a), new(0x3a2a30), new(0x2f2227), new(0xe05a2a), new(0x1e1a20), new(0xffb050), new(0x8a2a1a)), // Ember
+		(new(0xb89a7a), new(0x4a6a3a), new(0x3c562f), new(0x8a9a4a), new(0x2e3a26), new(0xc8d8b0), new(0x5a4a2a)), // Moss
+		(new(0xe0c8c0), new(0xa8c8e0), new(0x89a4b7), new(0xe8f4ff), new(0x4a5a78), new(0xd0f0ff), new(0x3a4a6a)), // Frost
+		(new(0xd8a888), new(0x3a3a8a), new(0x2f2f71), new(0xd8b040), new(0x2a2440), new(0xe8e8f0), new(0x8a2030)), // Royal
+		(new(0xd8c8b0), new(0xe8dcc4), new(0xbeb4a0), new(0xb8a888), new(0x6a5a4a), new(0xf0e8d8), new(0x4a3a2a)), // Bone
+		(new(0x9a8a8a), new(0x2a2630), new(0x221f27), new(0x4a4458), new(0x141218), new(0x8a7ab0), new(0x2a1a2a)), // Shadow
+		(new(0xc8946a), new(0xd8b880), new(0xb19668), new(0xb08050), new(0x6a4a30), new(0xe8d8b0), new(0x8a3a2a)), // Desert
+		(new(0xd0a088), new(0x8a1e2a), new(0x711822), new(0xd8c8b0), new(0x3a1a20), new(0xe0e0e8), new(0x2a2a2a)), // Crimson
+		(new(0xc8a888), new(0x2e7a6a), new(0x256456), new(0x8ad0b0), new(0x1e3a34), new(0xe0f8f0), new(0x6a4a2a)), // Jade
+		(new(0xc89a8a), new(0x5a2a5a), new(0x492249), new(0xa86aa8), new(0x2a1a2e), new(0xe0d0f0), new(0x4a2a3a)), // Plum
+		(new(0xc0a090), new(0x6a7078), new(0x565b62), new(0xa0a8b0), new(0x34383e), new(0xd8dce0), new(0x5a4636)), // Slate
+		(new(0xe0b090), new(0xf0d070), new(0xc4aa5b), new(0xfff0b0), new(0x8a6a20), new(0xfff8e0), new(0x6a2a1a)), // Gilded
+	];
 }
+
+public enum SculptPalette { Custom, Brass, Steel, Rust, Ivory, Ember, Moss, Frost, Royal, Bone, Shadow, Desert, Crimson, Jade, Plum, Slate, Gilded }
 
 public sealed class NeuralSurfaceSettings
 {

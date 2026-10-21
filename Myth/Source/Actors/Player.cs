@@ -714,6 +714,7 @@ public abstract partial class Pawn : Actor
 	}
 
 	bool wallSliding = false;
+	protected bool WallSliding => wallSliding;
 	double lastSkidParticlesTime;
 
 	// The launch window: the fixed-speed burst is driving movement (and its fx). Distinct from

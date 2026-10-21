@@ -91,7 +91,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 		ReadOnlySpan<BodyLight> lights = default, Vector2 worldCenter = default, ReadOnlySpan<Vector4> dents = default,
 		float wobble = 0, float wobblePhase = 0, Color bruise = default, ReadOnlySpan<Vector4> contacts = default,
 		Vector2? stretch = null, Vector4 morph = default, Vector2 swing = default, Vector2 patternBoost = default,
-		ReadOnlySpan<Vector3> jiggle = default, Vector3 wobbleAt = default)
+		ReadOnlySpan<Vector3> jiggle = default, Vector3 wobbleAt = default, float anvilHeat = 0)
 	{
 		dents = dents[..Math.Min(dents.Length, MaxDents)];
 		face = face.Quantized();
@@ -125,6 +125,8 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			shading.Add(contact);
 		shading.Add(squish);
 		shading.Add(morph);
+		anvilHeat = MathF.Round(anvilHeat * 32) / 32;
+		shading.Add(anvilHeat);
 		swing = (swing * 32).Round() / 32;
 		shading.Add(swing);
 		// The pattern spreads and glows past the shape's resting amounts by patternBoost (spread, glow).
@@ -170,7 +172,7 @@ sealed class SculptedHead(GraphicsDevice device, bool outline = true, float exte
 			Nose = new(s.NoseHeight, s.NoseDroop, s.NoseFlat, s.NostrilSize),
 			Eyes = new(s.EyeSpacing, s.EyeHeight, s.EyeSize, s.EyeDepth),
 			Mouth = new(s.MouthWidth, s.MouthHeight, s.MouthSize, s.EarSize),
-			Ears = new(s.EarHeight, 0, 0, 0),
+			Ears = new(s.EarHeight, anvilHeat, 0, 0),
 			Near = (Vector4)near,
 			Core = (Vector4)core,
 			Far = (Vector4)far,

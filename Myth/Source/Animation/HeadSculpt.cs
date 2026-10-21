@@ -16,6 +16,7 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	public Color Tint = Color.White; // multiplies color, emissive and the shadow mask's darkness
 	public Expression Face;
 	public Vector4 Morph; // see SculptedHead.hlsl's Morph
+	public float AnvilHeat; // 0 cold .. 1 white-hot, climbing up from the anvil's striking face
 	public float Yaw, YawVelocity, Pitch, PitchVelocity, Roll, RollVelocity;
 	public float Wobble, WobblePhase;
 	public Vector2 ImpactRest; // the squash the impact spring settles back to
@@ -96,6 +97,9 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		var at = SculptedHead.AnvilInView(Assets.GetHeadShape(ShapeId), i, Yaw, Pitch, Roll);
 		return Center + new Vector2(at.X, -at.Y) * owner.Squish * Radius;
 	}
+
+	// Re-marches on the next draw, whatever its VisualFPS, so a hit's reaction lands on the frame it freezes on.
+	public void Redraw() => visualDue = true;
 
 	public void Step()
 	{
@@ -286,7 +290,7 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		head.Render(Assets.GetHeadShape(ShapeId), Radius, Yaw, Pitch, Roll, face, Near, Color.Lerp(Near, far, 0.5f), far, Eye,
 			BodyShadeMode.Banded, new(0, 0.5f, 1, 0), lights[..HumanoidRigVisual.GatherLights(Game, lights, center, Radius, inside: Radius)],
 			center, dents.AsSpan(0, dentCount), Wobble, WobblePhase, Bruise, contacts[..contactCount], owner.Squish, Morph, swing, PatternBoost,
-			jiggle, wobbleAt);
+			jiggle, wobbleAt, AnvilHeat);
 		return head;
 	}
 
