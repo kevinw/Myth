@@ -22,6 +22,7 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	public Vector2? GazeTarget; // a world point the pupils follow, over the face's own gaze
 	public Vector2 PatternBoost; // how much further the head shape's pattern spreads and glows
 	public float VisualFPS; // how often it re-marches; 0 for every frame
+	public Vector4 Jiggliness = Vector4.One; // scales how far its flesh lags behind a lurch or spin: jowls, ears, nose, brow
 
 	static float WobbleDecay => 4.5f;
 	static float WobbleRate => 30f;
@@ -68,6 +69,13 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 	Vector3 wobbleAt; // head-local point the last hit's wobble spreads from
 	float visualTimer;
 	bool visualDue = true;
+	// Hits waiting on the head's last render to come back from the GPU: where they landed on its texture, dent scale.
+	readonly List<(Vector2 Pixel, float Scale)> pendingDents = [];
+	TextureDownload<Half> positionDownload;
+	TextureDownload<Color> normalDownload;
+	Half[] positions = [];
+	Color[] normals = [];
+	int downloadSize;
 
 	Game Game => owner.Game;
 	Time Time => owner.Time;
@@ -82,8 +90,17 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		return (Center + new Vector2(eye.X, -eye.Y) * owner.Squish * Radius, open);
 	}
 
+	// Where anvil piece i joins the anvil, in the world.
+	public Vector2 AnvilPieceAt(int i)
+	{
+		var at = SculptedHead.AnvilInView(Assets.GetHeadShape(ShapeId), i, Yaw, Pitch, Roll);
+		return Center + new Vector2(at.X, -at.Y) * owner.Squish * Radius;
+	}
+
 	public void Step()
 	{
+		if (pendingDents.Count > 0)
+			LandDents();
 		Wobble *= MathF.Exp(-WobbleDecay * Time.Delta);
 		if (Wobble < 0.004f)
 			(Wobble, wobbleAt) = (0, Vector3.Zero);
@@ -125,14 +142,14 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 				(jiggle[i], jiggleVelocity[i]) = (Vector3.Zero, Vector3.Zero);
 				continue;
 			}
-			var (stiffness, damping) = i switch
+			var (stiffness, damping, jiggliness) = i switch
 			{
-				< 2 => (JowlStiffness, JowlDamping),
-				< 4 => (EarStiffness, EarDamping),
-				4 => (NoseStiffness, NoseDamping),
-				_ => (BrowStiffness, BrowDamping),
+				< 2 => (JowlStiffness, JowlDamping, Jiggliness.X),
+				< 4 => (EarStiffness, EarDamping, Jiggliness.Y),
+				4 => (NoseStiffness, NoseDamping, Jiggliness.Z),
+				_ => (BrowStiffness, BrowDamping, Jiggliness.W),
 			};
-			jiggleVelocity[i] -= (shove + Vector3.Cross(spin - lastSpin, new(anchors[i].X, anchors[i].Y, anchors[i].Z))) * JiggleInertia;
+			jiggleVelocity[i] -= (shove + Vector3.Cross(spin - lastSpin, new(anchors[i].X, anchors[i].Y, anchors[i].Z))) * JiggleInertia * jiggliness;
 			Spring.Step(ref jiggle[i], ref jiggleVelocity[i], Vector3.Zero, stiffness / (softness * softness), damping / softness, Time.Delta);
 			if (jiggle[i].LengthSquared() < 1e-5f && jiggleVelocity[i].LengthSquared() < 1e-4f)
 				(jiggle[i], jiggleVelocity[i]) = (Vector3.Zero, Vector3.Zero);
@@ -182,17 +199,53 @@ sealed class HeadSculpt(Actor owner, float extent = SculptedHead.DefaultExtent)
 		walls[axis].Toward = axis == 0 ? new(MathF.Sign(speed), 0) : new(0, MathF.Sign(speed));
 	}
 
-	// Carves a dent where a hit lands on the visible surface, in head-local space so it turns with the head; scale sizes it.
+	// Carves a dent where a hit lands on the head as last drawn, in head-local space so it turns with the head; scale
+	// sizes it. It lands once that render reads back from the GPU: the same frame on desktop, a frame or so in a browser.
 	public void Dent(Vector2 worldPoint, float scale = 1)
 	{
-		var across = (worldPoint - Center) / Radius * new Vector2(1, -1);
-		var shape = Assets.GetHeadShape(ShapeId);
-		if (!SculptedHead.Raycast(shape, across, Yaw, Pitch, Roll, out var point, out var normal))
+		if (head?.PositionTexture is not { } positionTexture)
 			return;
+		if (pendingDents.Count == 0)
+		{
+			downloadSize = head.Size;
+			positionDownload = positionTexture.RequestDownload(positionDownload);
+			normalDownload = head.RawNormalTexture!.RequestDownload(normalDownload);
+		}
+		pendingDents.Add((worldPoint - (Vector2)owner.RenderPosition + new Vector2(downloadSize / 2), scale));
+	}
+
+	void LandDents()
+	{
+		var pixels = downloadSize * downloadSize;
+		if (normals.Length != pixels)
+			(positions, normals) = (new Half[pixels * 4], new Color[pixels]);
+		if (!positionDownload.TryRead(positions) || !normalDownload.TryRead(normals))
+			return;
+		var toHead = SculptedHead.Rotations(Yaw, Pitch, Roll).ToHead;
+		var center = new Vector2(downloadSize / 2);
+		var bounds = new RectInt(0, 0, downloadSize, downloadSize);
+		foreach (var (pixel, scale) in pendingDents)
+			// Falls back toward the center when it misses the silhouette.
+			for (var (attempt, offset) = (0, pixel - center); attempt <= 8; attempt++, offset *= 0.8f)
+			{
+				var at = (center + offset).FloorToPoint2();
+				var i = at.Y * downloadSize + at.X;
+				if (!bounds.Contains(at) || (float)positions[i * 4 + 3] < 0.5f)
+					continue;
+				var point = new Vector3((float)positions[i * 4], (float)positions[i * 4 + 1], (float)positions[i * 4 + 2]);
+				var screen = normals[i].ToVector3() * 2 - Vector3.One;
+				Dent(point, Vector3.Normalize(Vector3.TransformNormal(screen with { Y = -screen.Y }, toHead)), scale);
+				break;
+			}
+		pendingDents.Clear();
+	}
+
+	void Dent(Vector3 point, Vector3 normal, float scale)
+	{
 		// The wobble spreads from the hit, and the flesh nearest it is shoved in.
 		wobbleAt = point;
 		Span<Vector4> anchors = stackalloc Vector4[SculptedHead.MaxJiggles];
-		SculptedHead.FleshAnchors(shape, anchors);
+		SculptedHead.FleshAnchors(Assets.GetHeadShape(ShapeId), anchors);
 		for (var i = 0; i < jiggle.Length; i++)
 			jiggleVelocity[i] -= normal * JiggleFromHit *
 				Math.Clamp(1 - Vector3.Distance(point, new(anchors[i].X, anchors[i].Y, anchors[i].Z)) / (anchors[i].W + 0.5f), 0, 1);

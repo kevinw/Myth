@@ -6,13 +6,15 @@ namespace Myth;
 // A giant floating head that telegraphs every attack with its face, its body language and its own shape:
 // - Volley: squints, cocks one brow and draws back, then sweeps an arc of shots starting from the cocked brow's side.
 // - Puff: astonished, it swells and its cheeks inflate; the bigger the puff, the denser the ring it spits.
-// - Slam: rises to the ceiling over you, clenched, its chin growing into an iron anvil, a glow marking where it'll
+// - Slam: rises to the ceiling over you, clenched, an iron anvil forging piece by piece from its chin, a glow marking where it'll
 //   land; then drops, quaking the floor (jump it) and, from stage 2, rolling low fire out both ways. It's left wedged
 //   and dizzy: the window to hit it hard.
 // - Weep (stage 2+): sad, it drifts across the room crying tears that fall in sheets.
 // - Split (stage 3): afraid, it cracks in half down the middle, baring a glowing core that spirals shots; the core
 //   takes heavy damage.
 // Any hit chips it, dents it and makes it wince. Each third of its health lost speeds it up and heats its eyes.
+// With a ContainerId it sleeps inside that GlassTube, stirring a little more at each strike on the glass, until the
+// glass shatters and it drops, freed, and wakes.
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy | ActorTag.Boss | ActorTag.Flying, BoundsX = -40, BoundsY = -40,
 	BoundsW = 80, BoundsH = 80, LivePositionEditable = true)]
 public sealed class HeadBoss : Actor
@@ -27,12 +29,15 @@ public sealed class HeadBoss : Actor
 	public Color BruiseColor = new(0x5a1a38);
 	[I(1, 80)] public int Health = 30;
 	[I(1, 60)] public float VisualFPS = 24; // how often the head re-marches; its springs still run every frame
+	[ActorRef] public string ContainerId = "";
 
 	static float DentScale => 1 / 3f; // of a floating head's dent
 	static float HoverHeight => 0.42f; // fraction of the room's height down from the ceiling
 	static float HoverFollow => 1.6f; // how hard it steers toward its hover spot
 	static float HoverBob => 4f;
 	static float WakeTime => 1.1f;
+	static float FreedDropTime => 0.35f;
+	static float FreedDropSpeed => 90f;
 	static float AttackCooldown => 1.1f;
 	static int AttacksBeforeSlam => 3; // it always gets to the slam (and the opening after) this often
 
@@ -47,6 +52,7 @@ public sealed class HeadBoss : Actor
 	static float HeavyScale => 3f; // bigger and slower by this much
 
 	static float SlamRiseTime => 1.1f;
+	static float SlamForgeTime => 0.55f; // the anvil's assembly, within the rise
 	static float SlamHangTime => 0.4f;
 	static float SlamClearance => 1.5f; // radii below the ceiling at the top of the rise
 	static float SlamGravity => 1400f;
@@ -75,6 +81,7 @@ public sealed class HeadBoss : Actor
 	static float CoreShotWobble => 0.012f;
 
 	static float FaceResponse => 9f;
+	static Vector4 Jiggliness => new(3.6f, 2f, 4f, 4f); // how hard its features spring about when it lurches: jowls, ears, nose, brow
 	static float WobbleKick => 0.06f;
 	static float SpinKick => 3f;
 	static float HitShove => 70f;
@@ -99,6 +106,9 @@ public sealed class HeadBoss : Actor
 	Vector2? slamMark; // where the slam will land, glowing on the floor
 	readonly HeadSculpt sculpt;
 	readonly Coroutine attack = new();
+	ActorDestructionTrigger? container;
+	GlassTube? tube;
+	int strikesFelt;
 	int chunkEffect = -1;
 	int emberEffect = -1;
 
@@ -111,7 +121,8 @@ public sealed class HeadBoss : Actor
 
 	int Stage => Health > maxHealth * 2 / 3 ? 1 : Health > maxHealth / 3 ? 2 : 3;
 	float Speedup => Stage switch { 1 => 1f, 2 => 1.15f, _ => 1.3f };
-	internal override bool ContactDamageEnabled => contactGrace <= 0 && phase is not (Phase.Asleep or Phase.Stunned or Phase.Dying);
+	internal override bool ContactDamageEnabled => contactGrace <= 0 && phase is not (Phase.Asleep or Phase.Dying);
+	public override float HitKnockback => 100f;
 	public override string HitSoundType => "flesh";
 	Vector2 Center => Position;
 	Vector2 Mouth => Center + new Vector2(0, Radius * 0.45f);
@@ -126,6 +137,10 @@ public sealed class HeadBoss : Actor
 		Hitbox = new(new RectInt(-half, -half, half * 2, half * 2));
 		chunkEffect = AcquireParticleEffect("head_chunks");
 		emberEffect = AcquireParticleEffect("embers");
+		if (!string.IsNullOrWhiteSpace(ContainerId))
+			container = new(this, ContainerId);
+		if (container is { Triggered: false })
+			(Mask, CollidesWithSolids) = (Masks.None, false);
 		SyncVisual(false);
 		base.Added();
 	}
@@ -166,7 +181,15 @@ public sealed class HeadBoss : Actor
 			case Phase.Asleep:
 				Velocity = new(0, MathF.Sin(Timer * 1.2f) * HoverBob);
 				mood = new(BrowRaise: -0.5f, Smile: 0.15f, LidClose: 1);
-				if (Game.WorldView.Overlaps(GetVisualBounds()))
+				if (container?.Update() == true)
+					attack.Start(Freed());
+				else if (container is { Triggered: false })
+				{
+					tube ??= Game.GetActorById(ContainerId) as GlassTube;
+					if (tube?.Strikes > strikesFelt)
+						attack.Start(Stir(++strikesFelt));
+				}
+				else if (Game.WorldView.Overlaps(GetVisualBounds()))
 					attack.Start(Wake());
 				return;
 			case Phase.Dying:
@@ -237,6 +260,41 @@ public sealed class HeadBoss : Actor
 			yield return 0;
 		}
 		FinishAttack();
+	}
+
+	// Still asleep, it feels a strike on its tube: a brow twitch, then, the more strikes, an eye flickering half open.
+	IEnumerator<float> Stir(int strikes)
+	{
+		sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
+		Squish = new(1.06f, 0.94f);
+		var time = 0.5f + strikes * 0.25f;
+		for (var t = 0f; t < time; t += Time.Delta)
+		{
+			var twitch = MathF.Sin(t / time * MathF.PI);
+			mood = new(BrowTilt: twitch * 0.8f, BrowRaise: -0.5f, Smile: 0.15f - twitch * 0.4f,
+				LidClose: 1 - (strikes > 1 ? twitch * 0.55f : 0));
+			eyes = strikes > 1 ? twitch * (0.5f + 0.5f * MathF.Sin(t * 40)) * 0.4f : 0;
+			yield return 0;
+		}
+		eyes = 0;
+	}
+
+	// Its tube shattered, it drops as the gas gives out under it, then snaps awake.
+	IEnumerator<float> Freed()
+	{
+		Enter(Phase.Waking);
+		(Mask, CollidesWithSolids) = (Masks.Enemy, true);
+		for (var time = 0f; time < FreedDropTime; time += Time.Delta)
+		{
+			Velocity = new(0, Calc.Approach(Velocity.Y, FreedDropSpeed, 600 * Time.Delta));
+			sculpt.Wobble = MathF.Max(sculpt.Wobble, 0.03f);
+			yield return 0;
+		}
+		Game.Shake(0.3f, 2);
+		sculpt.Wobble = WobbleKick;
+		Squish = new(1.25f, 0.8f);
+		for (var wake = Wake(); wake.MoveNext();)
+			yield return wake.Current;
 	}
 
 	// Squints and cocks the brow on the side the sweep starts from, drawing back; then sweeps the arc.
@@ -330,12 +388,15 @@ public sealed class HeadBoss : Actor
 		var top = arena.Top + Radius * SlamClearance;
 		var rise = SlamRiseTime / Speedup;
 		AudioEvent("boss/start_float");
+		var forged = 0;
 		for (var time = 0f; time < rise; time += Time.Delta)
 		{
 			var t = time / rise;
 			mood = Expression.Angry;
 			mouth = 0;
-			morph.X = Ease.Cube.Out(t);
+			morph.X = MathF.Min(time / (SlamForgeTime / Speedup), 1);
+			for (; forged < SculptedHead.AnvilFormed(morph.X); forged++)
+				Forged(forged);
 			var x = Math.Clamp(Center.X + ToPlayer.X, arena.Left + Radius, arena.Right - Radius);
 			Velocity = Calc.Approach(Velocity, (new Vector2(x, top) - Center) * 4, 600 * Time.Delta);
 			Squish = new(1 - 0.1f * t, 1 + 0.1f * t);
@@ -363,6 +424,16 @@ public sealed class HeadBoss : Actor
 			Land();
 		for (var stunned = Stunned(); stunned.MoveNext();)
 			yield return stunned.Current;
+	}
+
+	// Each anvil piece clanks home, sparking where it joins, jolting the head a little lower; the block hardest.
+	void Forged(int piece)
+	{
+		var heavy = piece == 1;
+		AudioEvent("boss/anvil_forge", "piece", piece);
+		Squish = heavy ? new(1.12f, 0.88f) : new(1.05f, 0.95f);
+		sculpt.Wobble = MathF.Max(sculpt.Wobble, heavy ? 0.04f : 0.02f);
+		Game.Particles?.Emit(emberEffect, sculpt.AnvilPieceAt(piece), heavy ? 10 : 4, MathF.PI / 2, heavy ? 1 : 0.6f, 2.4f);
 	}
 
 	Vector2? FloorBelow()
@@ -558,6 +629,7 @@ public sealed class HeadBoss : Actor
 		// Its cracks spread out from the seam it splits along and burn hotter each stage; a hit flares them.
 		sculpt.PatternBoost = new(cracks, (Stage - 1) * 0.35f + morph.W + pain * 0.3f);
 		sculpt.VisualFPS = editor ? 0 : VisualFPS;
+		sculpt.Jiggliness = Jiggliness;
 	}
 
 	public override void OnCollideX()
@@ -645,7 +717,7 @@ public sealed class HeadBoss : Actor
 	static float EyeLightReach => 3.2f; // radii
 	static float EyeLightIntensity => 0.13f;
 
-	// Each eye tints the room, dimming as its lids close; the slam's landing spot glows on the floor, brighter as the anvil grows; the bared core
+	// Each eye tints the room, dimming as its lids close; the slam's landing spot glows on the floor, brighter with each anvil piece; the bared core
 	// blazes.
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
@@ -657,7 +729,10 @@ public sealed class HeadBoss : Actor
 				action(at, Radius * EyeLightReach * litEyes, EyeLightIntensity * litEyes * open, 10, EyeColor);
 		}
 		if (slamMark is { } mark)
-			action(mark, Radius * (0.6f + morph.X), 0.6f + morph.X, 4, SlamWaveColor);
+		{
+			var forged = SculptedHead.AnvilFormed(morph.X) / (float)SculptedHead.AnvilAnchors.Length;
+			action(mark, Radius * (0.6f + forged), 0.6f + forged, 4, SlamWaveColor);
+		}
 		if (morph.W > 0.05f)
 			action(Center, Radius * 4 * morph.W, 1.4f * morph.W, 12, Color.Lerp(EyeColor, Color.White, 0.4f));
 	}

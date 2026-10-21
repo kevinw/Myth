@@ -66,6 +66,25 @@
   ],
   "actors": [
     {
+      "Id": "084f603d36112dbf",
+      "Type": "GlassTube",
+      "Position": [152, 8]
+    },
+    {
+      "Id": "ba28137d810f7d23",
+      "Type": "NeuralTextureActor",
+      "Position": [154, 14],
+      "Size": [92, 148],
+      "WeightsFile": "bubbles_up.bin",
+      "WeightsFile1": "smoke_plume_2_diverge.bin",
+      "Layer": "Foreground",
+      "RenderDepth": -4,
+      "Tint": "A8F0C8",
+      "Opacity": 0.85,
+      "ShutdownSourceActorId": "084f603d36112dbf",
+      "ActiveShutdown": true
+    },
+    {
       "Id": "57b7ed52498bb4f4",
       "Type": "PlayerStart",
       "Position": [24, 168]
@@ -74,8 +93,11 @@
       "Id": "cc975709dc8109d9",
       "Type": "HeadBoss",
       "Position": [200, 72],
+      "ContainerId": "084f603d36112dbf",
       "HeadColor": "9E8CC9",
-      "EyeColor": "E1FF00"
+      "EyeColor": "E1FF00",
+      "VisualFPS": 35.445,
+      "Radius": 35.838
     },
     {
       "Id": "57fcd589e0e583e0",

@@ -1,7 +1,7 @@
 // Ray-marches a SculptedHead's signed distance field: one fragment per head-texture pixel, writing color shaded
 // like a SculptedBody (SV_Target0, Include/SculptedShading.hlsl), screen-space normal (SV_Target1, alpha = hit) and
-// scene-light highlights (SV_Target2). SculptedHeadMask.hlsl dilates the result into the mask. SculptedHead.cs keeps
-// a CPU copy of the shape (not the shading) as the reference it's verified against; keep the two in step.
+// scene-light highlights (SV_Target2) and the head-local point on the flesh each pixel shows, where a dent there would
+// carve (SV_Target3, alpha = hit), which hits read back. SculptedHeadMask.hlsl dilates the result into the mask.
 
 cbuffer VertexUniformBlock : register(b0, space1)
 {
@@ -95,6 +95,7 @@ struct HeadOutput
     float4 Color : SV_Target0;
     float4 Normal : SV_Target1;
     float4 Specular : SV_Target2;
+    float4 Position : SV_Target3;
 };
 
 #include "Include/SculptedShading.hlsl"
@@ -103,7 +104,7 @@ static const float SplitGap = 0.35; // radii each half slides out, fully split
 static const float CoreRadius = 0.42;
 static const float3 Iron = float3(0.35, 0.36, 0.44);
 static const float WobbleReach = 0.9; // radii a hit's wobble spreads
-static const int MaxSteps = 40;
+static const int MaxSteps = 50;
 
 float3 to_head(float3 v) { return v.x * ToHead0.xyz + v.y * ToHead1.xyz + v.z * ToHead2.xyz; }
 float3 to_view(float3 v) { return v.x * ToView0.xyz + v.y * ToView1.xyz + v.z * ToView2.xyz; }
@@ -302,25 +303,55 @@ float sd_adornment(float3 p, int i)
     return sd_round_cone(p, at, at + direction * size, thickness, thickness * 0.15);
 }
 
-// The anvil hangs from the jaw's underside, growing with Morph.x: a waisted neck flaring into a block, a horn tapering
-// out one side, a stepped heel on the other, and a studded striking face underneath. p from where it hangs.
+// The anvil hangs from the jaw's underside, forged top down piece by piece as Morph.x runs 0..1: a waisted neck, a
+// block flaring from it, a horn tapering out one side, a stepped heel on the other, then the striking face's studs.
+// Each piece pops out of where it joins the last, white-hot, and cools to iron.
+static const float AnvilStagger = 0.11; // of Morph.x between pieces starting
+static const float AnvilForm = 0.34; // of Morph.x each piece takes to grow
+static const float AnvilCool = 0.2; // of Morph.x past formed until a piece is cold
 float3 in_anvil(float3 p) { return p + Rides[3].xyz - float3(0.0, -Jaw.w - Jaw.y, Jaw2.x * 0.5); }
-float sd_anvil(float3 p)
+float anvil_growth(float i)
+{
+    float u = saturate((Morph.x - i * AnvilStagger) / AnvilForm) - 1.0;
+    return 1.0 + u * u * (2.70158 * u + 1.70158);
+}
+float anvil_glow(float i) { return 1.0 - saturate((Morph.x - i * AnvilStagger) / (AnvilForm + AnvilCool)); }
+// q scaled about the anchor a piece grows from, for a piece n of its full size.
+float3 grown(float3 q, float3 anchor, float n) { return anchor + (q - anchor) / max(n, 0.001); }
+void anvil_piece(inout float nearest, inout float glow, float d, float i)
+{
+    if (d < nearest)
+        glow = anvil_glow(i);
+    nearest = min(nearest, d);
+}
+float anvil(float3 p, out float glow)
 {
     float3 q = in_anvil(p);
-    float a = Morph.x;
-    float neck = sd_round_box(q + float3(0.0, 0.16, 0.0) * a, float3(0.26, 0.18, 0.24) * a, 0.05 * a);
-    float block = sd_round_box(q + float3(0.08, 0.54, 0.0) * a, float3(0.8, 0.22, 0.52) * a, 0.05 * a);
-    float horn = sd_round_cone(q, float3(0.6, -0.46, 0.0) * a, float3(1.4, -0.34, 0.0) * a, 0.17 * a, 0.03 * a);
-    float heel = sd_round_box(q + float3(0.95, 0.42, 0.0) * a, float3(0.14, 0.1, 0.4) * a, 0.03 * a);
-    float spacing = 0.5 * a;
-    float3 stud = float3(q.x - clamp(round(q.x / spacing), -1.0, 1.0) * spacing, q.y + 0.76 * a, abs(q.z) - 0.28 * a);
-    float studs = sd_round_cone(stud, float3(0.0, 0.0, 0.0), float3(0.0, -0.16 * a, 0.0), 0.1 * a, 0.025 * a);
-    return min(smooth_union(smooth_union(neck, block, 0.08 * a), min(horn, heel), 0.05 * a), studs);
+    float n = anvil_growth(0.0);
+    float neck = n > 0.0 ? sd_round_box(grown(q, float3(0.0, 0.02, 0.0), n) + float3(0.0, 0.16, 0.0), float3(0.26, 0.18, 0.24), 0.05) * n : 1e5;
+    n = anvil_growth(1.0);
+    float block = n > 0.0 ? sd_round_box(grown(q, float3(0.0, -0.34, 0.0), n) + float3(0.08, 0.54, 0.0), float3(0.8, 0.22, 0.52), 0.05) * n : 1e5;
+    n = anvil_growth(2.0);
+    float horn = n > 0.0 ? sd_round_cone(grown(q, float3(0.6, -0.46, 0.0), n), float3(0.6, -0.46, 0.0), float3(1.4, -0.34, 0.0), 0.17, 0.03) * n : 1e5;
+    n = anvil_growth(3.0);
+    float heel = n > 0.0 ? sd_round_box(grown(q, float3(-0.88, -0.42, 0.0), n) + float3(0.95, 0.42, 0.0), float3(0.14, 0.1, 0.4), 0.03) * n : 1e5;
+    float column = clamp(round(q.x / 0.5), -1.0, 1.0);
+    n = anvil_growth(5.0 + column);
+    float3 stud = float3(q.x - column * 0.5, q.y + 0.76, abs(q.z) - 0.28);
+    float studs = n > 0.0 ? sd_round_cone(stud / n, float3(0.0, 0.0, 0.0), float3(0.0, -0.16, 0.0), 0.1, 0.025) * n : 1e5;
+    float nearest = 1e5;
+    glow = 0.0;
+    anvil_piece(nearest, glow, neck, 0.0);
+    anvil_piece(nearest, glow, block, 1.0);
+    anvil_piece(nearest, glow, horn, 2.0);
+    anvil_piece(nearest, glow, heel, 3.0);
+    anvil_piece(nearest, glow, studs, 5.0 + column);
+    return min(smooth_union(smooth_union(neck, block, 0.08), min(horn, heel), 0.05), studs);
 }
+float sd_anvil(float3 p) { float glow; return anvil(p, glow); }
 
-// How hot the anvil runs at p: its striking face and studs glow up from the bottom.
-float anvil_heat(float3 p) { return saturate((-in_anvil(p).y - 0.5 * Morph.x) / (0.34 * Morph.x)); }
+// How hot the anvil runs at p: its striking face and studs glow up from the bottom, fresh pieces hotter still.
+float anvil_heat(float3 p, float glow) { return max(saturate((-in_anvil(p).y - 0.5) / 0.34) * Morph.x, glow); }
 
 // Split open, each half slides out sideways; where p sat on the whole head.
 float3 unsplit(float3 p) { return p - float3(sign(p.x) * Morph.z * SplitGap, 0.0, 0.0); }
@@ -454,6 +485,7 @@ HeadOutput fragment_main(VsOutput input)
     output.Color = float4(0.0, 0.0, 0.0, 0.0);
     output.Normal = float4(0.0, 0.0, 0.0, 0.0);
     output.Specular = float4(0.0, 0.0, 0.0, 0.0);
+    output.Position = float4(0.0, 0.0, 0.0, 0.0);
     // Keep the batcher's interpolants alive; D3D12 needs matching signatures.
     if (input.type.x < -1000.0)
         return output;
@@ -506,8 +538,10 @@ HeadOutput fragment_main(VsOutput input)
         light = min(light, 0.6);
     float3 raw = squashed(face);
     float3 feature = flesh(raw);
-    bool iron = Morph.x > 0.0 && sd_anvil(raw) < 0.03;
-    float heat = iron ? anvil_heat(raw) * Morph.x : 0.0;
+    output.Position = float4(feature, 1.0);
+    float glow;
+    bool iron = Morph.x > 0.0 && anvil(raw, glow) < 0.03;
+    float heat = iron ? anvil_heat(raw, glow) : 0.0;
     float3 color = heat > threshold ? lerp(Eye.rgb, 1.0, 0.25)
         : iron ? sculpted_color(light, Iron * 1.7, Iron * 1.25, Iron * 0.85, threshold)
         : sculpted_color(light, Near.rgb, Core.rgb, Far.rgb, threshold);
