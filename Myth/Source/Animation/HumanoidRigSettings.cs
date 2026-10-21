@@ -122,6 +122,7 @@ public sealed class SculptBodySettings
 	[I(0, 2, Knob = true)] public float Codpiece = 1;
 	[I(0, 2, Knob = true)] public float Claws = 1; // length; 0 leaves plain hands
 	[I(0, 1.5f, Knob = true)] public float Sword; // meters of blade in the right fist; 0 for none
+	[I(0.5f, 3, Knob = true)] public float SwordWidth = 1.2f; // px of blade radius, whatever the scale, so it holds steady
 	public bool BladeOnlyHarms; // the body only takes hits; just the sword hurts
 	[I(0.3f, 2, Knob = true)] public float BootSize = 1;
 	[I(0, 0.15f, Knob = true)] public float HeelLength = 0.04f; // meters the heel reaches back past the ankle

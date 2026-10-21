@@ -260,7 +260,7 @@ partial class HumanoidRigVisual
 				heat = Heat(SculptRegion.RightArm);
 				var claws = visual.rightClaws;
 				var grip = (V(claws[0]) + V(claws[6])) * 0.5f;
-				var along = Vector3.Normalize(V(claws[0]) - V(claws[6]));
+				var along = Vector3.Normalize(new Vector3(visual.rightGripAxis, (visual.jointDepth[claws[0]] - visual.jointDepth[claws[6]]) * ppm));
 				if (!float.IsFinite(along.X))
 					along = -up;
 				var across = Vector3.Normalize(Vector3.Cross(along, Vector3.UnitZ));
@@ -270,7 +270,8 @@ partial class HumanoidRigVisual
 				var thin = 0.6f / bulk; // meters that draw as 0.6px, so a small figure's sword still shows
 				Add(grip - along * 0.07f * ppm, guard, MathF.Max(0.016f, thin), MathF.Max(0.016f, thin), 0, hilt, Metal);
 				Add(guard - across * 0.05f * ppm, guard + across * 0.05f * ppm, MathF.Max(0.013f, thin), MathF.Max(0.013f, thin), 0, hilt, Metal);
-				Add(guard, guard + along * visual.Settings.Sculpt.Sword * ppm, MathF.Max(0.018f, thin), MathF.Max(0.004f, thin * 0.5f), 0,
+				var blade = visual.Settings.Sculpt.SwordWidth / bulk;
+				Add(guard, guard + along * visual.Settings.Sculpt.Sword * ppm, MathF.Max(0.018f, blade), MathF.Max(0.004f, blade * 0.75f), 0,
 					visual.Settings.Sculpt.BladeColor, Metal);
 				list[^3] = list[^3] with { Combat = BodyCombat.None };
 				list[^2] = list[^2] with { Combat = BodyCombat.None };

@@ -429,5 +429,60 @@
     "UpperBodyLeanDegrees": 0,
     "ArmWidthScale": 1,
     "HandWidthScale": 1
+  },
+  "SoldierRun": {
+    "Clip": "Zombie_Running",
+    "Start": 0,
+    "End": 3.4028235E+38,
+    "Loop": true,
+    "Speed": 0.6,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierChop": {
+    "Clip": "Zombie_Attack",
+    "Start": 0.3,
+    "End": 2.4,
+    "Loop": false,
+    "Speed": 1.5,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierKick": {
+    "Clip": "Zombie_Kicking",
+    "Start": 0.2,
+    "End": 1.7,
+    "Loop": false,
+    "Speed": 1.3,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierFlinch": {
+    "Clip": "Zombie_Reaction_Hit",
+    "Start": 0.35,
+    "End": 1.6,
+    "Loop": false,
+    "Speed": 1.8,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierDeath": {
+    "Clip": "Zombie_Dying",
+    "Start": 0,
+    "End": 2.8,
+    "Loop": false,
+    "Speed": 1.2,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
   }
 }

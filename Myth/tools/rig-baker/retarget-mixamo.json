@@ -1,6 +1,15 @@
 {
   "GroundReferenceClip": "Zombie_Idle_Loop",
   "Clips": {
+    "Zombie_Running": {
+      "InPlace": "Linear"
+    },
+    "Zombie_Reaction_Hit": {
+      "InPlace": "Lock"
+    },
+    "Zombie_Dying": {
+      "InPlace": "Lock"
+    },
     "Kick_Soccerball": {
       "Ground": true
     },

@@ -5,16 +5,17 @@ namespace Myth;
 
 // A nimble swordsman Bud's size, sculpted, sword in his right fist. He paths with the reach field and burrows like
 // Bud, and keeps you at sword's length:
-// - Spacing: closes to SpacingRange and holds there; crowd him and he hops back out of your reach, still facing you.
-// - Cut: in reach, he plants and swings. The swing's own raise is the tell. Only the blade hurts, and only while it
-//   cuts, so between cuts you can stand toe to toe with him.
+// - Spacing: closes to SpacingRange and holds there; crowd him and he either kicks you off, hard, or hops back out of
+//   your reach, still facing you.
+// - Cut: in reach, he plants and swings, a quick slash or, now and then, an overhead chop with a longer raise. The
+//   raise is the tell. Only the blade hurts, and only while it cuts, so between cuts you can stand toe to toe with him.
 // - Ambush: now and then, when there's a wall spot above you he can get to, he goes there, burrowing up the wall if
 //   that's the way, and waits buried for AmbushTime, his burrow line glowing where he'll come from. Then he pops off
 //   the wall and plunges sword-first: the down smash, which quakes the floor where it lands and leaves him open.
 // - Pair: two of them either side of you wind up together and throw their swords at each other, one at your head and
 //   one at your feet, spinning; each catches the other's. Until the blades come home both are unarmed, and one that
 //   misses his catch has to go pick his sword up off the floor before he can cut again.
-// Five hits and he's done.
+// Every hit makes him flinch; five and he falls, and lies there a moment before he's gone.
 [GameActor(Sprite = "bud", Tags = ActorTag.Enemy, Anchor = SpriteAnchor.BottomCenter, LivePositionEditable = true)]
 public class FootSoldier : Pawn
 {
@@ -33,10 +34,20 @@ public class FootSoldier : Pawn
 	static float CutReach => 28f;
 	static float CutHeight => 14f;
 	static float CutCooldown => 1.1f;
-	static string CutTake => "Sword_Regular_A";
-	static float CutHitStart => 0.25f; // seconds into the swing the blade starts to hurt
-	static float CutHitEnd => 0.5f;
-	static float CutLunge => 70f;
+	// A swing: the take, when in it (seconds) it hurts, and the lunge as it starts to.
+	readonly record struct Swing(string Take, float HitStart, float HitEnd, float Lunge);
+	static Swing Slash => new("Sword_Regular_A", 0.25f, 0.5f, 70f);
+	static Swing Chop => new("SoldierChop", 0.7f, 0.95f, 30f); // overhead, two-handed, a longer raise
+	static float ChopChance => 0.4f;
+	static Swing Kick => new("SoldierKick", 0.3f, 0.6f, 20f);
+	static float KickChance => 0.5f; // crowded, how often he kicks you off rather than hopping back
+	static float KickCooldown => 2f;
+	static Point2 KickReach => new(14, 10); // px in front of him, at the waist, the kick lands in
+	static Vector2 KickPush => new(220, -110); // how hard it sends you, away from him
+	static string RunTake => "SoldierRun";
+	static string FlinchTake => "SoldierFlinch";
+	static string DeathTake => "SoldierDeath";
+	static float DeathLinger => 0.4f; // lying still after the fall before he's gone
 	static float AmbushCooldown => 4f;
 	static float AmbushMinHeight => 24f; // px above you a wall spot has to be
 	static float AmbushMaxHeight => 96f;
@@ -57,10 +68,10 @@ public class FootSoldier : Pawn
 	static float PairCatchTimeout => 2.5f;
 	static int HighLane => -12; // px above the feet a blade flies at: one at your head, one at your feet
 	static int LowLane => -3;
-	static float HurtTime => 0.3f;
+	static float HurtTime => 0.45f;
 	static float HurtKnockback => 90f;
 
-	enum Mode { Idle, Engage, BackHop, Cut, Ambush, Smash, Recover, Pair, Hurt }
+	enum Mode { Idle, Engage, BackHop, Cut, Kick, Ambush, Smash, Recover, Pair, Hurt, Dying }
 
 	readonly ReachSense sense = new(ReachBody.Bud);
 	readonly ReachPilot pilot;
@@ -72,6 +83,10 @@ public class FootSoldier : Pawn
 	float buried; // how long he's waited buried this ambush
 	Point2 ambushSpot;
 	bool lunged;
+	Swing swing;
+	bool kickLive;
+	float kickCooldown;
+	float lyingStill;
 	bool plunging;
 	bool swordLive;
 	bool armed = true;
@@ -95,7 +110,8 @@ public class FootSoldier : Pawn
 	protected override PawnAbilities Abilities => PawnAbilities.Burrow;
 	protected override HumanoidRigSettings? DrawRig => Rig;
 	internal override float MaxBurrowDuration => base.MaxBurrowDuration + AmbushTime;
-	internal override bool ContactDamageEnabled => swordLive;
+	internal override bool ContactDamageEnabled => swordLive || kickLive;
+	protected override string RigTakeFor(string name) => name is "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop" ? RunTake : name;
 
 	public override void Added()
 	{
@@ -118,10 +134,21 @@ public class FootSoldier : Pawn
 		return true;
 	}
 
-	// Only the blade hurts, and only while it's cutting; plunging, all of him does. The body takes the hits.
+	// Only the blade hurts, and only while it's cutting; plunging, all of him does, and kicking, the space in front of
+	// him. The body takes the hits.
 	internal override bool OverlapsCombatBounds(in RectInt bounds, CombatRole role = CombatRole.Vulnerable)
 		=> role != CombatRole.Harmful ? base.OverlapsCombatBounds(bounds, role)
-			: swordLive && (plunging && Hitbox.Overlaps(bounds - Position) || RigVisual?.BodyOverlaps(bounds, CombatRole.Harmful) == true);
+			: swordLive && (plunging && Hitbox.Overlaps(bounds - Position) || RigVisual?.BodyOverlaps(bounds, CombatRole.Harmful) == true) ||
+			kickLive && KickRect.Overlaps(bounds);
+
+	RectInt KickRect => new(Position.X + (Facing > 0 ? 0 : -KickReach.X), Position.Y - 12, KickReach.X, KickReach.Y);
+
+	// The kick sends you flying, much further than a cut.
+	public override void OnPerformHit(Actor hitting)
+	{
+		if (kickLive && hitting is Player player)
+			player.Velocity = KickPush * new Vector2((int)Facing, 1);
+	}
 
 	public override void Update()
 	{
@@ -129,6 +156,7 @@ public class FootSoldier : Pawn
 		modeTime += Time.Delta;
 		cutCooldown -= Time.Delta;
 		backHopCooldown -= Time.Delta;
+		kickCooldown -= Time.Delta;
 		ambushCooldown -= Time.Delta;
 		pairCooldown -= Time.Delta;
 		if (armed)
@@ -146,7 +174,7 @@ public class FootSoldier : Pawn
 	void Begin(Mode next)
 	{
 		(mode, modeTime) = (next, 0);
-		swordLive = plunging = lunged = false;
+		swordLive = kickLive = plunging = lunged = false;
 		buried = 0;
 		pilot.Cancel();
 	}
@@ -160,7 +188,8 @@ public class FootSoldier : Pawn
 		return mode switch
 		{
 			Mode.Engage => Engage(player, to, side),
-			Mode.Cut => Cut(),
+			Mode.Cut or Mode.Kick => Swinging(),
+			Mode.Dying => Dying(),
 			Mode.Ambush => Ambush(player),
 			Mode.Smash => Smash(player, to),
 			Mode.Pair => Pair(player),
@@ -194,15 +223,26 @@ public class FootSoldier : Pawn
 			return default;
 		}
 		var reach = MathF.Abs(to.X);
-		if (reach < CrowdRange && backHopCooldown <= 0)
+		if (reach < CrowdRange)
 		{
-			BackHop();
-			return default;
+			if (kickCooldown <= 0)
+			{
+				kickCooldown = KickCooldown;
+				if (Game.rng.Chance(KickChance))
+				{
+					StartSwing(Mode.Kick, Kick);
+					return default;
+				}
+			}
+			if (backHopCooldown <= 0)
+			{
+				BackHop();
+				return default;
+			}
 		}
 		if (reach <= CutReach && cutCooldown <= 0)
 		{
-			Begin(Mode.Cut);
-			PreviewRigTake(CutTake);
+			StartSwing(Mode.Cut, Game.rng.Chance(ChopChance) ? Chop : Slash);
 			return default;
 		}
 		return reach <= SpacingRange ? input with { MoveX = 0 } : input;
@@ -232,18 +272,27 @@ public class FootSoldier : Pawn
 		Begin(Mode.Engage);
 	}
 
-	// Planted, the blade hurts through the middle of the swing, with a lunge as it starts to.
-	PawnInput Cut()
+	void StartSwing(Mode next, Swing with)
 	{
-		swordLive = modeTime >= CutHitStart && modeTime < CutHitEnd;
-		if (swordLive && !lunged)
+		Begin(next);
+		swing = with;
+		PreviewRigTake(with.Take);
+	}
+
+	// Planted, the blade (or the kick) hurts through the middle of the swing, with a lunge as it starts to.
+	PawnInput Swinging()
+	{
+		var live = modeTime >= swing.HitStart && modeTime < swing.HitEnd;
+		(swordLive, kickLive) = mode == Mode.Cut ? (live, false) : (false, live);
+		if (live && !lunged)
 		{
 			lunged = true;
-			Velocity.X += (int)Facing * CutLunge;
+			Velocity.X += (int)Facing * swing.Lunge;
 		}
-		if (modeTime >= CutHitEnd && RigPreview == null)
+		if (modeTime >= swing.HitEnd && RigPreview == null)
 		{
-			cutCooldown = CutCooldown;
+			if (mode == Mode.Cut)
+				cutCooldown = CutCooldown;
 			Begin(Mode.Engage);
 		}
 		return default;
@@ -463,19 +512,30 @@ public class FootSoldier : Pawn
 		Game.HitStun(0.08f);
 		if (plunging)
 			return;
-		PreviewRigTake(null);
 		Begin(Mode.Hurt);
+		PreviewRigTake(FlinchTake);
 		Velocity = new(away * HurtKnockback, -40);
 	}
 
 	void Die()
 	{
-		for (var x = -1; x <= 1; x++)
-			Game.Create<Pop>(Position + new Point2(x * 8, -8 + Math.Abs(x) * 4));
+		Begin(Mode.Dying);
+		Mask = Masks.None;
+		PreviewRigTake(DeathTake);
 		Game.HitStun(0.2f);
 		Game.Shake(0.15f);
 		Game.KillForThisSession(this);
+	}
+
+	// Falls, lies still a moment, then he's gone.
+	PawnInput Dying()
+	{
+		if (RigPreview != null || (lyingStill += Time.Delta) < DeathLinger)
+			return default;
+		for (var x = -1; x <= 1; x++)
+			Game.Create<Pop>(Position + new Point2(x * 8, -4 + Math.Abs(x) * 2));
 		Game.Destroy(this);
+		return default;
 	}
 
 	bool Sees(Player player)

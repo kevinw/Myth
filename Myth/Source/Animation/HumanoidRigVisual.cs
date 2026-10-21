@@ -266,6 +266,7 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	int spine3;
 	int leftClavicle;
 	int[] leftClaws = [], rightClaws = []; // per clawed finger: its second joint, third joint and tip
+	Vector2 rightGripAxis;
 	int rightClavicle;
 	int pelvis;
 	float animationPhase;
@@ -1009,6 +1010,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 		else
 			ResetFeet();
 		SimulateGarments();
+		// Across the right fist's knuckles, before snapping: those are a pixel or two apart, so snapped they'd only
+		// point in 45° steps. A sword held in the fist runs along it.
+		rightGripAxis = projectedPose[rightClaws[0]] - projectedPose[rightClaws[6]];
 		if (Settings.PixelSnap)
 			for (var i = 0; i < projectedPose.Length; i++)
 				projectedPose[i] = projectedPose[i].Round();

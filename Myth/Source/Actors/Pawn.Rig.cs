@@ -106,6 +106,10 @@ public abstract partial class Pawn
 	int rigAttackPitch; // 1 down, -1 up
 	float rigAttackReach; // eased: 1 down, -1 up
 
+	// The take (or raw clip) a pawn actually plays for one of the shared names RigClipFor and the leads pick; a pawn
+	// with its own moves swaps some in. Everything that reads the name (gait rates, leans) still sees the shared one.
+	protected virtual string RigTakeFor(string name) => name;
+
 	// Where the eyes and head aim; null looks ahead.
 	protected virtual Vector2? RigLookTarget => null;
 	protected virtual void OnRigFootstep(Vector2 at) { }
@@ -265,7 +269,7 @@ public abstract partial class Pawn
 		if (shown != rigPlaying || rigRestart)
 			PlayRig(shown, rigRestart);
 		// Picks up edits from the rig animation viewer mid-take; a no-op unless the take changed.
-		else if (rigTake is { } playingTake && RigTakes.TryGet(rigPlaying, out var liveTake) && liveTake != playingTake)
+		else if (rigTake is { } playingTake && RigTakes.TryGet(RigTakeFor(rigPlaying), out var liveTake) && liveTake != playingTake)
 		{
 			rigVisual.Play(liveTake, restart: false);
 			rigTake = liveTake;
@@ -540,13 +544,13 @@ public abstract partial class Pawn
 		}
 		var blend = name == "PlayerDive" ? RigDiveBlendDuration
 			: rigPlaying == "PlayerDive" && grounded ? RigDiveLandBlendDuration : -1;
-		rigTake = RigTakes.TryGet(name, out var take) ? take : null;
+		rigTake = RigTakes.TryGet(RigTakeFor(name), out var take) ? take : null;
 		if (rigTake != null)
 			rigVisual!.Play(name == "PlayerAttack" && !grounded && RigAirAttackMirrored
 				? take with { NearHand = take.NearHand switch { RigHand.Left => RigHand.Right, RigHand.Right => RigHand.Left, _ => RigHand.None } }
 				: take, blend);
 		else
-			rigVisual!.Play(name, restart: restart, blendDuration: blend);
+			rigVisual!.Play(RigTakeFor(name), restart: restart, blendDuration: blend);
 		rigPlaying = name;
 		// A swing out of the air starts on the air legs it already had; a down swipe starts reaching up for the hat.
 		if (name == "PlayerAttack")

@@ -18,6 +18,7 @@
 - `rigLead` is a one-shot *transition* take chosen in `RigLeadFor(from, to)` when the request changes (jump start, turn jump (a backflip when jumping out of a skid: StartTurnJump flips Facing and momentum on takeoff; its yaw twists like the skid), jump land, roll start, crouch↔crawl, crouch to stand). It plays to its end, then the request resumes. The skid also "holds" through run/idle once `Facing` has flipped.
 - `rigPreview` is forced by the Rig Animation Viewer.
 - A name is either a **take** (looked up in `RigTakes`) or a **raw clip**. Takes are only `Play`ed on change, because `Play(take)` restarts the take. Raw clips are idempotent.
+- **Per-pawn moves:** override `RigTakeFor(name)` to swap a different take in for a shared name (FootSoldier plays `SoldierRun` for `PlayerRun`); the gait/lean logic still sees the shared name, and other pawns are untouched. One-shot moves outside the sprite state machine (swings, flinches, a death) go through `PreviewRigTake(take)`; `RigPreview` goes null when it finishes.
 - Playback rate = `take.Speed ×` a state factor: gait clips scale with ground speed, the roll with roll speed, the climb only advances while climbing up.
 
 ## Takes (`Assets/Rigs/ual2.takes.json`)
