@@ -1836,6 +1836,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static float AttackWaveStrengthFalloff => 0.75f;
 	static float AttackWaveThickness => 1f;
 	static RumbleEffect AttackBlockRumble => new(0.45f, 0.65f, 0.11f);
+	static float PogoSpeed => 125f;
+	static float GuardPogoSpeed => 160f; // a pogo that clangs off a guard sends you higher
 	static float HurtFriction => 200;
 	static float DuckAttackCooldown => 0.4f;
 	static float HurtDuration => 0.5f;
@@ -2565,20 +2567,20 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (Facing == Signs.Negative)
 			it.X = -(it.X + it.Width);
 
-		var hitSomething = AttackThisHitBoxThisFrame(it + Position);
+		var hitSomething = AttackThisHitBoxThisFrame(it + Position, out var guarded);
 
-		if (hitSomething && canPogo)
+		if ((hitSomething || guarded) && canPogo)
 		{
-			Velocity.Y = -125f;
+			Velocity.Y = guarded ? -GuardPogoSpeed : -PogoSpeed;
 			burrowNeedsGrounding = false;
 			burrowTimer = 0f;
 		}
 	}
 
-	bool AttackThisHitBoxThisFrame(RectInt it) {
+	bool AttackThisHitBoxThisFrame(RectInt it, out bool blockedByShield) {
 		Game.AddCollisionRectForThisFrame(it);
 
-		var blockedByShield = Game.IsAttackBlocked(this, it, checkOnlyForStrongActorBlock: true);
+		blockedByShield = Game.IsAttackBlocked(this, it, checkOnlyForStrongActorBlock: true);
 		if (blockedByShield)
 			BlockAttack();
 

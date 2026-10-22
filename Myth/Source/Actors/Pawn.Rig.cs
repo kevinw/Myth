@@ -53,6 +53,7 @@ public abstract partial class Pawn
 	static float RigRunLeanPeak => 0.19f;
 	float rigRunLeanTime = 10;
 	protected virtual bool RigLeansIntoRuns => true;
+	protected virtual bool RigFidgetsWhenIdle => true;
 	bool rigWasRunning;
 
 	// Locomotion clips play at this rate at full ground speed, slowing with the pawn.
@@ -508,7 +509,7 @@ public abstract partial class Pawn
 
 	string RigFidget(string clip)
 	{
-		if (clip != "PlayerIdle" || input.MoveX != 0 || input.MoveY != 0 || input.JumpDown || input.DashDown || input.AttackPressed)
+		if (clip != "PlayerIdle" || !RigFidgetsWhenIdle || input.MoveX != 0 || input.MoveY != 0 || input.JumpDown || input.DashDown || input.AttackPressed)
 		{
 			rigFidget = null;
 			rigFidgetTimer = RigFidgetFirstDelay;

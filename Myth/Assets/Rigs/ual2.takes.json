@@ -474,6 +474,39 @@
     "ArmWidthScale": 1,
     "HandWidthScale": 1
   },
+  "SoldierGuardMiddle": {
+    "Clip": "Warrior_Idle",
+    "Start": 8.1,
+    "End": 11.4,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierGuardHigh": {
+    "Clip": "Pose_SoldierGuardHigh",
+    "Start": 0,
+    "End": 3.4028235e+38,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
+  "SoldierOpen": {
+    "Clip": "Zombie_Idle_Loop",
+    "Start": 0,
+    "End": 3.4028235e+38,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true,
+    "UpperBodyLeanDegrees": 0,
+    "ArmWidthScale": 1,
+    "HandWidthScale": 1
+  },
   "SoldierDeath": {
     "Clip": "Zombie_Dying",
     "Start": 0,

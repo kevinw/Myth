@@ -10,7 +10,9 @@ from bpy.app.handlers import persistent
 def arguments():
     parser = argparse.ArgumentParser(description="Open the UAL2 armature for Myth pose authoring")
     parser.add_argument("--action", required=True)
-    parser.add_argument("--from", dest="source", help="a new action starts from this action's first frame")
+    parser.add_argument("--from", dest="source",
+                        help="a new action starts from this action's first frame, or Action@seconds; "
+                             "an action not in the blend comes from mixamo/<Action>.glb")
     parser.add_argument("--wall", type=float,
                         help="show a wall guide this many meters in front of the body (not saved or exported)")
     parser.add_argument("--loop", type=int,
@@ -38,12 +40,29 @@ armature.animation_data_create()
 action = bpy.data.actions.get(args.action)
 if action is None:
     if args.source:
-        source = bpy.data.actions.get(args.source)
-        if source is None:
-            raise RuntimeError(f"No action named {args.source}")
+        name, _, seconds = args.source.partition("@")
+        imported = bpy.data.actions.get(name) is None
+        if imported:
+            glb = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mixamo", f"{name}.glb")
+            if not os.path.exists(glb):
+                raise RuntimeError(f"No action named {name}, nor {glb}")
+            before = set(bpy.data.objects)
+            bpy.ops.import_scene.gltf(filepath=glb)
+            for obj in set(bpy.data.objects) - before:
+                bpy.data.objects.remove(obj)
+        source = bpy.data.actions.get(name)
         armature.animation_data.action = source
-        bpy.context.scene.frame_set(int(source.frame_range[0]))
+        armature.animation_data.action_slot = source.slots[0]  # an imported clip's slot is bound to its own armature
+        bpy.context.scene.frame_set(round(source.frame_range[0] + float(seconds or 0) * bpy.context.scene.render.fps))
         bpy.context.view_layer.update()
+        # Hold the sampled pose: the new action keys it once the source is unassigned.
+        pose = {bone.name: (bone.location.copy(), bone.rotation_quaternion.copy(), bone.rotation_euler.copy(), bone.scale.copy())
+                for bone in armature.pose.bones}
+        armature.animation_data.action = None
+        for bone in armature.pose.bones:
+            bone.location, bone.rotation_quaternion, bone.rotation_euler, bone.scale = pose[bone.name]
+        if imported:
+            bpy.data.actions.remove(source)
     action = bpy.data.actions.new(args.action)
     action.use_fake_user = True
     armature.animation_data.action = action

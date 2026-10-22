@@ -261,6 +261,8 @@ partial class HumanoidRigVisual
 				var claws = visual.rightClaws;
 				var grip = (V(claws[0]) + V(claws[6])) * 0.5f;
 				var along = Vector3.Normalize(new Vector3(visual.rightGripAxis, (visual.jointDepth[claws[0]] - visual.jointDepth[claws[6]]) * ppm));
+				if (visual.SwordAimWeight > 0)
+					along = Vector3.Normalize(Vector3.Lerp(along, new Vector3(visual.SwordAim, 0), visual.SwordAimWeight));
 				if (!float.IsFinite(along.X))
 					along = -up;
 				var across = Vector3.Normalize(Vector3.Cross(along, Vector3.UnitZ));

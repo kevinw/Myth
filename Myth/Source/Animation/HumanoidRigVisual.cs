@@ -399,6 +399,9 @@ internal sealed partial class HumanoidRigVisual(Actor owner, HumanoidRigSettings
 	// Loops over the pelvis and legs in place of the playing clip's, by weight: an air pose under a ground swing.
 	public RigTake? LegTake;
 	public float LegWeight;
+	// Points the sword this way (pawn-local, screen space) in place of along the grip, by weight.
+	public Vector2 SwordAim;
+	public float SwordAimWeight;
 	public float CurrentFacingYaw => FacingYaw(owner.Facing);
 	public float Time
 	{
