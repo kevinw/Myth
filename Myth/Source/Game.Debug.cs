@@ -123,7 +123,9 @@ public partial class Game
 	internal PlayerRewinder rewinder;
 	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
-	internal readonly ReachSense reach = new(ReachBody.Bud);
+	readonly Dictionary<ReachBody, ReachSense> reachSenses = [];
+	internal ReachSense Reach(ReachBody body) => reachSenses.TryGetValue(body, out var sense) ? sense : reachSenses[body] = new(body);
+	internal ReachRoute? budRoute;
 	// Bud heads for the floor under a jumping player, if it's this close below.
 	static int PlayerFloorReach => 64;
 	// Widens the player's rect as Bud's goal, so he stops about 18px off instead of ~7px (bodies just touching).
@@ -132,13 +134,30 @@ public partial class Game
 
 	void UpdateReachField()
 	{
-		if (room == null || debugView != DebugView.ReachField && GetFirst<Bud>() == null)
-			return;
-		if (GymTarget is { } goal)
-			reach.Update(this, room, (goal.Hitbox.Rect + goal.Position).Inflate(1));
-		else if (GetFirst<Player>() is { } player)
-			reach.Update(this, room, (player.Hitbox.Rect + player.Position).InflateX(BudFollowGap), PlayerFloorReach);
+		budRoute = room == null || debugView != DebugView.ReachField && GetFirst<Bud>() == null ? null
+			: GymTarget is { } goal ? Reach(ReachBody.Bud).RouteTo(this, room, (goal.Hitbox.Rect + goal.Position).Inflate(1))
+			: GetFirst<Player>() is { } player ? Reach(ReachBody.Bud).RouteTo(this, room, (player.Hitbox.Rect + player.Position).InflateX(BudFollowGap), PlayerFloorReach)
+			: null;
 	}
+	static readonly Color[] ReachRouteColors = [new(0x7fe8ff), new(0xff7fd4), new(0xd4ff7f), new(0xffb04a), new(0xb08cff)];
+
+	// The costs to Bud's route (or the first one anyone's using), and every route in use with its riders' paths.
+	internal void RenderReachRoutes(Batcher batcher)
+	{
+		var colors = 0;
+		var shown = budRoute;
+		foreach (var sense in reachSenses.Values)
+			foreach (var route in sense.Routes)
+				if (route.UsedFrame == Time.Frame && route != budRoute)
+					shown ??= route;
+		shown?.Field.RenderCosts(batcher, shown);
+		budRoute?.Field.RenderPaths(batcher, budRoute, ReachRouteColors[colors++]);
+		foreach (var sense in reachSenses.Values)
+			foreach (var route in sense.Routes)
+				if (route.UsedFrame == Time.Frame && route != budRoute)
+					route.Field.RenderPaths(batcher, route, ReachRouteColors[colors++ % ReachRouteColors.Length]);
+	}
+
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
 	public List<(RectInt, float)> CollisionRectsThisFrame = [];

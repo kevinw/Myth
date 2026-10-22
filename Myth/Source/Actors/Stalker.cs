@@ -8,7 +8,7 @@ namespace Myth;
 // off-screen as a timer: how far it still had to travel to the exit you took, at its own
 // travel speed, is how long before it walks in through the entry of your new room.
 //
-// Because its body is twice Bud's, it keeps its own ReachSense, built for the bigger rects
+// Because its body is twice Bud's, it navigates its own ReachSense, built for the bigger rects
 // below and its slower speed. Gaps that body can't fit produce no edges at all, so crawl
 // spaces are genuinely safe from it.
 //
@@ -61,7 +61,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 	static ReachManner Manner => new(WindupMin: 0.25f, WindupMax: 0.7f, MissHesitation: 0);
 
 	readonly ReachPilot pilot;
-	ReachSense? sense;
+	ReachRoute? route;
 	readonly HumanoidRigVisual rigVisual;
 	DitherCorruption? corruption;
 	bool rigReady;
@@ -113,7 +113,6 @@ public class Stalker : Pawn, INeuralTextureAgent
 				return;
 			}
 
-		sense = new(new(NavProbe, NavDuckingProbe, SpeedMultiplier));
 		SyncRigSettings();
 		rigVisual.Initialize("Zombie_Idle_Loop");
 		rigReady = true;
@@ -149,12 +148,10 @@ public class Stalker : Pawn, INeuralTextureAgent
 		if (!hunting || pendingArrival || Game.GetFirst<Player>() is not { } player)
 			return new();
 
-		var input = sense?.Field is { } field ? pilot.GetInput(field) : default;
 		var toward = Math.Sign(player.Position.X - Position.X);
-		// No way through at all: shamble toward the player so it never just stands there.
-		if (pilot.Label.StartsWith("no ") && grounded && toward != 0 &&
-			Game.OverlapsRoomCollision(new RectInt(Position.X + toward * (NavProbe.Width / 2 + 2), Position.Y, 2, Game.TileSize)))
-			input = input with { MoveX = toward };
+		// No way through at all: shamble toward the player so it never just stands there, but not off a ledge.
+		var shamble = grounded && Game.OverlapsRoomCollision(new RectInt(Position.X + toward * (NavProbe.Width / 2 + 2), Position.Y, 2, Game.TileSize));
+		var input = pilot.GetInput(route, shamble ? toward : 0);
 		if (input.MoveX == 0 && toward != 0)
 			Facing = toward;
 		return input;
@@ -162,8 +159,8 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	public override void Update()
 	{
-		if (hunting && !pendingArrival && Game.room is { } room && Game.GetFirst<Player>() is { } player)
-			sense?.Update(Game, room, player.Hitbox.Rect + player.Position);
+		route = hunting && !pendingArrival && Game.room is { } room && Game.GetFirst<Player>() is { } player
+			? Game.Reach(new(NavProbe, NavDuckingProbe, SpeedMultiplier)).RouteTo(Game, room, player.Hitbox.Rect + player.Position) : null;
 
 		if (pendingArrival)
 		{

@@ -5,8 +5,9 @@ namespace Myth;
 
 // A nimble swordsman Bud's size, sculpted, sword in his right fist. He paths with the reach field and burrows like
 // Bud, and keeps you at sword's length:
-// - Spacing: closes to SpacingRange and holds there; crowd him and he either kicks you off, hard, or hops back out of
-//   your reach, still facing you.
+// - Spacing: closes to SpacingRange on whichever side of you he's on, so a squad splits to flank you rather than
+//   queueing up one path, and holds there; crowd him and he either kicks you off, hard, or hops back out of your
+//   reach, still facing you.
 // - Cut: in reach, he plants and swings, a quick slash or, now and then, an overhead chop with a longer raise. The
 //   raise is the tell. Only the blade hurts, and only while it cuts, so between cuts you can stand toe to toe with him.
 // - Ambush: now and then, when there's a wall spot above you he can get to, he goes there, burrowing up the wall if
@@ -16,6 +17,10 @@ namespace Myth;
 //   one at your feet, spinning; each catches the other's. Until the blades come home both are unarmed, and one that
 //   misses his catch has to go pick his sword up off the floor before he can cut again.
 // Every hit makes him flinch; five and he falls, and lies there a moment before he's gone.
+// No two are alike: each rolls his own dice, seeded by who he is, for his walking pace, his cooldowns and his pauses.
+// He takes a beat before each next move, and now and then stops short on a walk, so a squad falls out of step. He
+// won't walk into a comrade either: he waits behind him (for a while) and steps off one he's standing on, so a squad
+// on one side of you lines up rather than piling into one spot.
 [GameActor(Sprite = "bud", Tags = ActorTag.Enemy, Anchor = SpriteAnchor.BottomCenter, LivePositionEditable = true)]
 public class FootSoldier : Pawn
 {
@@ -25,6 +30,15 @@ public class FootSoldier : Pawn
 	[I(32, 320)] public float SightRange = 180;
 
 	static ReachManner Manner => new(WindupMin: 0.05f, WindupMax: 0.3f, MissHesitation: 0.1f);
+	static float PaceMin => 0.5f; // of full speed, walking his route; each rolls his own
+	static float PaceMax => 0.75f;
+	static float BeatMin => 0.1f; // the pause before his next move
+	static float BeatMax => 0.7f;
+	static float StrollMin => 0.8f; // walking this long, he stops short for a beat
+	static float StrollMax => 2.5f;
+	static float CooldownJitter => 0.35f; // each cooldown runs this fraction longer or shorter
+	static float PersonalSpace => 12f; // px he keeps from a comrade on the same footing
+	static float CrowdPatience => 1.5f; // waiting behind one this long, he goes on through
 	static float SpacingRange => 22f; // px he holds off you
 	static float CrowdRange => 10f; // closer than this he hops back
 	static float BackHopSpeed => 120f;
@@ -73,13 +87,19 @@ public class FootSoldier : Pawn
 
 	enum Mode { Idle, Engage, BackHop, Cut, Kick, Ambush, Smash, Recover, Pair, Hurt, Dying }
 
-	readonly ReachSense sense = new(ReachBody.Bud);
+	ReachRoute? route;
 	readonly ReachPilot pilot;
+	Rng rng;
+	ulong seed;
+	float pace;
+	float crowded;
+	float beat;
+	float stroll;
 	Mode mode;
 	float modeTime;
 	float cutCooldown;
 	float backHopCooldown;
-	float ambushCooldown = AmbushCooldown / 2;
+	float ambushCooldown;
 	float buried; // how long he's waited buried this ambush
 	Point2 ambushSpot;
 	bool lunged;
@@ -91,7 +111,7 @@ public class FootSoldier : Pawn
 	bool swordLive;
 	bool armed = true;
 	float swordLength; // as authored (and live-edited while he holds it); drawn as none while he's unarmed
-	float pairCooldown = PairCooldown / 2;
+	float pairCooldown;
 	FootSoldier? partner;
 	int lane;
 	bool thrown;
@@ -111,6 +131,7 @@ public class FootSoldier : Pawn
 	protected override HumanoidRigSettings? DrawRig => Rig;
 	internal override float MaxBurrowDuration => base.MaxBurrowDuration + AmbushTime;
 	internal override bool ContactDamageEnabled => swordLive || kickLive;
+	protected override bool RigLeansIntoRuns => false;
 	protected override string RigTakeFor(string name) => name is "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop" ? RunTake : name;
 
 	public override void Added()
@@ -119,7 +140,14 @@ public class FootSoldier : Pawn
 		Hitbox = new(StandingHitboxRect);
 		health = Health;
 		swordLength = Rig.Sculpt.Sword;
+		rng = new(seed = ActorId is { } id ? Hash32.Of(id) : Game.rng.U64());
+		pace = rng.Float(PaceMin, PaceMax);
+		stroll = rng.Float(StrollMin, StrollMax);
+		ambushCooldown = rng.Float(AmbushCooldown);
+		pairCooldown = rng.Float(PairCooldown);
 	}
+
+	float Vary(float cooldown) => cooldown * rng.Float(1 - CooldownJitter, 1 + CooldownJitter);
 
 	// Waiting, unarmed, on his partner's sword.
 	internal bool Receiving => mode == Mode.Pair && thrown && !armed;
@@ -159,21 +187,33 @@ public class FootSoldier : Pawn
 		kickCooldown -= Time.Delta;
 		ambushCooldown -= Time.Delta;
 		pairCooldown -= Time.Delta;
+		beat -= Time.Delta;
 		if (armed)
 			swordLength = Rig.Sculpt.Sword;
 		else
 			Rig.Sculpt.Sword = 0;
 		if (mode == Mode.Idle && player != null && Sees(player))
 			Begin(Mode.Engage);
-		if (mode != Mode.Idle && player != null && Game.room is { } room)
-			sense.Update(Game, room, mode == Mode.Ambush ? ReachBody.Bud.Stand + ambushSpot :
-				fetching != null ? ReachBody.Bud.Stand + fetching.Position : player.Hitbox.Rect + player.Position);
+		route = mode != Mode.Idle && player != null && Game.room is { } room
+			? Game.Reach(ReachBody.Bud).RouteTo(Game, room, mode == Mode.Ambush ? ReachBody.Bud.Stand + ambushSpot :
+				fetching != null ? ReachBody.Bud.Stand + fetching.Position : Flank(player))
+			: null;
 		base.Update();
+	}
+
+	// You, stretched SpacingRange out to his side: anywhere from beside you to sword's length off counts, so every
+	// soldier on one side shares a route, and where there's no footing out there he still comes in close.
+	RectInt Flank(Player player)
+	{
+		var you = player.Hitbox.Rect + player.Position;
+		return you.Conflate(you + new Point2(Position.X < player.Position.X ? -(int)SpacingRange : (int)SpacingRange, 0));
 	}
 
 	void Begin(Mode next)
 	{
 		(mode, modeTime) = (next, 0);
+		if (next == Mode.Engage)
+			beat = rng.Float(BeatMin, BeatMax);
 		swordLive = kickLive = plunging = lunged = false;
 		buried = 0;
 		pilot.Cancel();
@@ -187,7 +227,7 @@ public class FootSoldier : Pawn
 		var side = Math.Sign(to.X);
 		return mode switch
 		{
-			Mode.Engage => Engage(player, to, side),
+			Mode.Engage => GiveRoom(Engage(player, to, side)),
 			Mode.Cut or Mode.Kick => Swinging(),
 			Mode.Dying => Dying(),
 			Mode.Ambush => Ambush(player),
@@ -200,9 +240,20 @@ public class FootSoldier : Pawn
 
 	PawnInput Engage(Player player, Vector2 to, int side)
 	{
-		var input = sense.Field is { } field ? pilot.GetInput(field) : default;
-		if (pilot.Label.StartsWith("no ") && side != 0)
-			input = input with { MoveX = side };
+		var input = pilot.GetInput(route, side);
+		if (pilot.Phase == ReachPilot.Phases.Walking && beat <= 0)
+		{
+			input = input with { MoveX = input.MoveX * pace };
+			if ((stroll -= Time.Delta) <= 0)
+				(beat, stroll) = (rng.Float(BeatMin, BeatMax), rng.Float(StrollMin, StrollMax));
+		}
+		// Taking a beat: standing his ground, facing you, though he finishes any jump he's in the middle of.
+		if (beat > 0)
+		{
+			if (side != 0 && grounded)
+				Facing = side;
+			return pilot.Phase is ReachPilot.Phases.Walking or ReachPilot.Phases.Idle or ReachPilot.Phases.Stuck ? input with { MoveX = 0 } : input;
+		}
 		if (!armed)
 			return Fetch(input);
 		if (!grounded)
@@ -227,8 +278,8 @@ public class FootSoldier : Pawn
 		{
 			if (kickCooldown <= 0)
 			{
-				kickCooldown = KickCooldown;
-				if (Game.rng.Chance(KickChance))
+				kickCooldown = Vary(KickCooldown);
+				if (rng.Chance(KickChance))
 				{
 					StartSwing(Mode.Kick, Kick);
 					return default;
@@ -242,17 +293,43 @@ public class FootSoldier : Pawn
 		}
 		if (reach <= CutReach && cutCooldown <= 0)
 		{
-			StartSwing(Mode.Cut, Game.rng.Chance(ChopChance) ? Chop : Slash);
+			StartSwing(Mode.Cut, rng.Chance(ChopChance) ? Chop : Slash);
 			return default;
 		}
 		return reach <= SpacingRange ? input with { MoveX = 0 } : input;
+	}
+
+	// The nearest comrade on his footing closer than PersonalSpace: standing on him, he steps off; walking into him,
+	// he waits, until CrowdPatience runs out (he might be parked on the way through). Not mid-jump, nor mid-swing.
+	PawnInput GiveRoom(PawnInput input)
+	{
+		FootSoldier? nearest = null;
+		var gap = PersonalSpace;
+		if (mode == Mode.Engage && grounded && pilot.Phase is ReachPilot.Phases.Walking or ReachPilot.Phases.Idle or ReachPilot.Phases.Stuck)
+			foreach (var actor in Game.Actors)
+				if (actor is FootSoldier { mode: not Mode.Dying } other && other != this && Math.Abs(other.Position.Y - Position.Y) < 8 &&
+					Math.Abs(other.Position.X - Position.X) is var apart && apart < gap)
+					(nearest, gap) = (other, apart);
+		if (nearest == null)
+		{
+			crowded = 0;
+			return input;
+		}
+		var away = Math.Sign(Position.X - nearest.Position.X) is var side and not 0 ? side : seed > nearest.seed ? 1 : -1;
+		if (gap < PersonalSpace / 2)
+			return input with { MoveX = away * pace };
+		if (Math.Sign(input.MoveX) != -away)
+			crowded = 0;
+		else if ((crowded += Time.Delta) < CrowdPatience)
+			return input with { MoveX = 0 };
+		return input;
 	}
 
 	// Rounds on you and hops back out of your reach, like Bud ducking a swing.
 	void BackHop()
 	{
 		Begin(Mode.BackHop);
-		backHopCooldown = BackHopCooldown;
+		backHopCooldown = Vary(BackHopCooldown);
 		Velocity.X = -(int)Facing * BackHopSpeed;
 		jumpTimer = 0;
 		Squish = new(0.75f, 1.3f);
@@ -292,7 +369,7 @@ public class FootSoldier : Pawn
 		if (modeTime >= swing.HitEnd && RigPreview == null)
 		{
 			if (mode == Mode.Cut)
-				cutCooldown = CutCooldown;
+				cutCooldown = Vary(CutCooldown);
 			Begin(Mode.Engage);
 		}
 		return default;
@@ -303,7 +380,7 @@ public class FootSoldier : Pawn
 	bool FindAmbush(Player player, out Point2 spot)
 	{
 		spot = default;
-		if (sense.Field is not { } field)
+		if (route?.Field is not { } field)
 			return false;
 		var best = float.MaxValue;
 		foreach (var node in field.Nodes)
@@ -324,11 +401,11 @@ public class FootSoldier : Pawn
 	{
 		if (modeTime > AmbushPatience || pilot.Phase == ReachPilot.Phases.Stuck)
 		{
-			ambushCooldown = AmbushCooldown;
+			ambushCooldown = Vary(AmbushCooldown);
 			Begin(Mode.Engage);
 			return default;
 		}
-		var input = sense.Field is { } field ? pilot.GetInput(field) : default;
+		var input = pilot.GetInput(route);
 		if (State == States.Burrow && !input.JumpDown && buried < AmbushTime)
 		{
 			buried += Time.Delta;
@@ -351,7 +428,7 @@ public class FootSoldier : Pawn
 		}
 		if (grounded || modeTime > SmashMissTime)
 		{
-			ambushCooldown = AmbushCooldown;
+			ambushCooldown = Vary(AmbushCooldown);
 			Begin(Mode.Engage);
 			return default;
 		}
@@ -389,7 +466,7 @@ public class FootSoldier : Pawn
 	void StartPair(FootSoldier with, int lane)
 	{
 		Begin(Mode.Pair);
-		(partner, this.lane, thrown, pairCooldown) = (with, lane, false, PairCooldown);
+		(partner, this.lane, thrown, pairCooldown) = (with, lane, false, Vary(PairCooldown));
 		Facing = Math.Sign(with.Position.X - Position.X) is var side and not 0 ? side : (int)Facing;
 		PreviewRigTake(PairTake);
 	}
@@ -457,7 +534,7 @@ public class FootSoldier : Pawn
 	{
 		if (modeTime >= time)
 		{
-			ambushCooldown = MathF.Max(ambushCooldown, mode == Mode.Recover ? AmbushCooldown : 0);
+			ambushCooldown = MathF.Max(ambushCooldown, mode == Mode.Recover ? Vary(AmbushCooldown) : 0);
 			Begin(Mode.Engage);
 		}
 		return default;
@@ -521,7 +598,7 @@ public class FootSoldier : Pawn
 	{
 		Begin(Mode.Dying);
 		Mask = Masks.None;
-		PreviewRigTake(DeathTake);
+		PreviewRigTake(DeathTake, hold: true);
 		Game.HitStun(0.2f);
 		Game.Shake(0.15f);
 		Game.KillForThisSession(this);
@@ -530,7 +607,7 @@ public class FootSoldier : Pawn
 	// Falls, lies still a moment, then he's gone.
 	PawnInput Dying()
 	{
-		if (RigPreview != null || (lyingStill += Time.Delta) < DeathLinger)
+		if (!RigPreviewFinished || (lyingStill += Time.Delta) < DeathLinger)
 			return default;
 		for (var x = -1; x <= 1; x++)
 			Game.Create<Pop>(Position + new Point2(x * 8, -4 + Math.Abs(x) * 2));

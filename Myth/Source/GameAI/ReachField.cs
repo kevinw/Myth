@@ -6,8 +6,8 @@ namespace Myth;
 
 // Where a pawn can get to in the room as it was when rasterized. The room collision (tiles, solid and jumpthru
 // actors, ribbon pixel masks) is rasterized into SummedMasks; standing spots are found on that raster; recorded
-// ReachMoves are swept from each spot to see where they end up; then a Dijkstra run backwards from the target
-// gives every spot its cost to reach it. ReachSense keeps one current as the room changes.
+// ReachMoves are swept from each spot to see where they end up; then a Dijkstra run backwards from a target
+// gives every spot its cost to reach it (a ReachRoute). ReachSense keeps one current as the room changes.
 public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary<(Point2 Start, int Move), int> misses)
 {
 	public enum NodeKind { Stand, Wall, Swim, Rope, Ride }
@@ -89,13 +89,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	public readonly List<Node> Nodes = [];
 	public readonly List<Edge> Edges = [];
 	public List<ReachMove> Moves => moves;
-	public RectInt? Target { get; private set; }
-	public float Cost(int node) => cost[node];
-	public int BestEdge(int node) => best[node];
 
 	readonly SummedMask solid = new(), jumpthru = new(), water = new();
 	int ropes; // a signature of the room's ropes, which aren't in the raster
-	bool solved;
 	RectInt bounds;
 	int roomBottom;
 	readonly Dictionary<Point2, int> standAt = [];
@@ -110,9 +106,6 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	readonly Dictionary<int, int> edgeTo = []; // cheapest edge so far from the node being expanded, by destination
 	readonly List<int> runups = [.. moves.Where(move => move.Runup > 0).Select(move => move.Runup).Distinct()];
 	readonly ReachMove fall = moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 0 }); // how a bonked head comes back down
-	float[] cost = [];
-	int[] best = [];
-	int[] touchFrame = []; // > 0 where the target is reached partway through the node's best move
 	int[] incomingStart = [];
 	int[] incoming = [];
 	int[] fill = [];
@@ -129,29 +122,15 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	bool dugReversed;
 	// Stands beside the open end of a BurrowLine, and the way to it.
 	readonly HashSet<(int Node, int Dir)> mouths = [];
-	bool solvedMidMove; // nothing stood in the last target, so it was reached partway through moves
 	readonly PriorityQueue<int, float> queue = new();
 	int sweeps;
 
 	public int MissCount(Point2 start, int move) => misses.GetValueOrDefault((start, move));
 
-	public void ReportMiss(Point2 start, int move)
-	{
-		misses[(start, move)] = misses.GetValueOrDefault((start, move)) + 1;
-		solved = false;
-	}
-
 	// Following a moving target only re-solves once it has moved a few px.
-	public void SolveFor(RectInt target)
-	{
-		var tolerance = solvedMidMove ? AirborneResolveDistance : ResolveDistance;
-		if (solved && Target is { } solvedFor && solvedFor.Size == target.Size &&
-			Math.Abs(solvedFor.X - target.X) < tolerance && Math.Abs(solvedFor.Y - target.Y) < tolerance)
-			return;
-		Solve(target);
-		Target = target;
-		solved = true;
-	}
+	internal static bool Follows(ReachRoute route, RectInt target)
+		=> route.Target.Size == target.Size && (route.SolvedMidMove ? AirborneResolveDistance : ResolveDistance) is var tolerance &&
+			Math.Abs(route.Target.X - target.X) < tolerance && Math.Abs(route.Target.Y - target.Y) < tolerance;
 
 	public bool SameAs(ReachField other)
 		=> ropes == other.ropes && solid.SamePixels(other.solid) && jumpthru.SamePixels(other.jumpthru) && water.SamePixels(other.water);
@@ -258,7 +237,6 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		Array.Copy(incomingStart, fill, Nodes.Count);
 		for (var e = 0; e < Edges.Count; e++)
 			incoming[fill[Edges[e].To]++] = e;
-		solved = false;
 		longestSlice = Math.Max(longestSlice, Stopwatch.GetElapsedTime(slice).TotalMilliseconds);
 		if (LogBuilds)
 			Console.WriteLine($"[Reach] {Nodes.Count} nodes, {Edges.Count} edges, {sweeps} sweeps, " +
@@ -1231,15 +1209,13 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		return result;
 	}
 
-	void Solve(RectInt target)
+	internal void Solve(ReachRoute route, RectInt target)
 	{
 		var count = Nodes.Count;
-		if (cost.Length < count)
-		{
-			cost = new float[count];
-			best = new int[count];
-			touchFrame = new int[count];
-		}
+		if (route.cost.Length < count)
+			(route.cost, route.best, route.touchFrame) = (new float[count], new int[count], new int[count]);
+		var (cost, best, touchFrame) = (route.cost, route.best, route.touchFrame);
+		(route.Field, route.Target) = (this, target);
 		Array.Fill(cost, float.PositiveInfinity, 0, count);
 		Array.Fill(best, -1, 0, count);
 		Array.Clear(touchFrame, 0, count);
@@ -1247,11 +1223,11 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 
 		for (var i = 0; i < count; i++)
 			if (target.Overlaps((Nodes[i].Ducking ? DuckBody : Body) + Nodes[i].Position))
-				Seed(i, 0, -1, 0);
+				Seed(route, i, 0, -1, 0);
 
 		// Nothing stands in it (a goal hanging in the air): reach it mid-move instead.
-		solvedMidMove = queue.Count == 0;
-		if (solvedMidMove)
+		route.SolvedMidMove = queue.Count == 0;
+		if (route.SolvedMidMove)
 			for (var e = 0; e < Edges.Count; e++)
 			{
 				var edge = Edges[e];
@@ -1265,7 +1241,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 					frame = sweep.TouchFrame <= sweep.Frame ? sweep.TouchFrame : -1;
 				}
 				if (frame > 0)
-					Seed(edge.From, frame * ReachMoves.Dt + JumpPenalty, e, frame);
+					Seed(route, edge.From, frame * ReachMoves.Dt + JumpPenalty, e, frame);
 			}
 
 		while (queue.TryDequeue(out var node, out var reached))
@@ -1321,13 +1297,11 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		return target;
 	}
 
-	void Seed(int node, float at, int edge, int frame)
+	void Seed(ReachRoute route, int node, float at, int edge, int frame)
 	{
-		if (at >= cost[node])
+		if (at >= route.cost[node])
 			return;
-		cost[node] = at;
-		best[node] = edge;
-		touchFrame[node] = frame;
+		(route.cost[node], route.best[node], route.touchFrame[node]) = (at, edge, frame);
 		queue.Enqueue(node, at);
 	}
 
@@ -1351,12 +1325,11 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	static Color Mid => new(0xffe14a);
 	static Color Far => new(0xff4a4a);
 	static Color Unreachable => new Color(0x606070) * 0.6f;
-	static Color PathColor => new(0x7fe8ff);
 
-	public void Render(Batcher batcher, Point2? from)
+	// Every node colored by its cost to the route's target, near green to far red.
+	internal void RenderCosts(Batcher batcher, ReachRoute route)
 	{
-		if (!solved)
-			return;
+		var cost = route.cost;
 		var maxCost = 0f;
 		for (var i = 0; i < Nodes.Count; i++)
 			if (float.IsFinite(cost[i]))
@@ -1389,23 +1362,33 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 					break;
 			}
 		}
+	}
 
-		if (Target is { } target)
-			batcher.RectLine(target, 1, PathColor);
-		if (from is not { } feet || NearestNode(feet, 24) is not (var at and >= 0))
+	// The route's target, and the way to it from where each pawn steering by it is.
+	internal void RenderPaths(Batcher batcher, ReachRoute route, Color color)
+	{
+		batcher.RectLine(route.Target, 1, color);
+		foreach (var rider in route.Riders)
+			RenderPath(batcher, route, rider.Position, color);
+	}
+
+	void RenderPath(Batcher batcher, ReachRoute route, Point2 feet, Color color)
+	{
+		var (cost, best, touchFrame) = (route.cost, route.best, route.touchFrame);
+		if (NearestNode(feet, 24) is not (var at and >= 0))
 			return;
 		for (var steps = 0; steps < 256 && cost[at] > 0 && best[at] is var e and >= 0; steps++)
 		{
 			var edge = Edges[e];
 			var start = (Vector2)edge.Start + new Vector2(0, -2);
 			if (edge.Move < 0 || Moves[edge.Move].Burrows)
-				batcher.Line(start, (Vector2)Nodes[edge.To].Position + new Vector2(0, -2), 1, PathColor);
+				batcher.Line(start, (Vector2)Nodes[edge.To].Position + new Vector2(0, -2), 1, color);
 			else
 			{
 				var offsets = Moves[edge.Move].Offsets;
 				var frames = touchFrame[at] > 0 ? touchFrame[at] : edge.Frames;
 				for (var k = 1; k <= frames && k < offsets.Length; k++)
-					batcher.Line(start + (Vector2)offsets[k - 1], start + (Vector2)offsets[k], 1, PathColor);
+					batcher.Line(start + (Vector2)offsets[k - 1], start + (Vector2)offsets[k], 1, color);
 			}
 			if (touchFrame[at] > 0)
 				break;
@@ -1414,9 +1397,30 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	}
 }
 
-// Keeps a ReachField current: re-rasterizes the room every RefreshInterval and, when it differs, builds the next
-// field a slice per frame while the last one stays in use, then swaps it in. Opened doors, grown ribbons and
-// broken tiles are simply part of the next build.
+// One target's costs over a ReachField: each node's cost to reach the target and the edge to take. Anyone after the
+// same target shares it, and ReachSense re-solves it when the field or the misses change.
+public sealed class ReachRoute(ReachSense sense)
+{
+	public ReachField Field { get; internal set; } = null!;
+	public RectInt Target { get; internal set; }
+	internal bool SolvedMidMove; // nothing stood in the target, so it was reached partway through moves
+	internal float[] cost = [];
+	internal int[] best = [];
+	internal int[] touchFrame = []; // > 0 where the target is reached partway through the node's best move
+	internal int Version = -1; // the sense's, when solved
+	internal ulong UsedFrame;
+	internal readonly List<Pawn> Riders = []; // steering by it this frame
+
+	public float Cost(int node) => cost[node];
+	public int BestEdge(int node) => best[node];
+	public int MissCount(Point2 start, int move) => Field.MissCount(start, move);
+	public void ReportMiss(Point2 start, int move) => sense.ReportMiss(start, move);
+}
+
+// Keeps a ReachField current for one body: re-rasterizes the room every RefreshInterval and, when it differs,
+// builds the next field a slice per frame while the last one stays in use, then swaps it in. Opened doors, grown
+// ribbons and broken tiles are simply part of the next build. One per body per Game (Game.Reach), shared by
+// every pawn of that body, each asking for a route to its own target.
 public sealed class ReachSense(ReachBody body)
 {
 	static float RefreshInterval => 0.25f;
@@ -1438,12 +1442,54 @@ public sealed class ReachSense(ReachBody body)
 	Room? room;
 	float refreshTimer;
 	float buildTime; // how long the build in flight has taken, in game time so the gym and a rewind agree
-	// Moves tried and missed this room visit, by where they started: they cost more from then on.
+	// Moves tried and missed this room visit, by where they started: they cost more from then on, for everyone.
 	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
+	internal readonly List<ReachRoute> Routes = [];
+	int version; // bumps when a new field swaps in or a miss changes the costs: routes solved before re-solve
+	ulong frame = ulong.MaxValue;
 
+	// The route to target this frame, shared with anyone else after (nearly) the same one; null until there's a
+	// field. Call it every frame the route is used: a route nobody asked for this frame goes to the next new target.
 	// floorReach > 0 stretches an airborne target down to the floor that far below it.
-	public void Update(Game game, Room room, RectInt target, int floorReach = 0)
+	public ReachRoute? RouteTo(Game game, Room room, RectInt target, int floorReach = 0)
 	{
+		Update(game, room);
+		if (Field == null)
+			return null;
+		if (floorReach > 0)
+			target = Field.DownToFloor(target, floorReach);
+		ReachRoute? route = null;
+		foreach (var candidate in Routes)
+			if (candidate.Version == version && ReachField.Follows(candidate, target))
+				route = candidate;
+		if (route == null)
+		{
+			foreach (var candidate in Routes)
+				if (candidate.UsedFrame != frame)
+					route = candidate;
+			if (route == null)
+				Routes.Add(route = new(this));
+			Field.Solve(route, target);
+			route.Version = version;
+		}
+		if (route.UsedFrame != frame)
+			route.Riders.Clear();
+		route.UsedFrame = frame;
+		return route;
+	}
+
+	internal void ReportMiss(Point2 start, int move)
+	{
+		misses[(start, move)] = misses.GetValueOrDefault((start, move)) + 1;
+		version++;
+	}
+
+	// Once a frame, however many ask.
+	void Update(Game game, Room room)
+	{
+		if (game.Time.Frame == frame)
+			return;
+		frame = game.Time.Frame;
 		moves ??= ReachMoves.For(game, body);
 		if (room != this.room)
 		{
@@ -1479,8 +1525,8 @@ public sealed class ReachSense(ReachBody body)
 				// build did caps that at half the frames, and changes nothing where builds are rare.
 				refreshTimer = Math.Max(refreshTimer, buildTime);
 				(Field, next) = (next, Field);
+				version++;
 			}
 		}
-		Field?.SolveFor(floorReach > 0 ? Field.DownToFloor(target, floorReach) : target);
 	}
 }

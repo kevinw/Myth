@@ -16,6 +16,15 @@ public static class Hash32
 		}
 	}
 
+	// FNV-1a: the same string hashes the same in every run and on every platform, unlike string.GetHashCode.
+	public static uint Of(string text)
+	{
+		var hash = 2166136261u;
+		foreach (var c in text)
+			hash = unchecked((hash ^ c) * 16777619u);
+		return hash;
+	}
+
 	public static int TileVariantSeed(Point2 worldTile, char tileType)
 	{
 		unchecked

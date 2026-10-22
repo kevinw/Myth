@@ -256,7 +256,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 		if (TryWalkInFromEntrance(out var enterX, out var enterY))
 			return new(enterX, enterY, false, false, false);
-		var input = Game.reach.Field is { } field ? pilot.GetInput(field) : default;
+		var input = pilot.GetInput(Game.budRoute);
 		var target = Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>();
 		// Gathering for a move he looks where he's going; otherwise at whoever he's after.
 		var look = pilot.Phase is ReachPilot.Phases.Winding or ReachPilot.Phases.Timing ? pilot.Heading : target?.Position;

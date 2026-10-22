@@ -18,6 +18,7 @@ public abstract partial class Pawn
 	string rigPlaying = "";
 	RigTake? rigTake; // null when rigPlaying is a raw clip
 	string? rigPreview; // forced by the rig animation viewer; a one-shot hands back when it finishes
+	bool rigPreviewHolds; // ...unless it holds its last pose instead
 	float rigDiveAngle;
 	float rigDiveWeight;
 	float rigDiveJumpGrace;
@@ -51,6 +52,7 @@ public abstract partial class Pawn
 	static float RigRunLeanIn => 39f; // degrees
 	static float RigRunLeanPeak => 0.19f;
 	float rigRunLeanTime = 10;
+	protected virtual bool RigLeansIntoRuns => true;
 	bool rigWasRunning;
 
 	// Locomotion clips play at this rate at full ground speed, slowing with the pawn.
@@ -263,7 +265,7 @@ public abstract partial class Pawn
 		}
 		if (rigLead != null && rigPlaying == rigLead && rigVisual.AnimationFinished)
 			rigLead = null;
-		if (rigPreview != null && rigPlaying == rigPreview && rigVisual.AnimationFinished)
+		if (RigPreviewFinished && !rigPreviewHolds)
 			rigPreview = null;
 		var shown = rigPreview ?? rigLead ?? clip;
 		if (shown != rigPlaying || rigRestart)
@@ -282,7 +284,7 @@ public abstract partial class Pawn
 		rigWasRunning = running;
 		rigRunLeanTime += Time.Delta;
 		var leanT = rigRunLeanTime / RigRunLeanPeak;
-		rigVisual.ExtraLeanDegrees = RigRunLeanIn * leanT * MathF.Exp(1 - leanT);
+		rigVisual.ExtraLeanDegrees = RigLeansIntoRuns ? RigRunLeanIn * leanT * MathF.Exp(1 - leanT) : 0;
 
 		var gait = shown is "Walk_Loop" or "PlayerRun" or "Jog_Fwd_Loop" or "Sprint_Loop" or "PlayerCrawl" or "Crouch_Fwd_Loop";
 		rigVisual.GaitActive = gait;
@@ -564,12 +566,13 @@ public abstract partial class Pawn
 	internal HumanoidRigVisual? RigVisual => rigVisual;
 	internal string RigPlaying => rigPlaying;
 	internal string? RigPreview => rigPreview;
+	internal bool RigPreviewFinished => rigPreview != null && rigPlaying == rigPreview && rigVisual!.AnimationFinished;
 
-	// Plays a take through once over whatever the pawn's state shows, then hands back; null hands back now. Replaying
-	// the take that just finished starts it fresh rather than counting it done.
-	internal void PreviewRigTake(string? take)
+	// Plays a take through once over whatever the pawn's state shows, then hands back (or, held, stays on its last
+	// pose); null hands back now. Replaying the take that just finished starts it fresh rather than counting it done.
+	internal void PreviewRigTake(string? take, bool hold = false)
 	{
-		rigPreview = take;
+		(rigPreview, rigPreviewHolds) = (take, hold);
 		rigRestart |= take != null;
 		if (take != null)
 			rigPlaying = "";

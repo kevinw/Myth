@@ -6,7 +6,7 @@ namespace Myth;
 // WindupMax for the riskiest move), and how much longer for each time that move has already failed it.
 public readonly record struct ReachManner(float WindupMin, float WindupMax, float MissHesitation);
 
-// Drives a pawn along a ReachField using inputs only. It walks to the takeoff of the best move from where it
+// Drives a pawn along a ReachRoute using inputs only. It walks to the takeoff of the best move from where it
 // stands, arriving at rest on the exact pixel that move was swept from, winds up, then replays the move's
 // recorded inputs. It re-decides whenever a move ends or strays from its recorded path, so a knock or a missed
 // landing is just a new place to start from. Phase, Windup, Risk, Heading, StuckTime and Misses say what it's
@@ -61,16 +61,36 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	bool dugOut;    // and reached the spot it lets go at
 	int burrowGap;
 	bool steered;   // and turned the way its Steer asked
+	ReachRoute route = null!; // this frame's
+	static bool warnedStale;
 
 	public void Cancel() => move = -1;
 
-	public PawnInput GetInput(ReachField field)
+	// Off the route -- none yet, or no way from here -- it heads straight toward (a sign) instead, when given one.
+	// The route has to be this frame's RouteTo: one nobody asked for this frame may be solving someone else's target.
+	public PawnInput GetInput(ReachRoute? route, int toward = 0)
 	{
+		if (route != null && route.UsedFrame != owner.Game.Time.Frame)
+		{
+			if (!warnedStale)
+				Console.WriteLine($"[Reach] {owner.GetType().Name} steered by a route it didn't ask for this frame; call RouteTo first");
+			warnedStale = true;
+			route = null;
+		}
+		var input = route != null ? Steer(route) : default;
+		return toward != 0 && (route == null || Phase == Phases.Stuck) ? input with { MoveX = toward } : input;
+	}
+
+	PawnInput Steer(ReachRoute route)
+	{
+		this.route = route;
+		route.Riders.Add(owner);
+		var field = route.Field;
 		if (move >= 0 && Continue(field, out var input))
 			return input;
 		if (move >= 0 && !Arrived())
 		{
-			field.ReportMiss(edgeStart, move);
+			route.ReportMiss(edgeStart, move);
 			Misses++;
 		}
 		move = -1;
@@ -236,9 +256,9 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	bool Settled(ReachField field, int node, out ReachField.Edge edge)
 	{
 		edge = default;
-		var cost = field.Cost(node);
+		var cost = route.Cost(node);
 		Label = cost == 0 ? "at target" : float.IsFinite(cost) ? Label : "no path";
-		if (cost == 0 || !float.IsFinite(cost) || field.BestEdge(node) is not (var e and >= 0))
+		if (cost == 0 || !float.IsFinite(cost) || route.BestEdge(node) is not (var e and >= 0))
 		{
 			Phase = cost == 0 ? Phases.Idle : Phases.Stuck;
 			return true;
@@ -254,7 +274,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 		var target = field.Nodes[node].Position;
 		var crawl = field.Nodes[node].Ducking;
 		if (Settled(field, node, out var edge))
-			return field.Cost(node) == 0 ? Arrive(p, target, crawl) : default;
+			return route.Cost(node) == 0 ? Arrive(p, target, crawl) : default;
 		for (var steps = 0; steps < 64; steps++)
 		{
 			if (edge.Move >= 0)
@@ -272,7 +292,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 			target = to.Position;
 			crawl |= to.Ducking;
 			at = edge.To;
-			if (to.Kind != ReachField.NodeKind.Stand || field.Cost(at) == 0 || field.BestEdge(at) is not (var e and >= 0))
+			if (to.Kind != ReachField.NodeKind.Stand || route.Cost(at) == 0 || route.BestEdge(at) is not (var e and >= 0))
 				break;
 			edge = field.Edges[e];
 		}
@@ -286,7 +306,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 	// windup is paced to finish as the platform comes round, and the platform's timing wins either way.
 	PawnInput WindUp(ReachField field, ReachField.Edge edge)
 	{
-		var missed = field.MissCount(edge.Start, edge.Move);
+		var missed = route.MissCount(edge.Start, edge.Move);
 		var style = manner();
 		Risk = MathF.Min(1, edge.Risk + missed * MissRisk);
 		Heading = field.Nodes[edge.To].Position;
@@ -347,7 +367,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 		var here = field.Nodes[node];
 		var slot = here.Position.X - field.RidePhase(here).X;
 		if (Settled(field, node, out var edge))
-			return field.Cost(node) == 0 ? Arrive(p, platform.Position + new Point2(slot, 0), false) : default;
+			return route.Cost(node) == 0 ? Arrive(p, platform.Position + new Point2(slot, 0), false) : default;
 		if (edge.Move >= 0)
 		{
 			var off = platform.Position - field.RidePhase(here);

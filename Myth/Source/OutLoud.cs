@@ -82,7 +82,7 @@ public sealed class Utterance
 		var n = text.Length;
 		var revealAt = BuildRevealTimes(text, profile.CharsPerSecond * RateScale(emotion));
 
-		var rng = new Rng(Hash(text));
+		var rng = new Rng(Hash32.Of(text));
 		var basePitch = profile.BasePitch + EmotionPitch(emotion);
 		var variance = profile.PitchVariance * VarianceScale(emotion);
 		var buckets = BuildBuckets(profile.ClipVowels);
@@ -208,14 +208,6 @@ public sealed class Utterance
 			return c == '?';
 		}
 		return false;
-	}
-
-	// FNV-1a: a stable hash so the same line always sounds the same, across platforms.
-	static uint Hash(string s)
-	{
-		var h = 2166136261u;
-		foreach (var c in s) { h ^= c; h *= 16777619u; }
-		return h;
 	}
 
 	// xorshift32: deterministic everywhere, unlike System.Random's unspecified algorithm.

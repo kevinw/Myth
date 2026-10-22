@@ -39,3 +39,11 @@ string HeadShot(Actor actor, string path = "obj/head-shot.png", int scale = 8)
 	new Image(size * scale * textures.Length, size * scale, shot).WritePng(path);
 	return $"{System.IO.Path.GetFullPath(path)} ({size}px)";
 }
+// wake every FootSoldier that hasn't noticed the player yet
+int WakeSoldiers()
+{
+	var sleeping = All<FootSoldier>().Where(s => s.mode == FootSoldier.Mode.Idle).ToList();
+	foreach (var soldier in sleeping)
+		soldier.Begin(FootSoldier.Mode.Engage);
+	return sleeping.Count;
+}

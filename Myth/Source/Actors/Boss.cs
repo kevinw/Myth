@@ -36,7 +36,7 @@ public class Boss : Pawn
 	private enum EscapePhase { None, Leap, Cling, Flee }
 
 	readonly ReachPilot pilot;
-	readonly ReachSense sense = new(ReachBody.Bud with { Abilities = PawnAbilities.None });
+	ReachSense sense => Game.Reach(ReachBody.Bud with { Abilities = PawnAbilities.None });
 	private int health = MaxHealth;
 	private Vector2? navTarget;
 	private float retargetTimer;
@@ -112,11 +112,10 @@ public class Boss : Pawn
 		}
 		if (Game.room is not { } room)
 			return new();
-		sense.Update(Game, room, Hitbox.Rect + (navTarget ?? Position).RoundToPoint2());
+		var route = sense.RouteTo(Game, room, Hitbox.Rect + (navTarget ?? Position).RoundToPoint2());
 		if (navTarget is not { } target)
 			return new();
-		var input = sense.Field is { } field ? pilot.GetInput(field) : default;
-		return pilot.Label.StartsWith("no ") ? input with { MoveX = Math.Sign(target.X - Position.X) } : input;
+		return pilot.GetInput(route, Math.Sign(target.X - Position.X));
 	}
 
 	public override void Render(Batcher batcher)
