@@ -1,8 +1,21 @@
-// The player: Myth's controls (arrows/Space) driving a Pawn, drawn with its Aseprite sprite.
+// The player: Myth's controls (arrows, Space to jump, E to attack) driving a Pawn.
 
 Player :: struct @GameActor {
     #as using pawn: Pawn;
+    health := MAX_HEALTH;
+    state: enum u8 { NORMAL; ATTACK; HURT; DEAD; };
+    state_time: float;
+    attack: enum u8 { SIDE; DOWN; UP; DUCK; };
 }
+
+MAX_HEALTH :: 99;
+HIT_DAMAGE :: 17;           // six hits from full
+INVINCIBLE_DURATION :: 1.5;
+HURT_DURATION :: 0.5;
+HURT_FRICTION :: 200.0;
+DEATH_DURATION :: 2.2;
+ATTACK_ACTIVE_TIME :: 0.2;  // the swing hits for this long
+HIT_KNOCKBACK :: 30.0;      // what hitting something pushes you back by
 
 update :: (p: *Player) {
     input := Pawn_Input.{
@@ -11,16 +24,122 @@ update :: (p: *Player) {
         jump_pressed = key_pressed(SDLK_SPACE),
         jump_down = key_down(SDLK_SPACE),
     };
-    if demo input = demo_input();
-    events := pawn_update(p, input, delta);
+    attack_pressed := key_pressed(SDLK_E);
+    if demo input, attack_pressed = demo_input();
+
+    p.state_time += delta;
+    if p.state == .NORMAL && attack_pressed start_attack(p, input);
+    events: Pawn_Events;
+    if p.state == {
+      case .NORMAL;
+        events = pawn_update(p, input, delta);
+      case .ATTACK;
+        move_x := move_input(input);
+        horizontal_movement(p, move_x, ifx move_x then input.move_x else 0, delta);
+        name := attack_animation(p);
+        play(p, name, looping = false);
+        if p.state_time < ATTACK_ACTIVE_TIME swing(p);
+        events = pawn_update(p, input, delta, normal = false);
+        sprite := get_sprite("player");
+        if !sprite || p.state_time >= tag_duration(sprite, find_tag(sprite, name)) {
+            p.state = .NORMAL;
+            play(p, ifx p.attack == .DUCK then "duck" else "idle");
+        }
+      case .HURT;
+        p.velocity.x = approach(p.velocity.x, 0, HURT_FRICTION * delta);
+        events = pawn_update(p, .{}, delta, normal = false);
+        if p.state_time >= HURT_DURATION { p.state = .NORMAL; p.state_time = 0; }
+      case .DEAD;
+        events = pawn_update(p, .{}, delta, normal = false);
+        if p.state_time >= DEATH_DURATION respawn(p);
+    }
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
+
+    // Touching an enemy hurts.
+    if p.hit_cooldown <= 0 && p.state != .DEAD for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
 }
+
+draw :: (p: *Player) {
+    if p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;  // i-frame blink
+    draw_sprite(p, "player");
+}
+
+spawn_player :: (at: Point2) -> *Player {
+    p := add(*context.actors.players);
+    p.position = at;
+    p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
+    play(p, "idle");
+    return p;
+}
+
+#scope_file
+
+start_attack :: (p: *Player, input: Pawn_Input) {
+    move_x := move_input(input);
+    if !p.grounded && move_x p.facing = move_x;
+    p.attack = ifx p.ducking then .DUCK else ifx !p.grounded && input.move_y > 0 then .DOWN else ifx input.move_y < 0 then .UP else .SIDE;
+    p.state = .ATTACK;
+    p.state_time = 0;
+}
+
+attack_animation :: (p: *Player) -> string {
+    if p.attack == {
+      case .DUCK; return "duck_attack";
+      case .UP;   return "attack_up";
+      case;       return "attack";
+    }
+}
+
+// Hits whatever the swing's box touches this frame.
+swing :: (p: *Player) {
+    box: RectInt;
+    if p.attack == {
+      case .DUCK; box = .{3, -6, 13, 6};
+      case .DOWN; box = .{-19, 0, 39, 14};
+      case .UP;   box = .{-12, -27, 24, 12};
+      case;       box = .{6, -19, 20, 22};
+    }
+    if p.facing < 0 box.x = -(box.x + box.w);
+    box.x += p.position.x;
+    box.y += p.position.y;
+    for context.actors.blobs if it.hit_cooldown <= 0 && overlaps(box, hitbox_rect(it)) {
+        it.hit_cooldown = 0.5;
+        hit(it, p);
+        center := Vector2.{box.x + box.w * 0.5, box.y + box.h * 0.5};
+        p.velocity += unit_vector(to_vector(p.position) - center) * HIT_KNOCKBACK;
+    }
+}
+
+hurt :: (p: *Player, by: *Actor) {
+    p.hit_cooldown = INVINCIBLE_DURATION;
+    hit_stun(0.1);
+    shake(0.1);
+    play(p, "hurt");
+    dir := sign(xx (p.position.x - by.position.x));
+    if !dir dir = -p.facing;
+    p.velocity = .{dir * 100.0, -80};
+    p.health -= HIT_DAMAGE;
+    p.state = ifx p.health > 0 then .HURT else .DEAD;
+    p.state_time = 0;
+    if p.state == .DEAD shake(0.4);
+}
+
+respawn :: (p: *Player) {
+    p.position = start_position();
+    p.velocity = .{};
+    p.health = MAX_HEALTH;
+    p.state = .NORMAL;
+    p.hit_cooldown = INVINCIBLE_DURATION;
+    play(p, "idle");
+}
+
+#scope_export
 
 // `myth demo`: a scripted run through the room, for checking movement without a keyboard.
 demo: bool;
 demo_time: float;
 
-demo_input :: () -> Pawn_Input {
+demo_input :: () -> Pawn_Input, attack: bool {
     t := demo_time;
     input: Pawn_Input;
     if t > 0.3 && t < 1.6 input.move_x = 1;                     // run right
@@ -31,22 +150,7 @@ demo_input :: () -> Pawn_Input {
     input.jump_down |= t > 2.4 && t < 2.5;
     if t > 3.2 && t < 3.8 input.move_y = 1;                     // duck, then crawl
     if t > 3.5 && t < 3.8 input.move_x = 1;
-    return input;
+    if t > 4.0 && t < 5.6 input.move_x = 1;                     // run at the blob, swinging
+    attack := t > 5.0 && t < 5.02 || t > 5.5 && t < 5.52;
+    return input, attack;
 }
-
-draw :: (p: *Player) {
-    if !player_sprite.texture.gpu player_sprite = load_sprite(tprint("%/Sources/Sprites/player.ase", ASSETS));
-    tag := find_tag(player_sprite, p.animation);
-    draw_sprite(player_sprite, tag, p.animation_time, to_vector(p.position), .{xx p.facing * p.squish.x, p.squish.y}, p.animation_looping);
-}
-
-spawn_player :: (at: Point2) -> *Player {
-    p := add(*context.actors.players);
-    p.position = at;
-    p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
-    p.animation = "idle";
-    p.animation_looping = true;
-    return p;
-}
-
-player_sprite: Sprite;

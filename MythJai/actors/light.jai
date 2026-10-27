@@ -10,9 +10,8 @@ Light :: struct @GameActor {
     flicker_intensity: float = 0.08;    @I(0,0.5)
 }
 
-// Until lighting is ported: the light's reach, faintly, and its source.
+update :: (l: *Light) { advance(l, delta); }
+
 draw :: (l: *Light) {
-    reach := l.radius * 0.5;
-    rect(.{to_vector(l.position) - Vector2.{reach, reach}, .{reach * 2, reach * 2}}, fade(l.light_color, 0.06 * l.intensity));
-    rect(.{to_vector(l.position) - Vector2.{2, 2}, .{4, 4}}, l.light_color);
+    if l.sprite_name { play(l, "idle"); draw_sprite(l, l.sprite_name); }
 }

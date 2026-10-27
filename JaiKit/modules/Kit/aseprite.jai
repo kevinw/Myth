@@ -214,6 +214,13 @@ draw_sprite :: (s: Sprite, tag: Tag, seconds: float64, pos: Vector2, scale := Ve
     pop_matrix();
 }
 
+// Seconds to play `tag` through once.
+tag_duration :: (s: Sprite, tag: Tag) -> float {
+    ms: s32;
+    for tag.first..tag.last ms += s.durations[it];
+    return ms / 1000.0;
+}
+
 find_tag :: (s: Sprite, name: string) -> Tag, bool {
     for s.tags if it.name == name return it, true;
     return s.animation, false;

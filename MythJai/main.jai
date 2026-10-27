@@ -12,6 +12,9 @@ pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
 delta: float;               // seconds this frame
 last_ticks: u64;
+hit_stun_timer: float;      // the world freezes briefly on a hit
+shake_timer: float;
+next_sprite_check: float64;
 
 main :: () { while !frame() {} }
 
@@ -51,8 +54,17 @@ frame :: () -> bool {
     delta = ifx last_ticks then min(cast(float) (ticks - last_ticks) / 1_000_000_000, 1.0 / 20) else 1.0 / 60;
     last_ticks = ticks;
 
-    if demo demo_time += delta;
-    update_all(context.actors);
+    if now() > next_sprite_check {
+        next_sprite_check = now() + 0.25;
+        reload_changed_sprites();
+    }
+    shake_timer = approach(shake_timer, 0, delta);
+    if hit_stun_timer > 0 {
+        hit_stun_timer -= delta;
+    } else {
+        if demo demo_time += delta;
+        update_all(context.actors);
+    }
     camera = clamp_camera(camera_target());
     render();
     return false;
@@ -65,7 +77,9 @@ render :: () {
     push_matrix(.{floor(origin.x), floor(origin.y)}, scale);
     rect(.{.{}, VIEW}, room.backdrop);
 
-    push_matrix(-Vector2.{floor(camera.x), floor(camera.y)}, 1);
+    shaken := camera;
+    if shake_timer > 0 shaken += Vector2.{random_get_within_range(-1, 1), random_get_within_range(-1, 1)} * 2;
+    push_matrix(-Vector2.{floor(shaken.x), floor(shaken.y)}, 1);
     first := Point2.{xx floor(camera.x / TILE_SIZE), xx floor(camera.y / TILE_SIZE)};
     last := first + VIEW_TILES;
     for y: first.y..last.y for x: first.x..last.x {
@@ -97,6 +111,10 @@ tile_color :: (c: u8) -> Color {
     return .{xx (90 + hash % 120), xx (70 + (hash >> 8) % 110), xx (60 + (hash >> 16) % 100), 255};
 }
 
+hit_stun :: (seconds: float) { hit_stun_timer = max(hit_stun_timer, seconds); }
+shake :: (seconds: float) { shake_timer = max(shake_timer, seconds); }
+now :: () -> float64 { return SDL_GetTicksNS() / 1_000_000_000.0; }
+
 key_down :: (key: SDL_Keycode) -> bool { return array_find(held, key); }
 key_pressed :: (key: SDL_Keycode) -> bool { return array_find(pressed, key); }
 
@@ -127,3 +145,4 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #import "Math";
 #import "SDL3";
 #import "System";
+#import "Random";

@@ -11,12 +11,47 @@ Actor :: struct {
     velocity: Vector2;      @NoSerialize
     remainder: Vector2;     @NoSerialize
     hitbox: RectInt;        @NoSerialize
+    facing: s32 = 1;        @NoSerialize
+    squish := Vector2.{1, 1};   @NoSerialize
+    animation: string;      @NoSerialize
+    animation_time: float;  @NoSerialize
+    animation_looping := true;  @NoSerialize
+    hit_cooldown: float;    @NoSerialize  // i-frames: can't be hit again while > 0
     alive: bool;            @NoSerialize
     generation: u32;        @NoSerialize
 }
 
 update :: (a: *Actor) {}
 draw   :: (a: *Actor) { rect(.{to_vector(a.position) - Vector2.{3, 3}, .{6, 6}}, rgb(0xff00ff)); }
+
+// Per-frame upkeep every actor does, like Myth's Actor.AdvanceFrame.
+advance :: (a: *Actor, dt: float) {
+    a.squish = approach(a.squish, .{1, 1}, dt * 4);
+    a.hit_cooldown = approach(a.hit_cooldown, 0, dt);
+    a.animation_time += dt;
+}
+
+play :: (a: *Actor, name: string, looping := true) {
+    if a.animation != name a.animation_time = 0;
+    a.animation = name;
+    a.animation_looping = looping;
+}
+
+// The actor's sprite (Myth/Assets/Sources/Sprites/<name>.ase) in its current animation, facing and squish.
+draw_sprite :: (a: *Actor, name: string) {
+    sprite := get_sprite(name);
+    if !sprite return;
+    tag := find_tag(sprite, a.animation);
+    draw_sprite(sprite, tag, a.animation_time, to_vector(a.position), .{a.facing * a.squish.x, a.squish.y}, a.animation_looping);
+}
+
+hitbox_rect :: (a: *Actor) -> RectInt {
+    return .{a.position.x + a.hitbox.x, a.position.y + a.hitbox.y, a.hitbox.w, a.hitbox.h};
+}
+
+overlaps :: (a: RectInt, b: RectInt) -> bool {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
 
 all_actors: Actors;
 #add_context actors: *Actors;
@@ -88,6 +123,7 @@ move_pixel :: (a: *Actor, dir: Point2) -> bool {
 
 #scope_export
 
+#load "sprites.jai";
 #load "pawn.jai";
 #load "actors/player.jai";
 #load "actors/player_start.jai";

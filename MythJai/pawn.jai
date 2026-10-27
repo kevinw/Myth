@@ -5,8 +5,6 @@
 
 Pawn :: struct {
     #as using actor: Actor;
-    facing: s32 = 1;
-    squish := Vector2.{1, 1};
     grounded: bool;
     ducking: bool;
     jump_timer: float;              // > 0 while a held jump keeps its lift
@@ -19,9 +17,6 @@ Pawn :: struct {
     wall_coyote_direction: s32;
     run_start_timer: float;
     locomotion_timer: float;        // holds the run animation through brief stops
-    animation: string;
-    animation_time: float;
-    animation_looping: bool;
 }
 
 Pawn_Input :: struct {
@@ -59,10 +54,11 @@ GROUND_LOCOMOTION_HOLD :: 0.1;
 GROUND_LOCOMOTION_SPEED :: 2.0;
 STANDING_HEIGHT :: 12;
 
-pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float) -> Pawn_Events {
+// One frame of the body: timers, then (with `normal`) the Normal state's steering, ducking
+// and jumping, then gravity and movement. Other states pass normal = false and steer themselves.
+pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_Events {
     events := refresh_grounded(p);
-    p.squish = approach(p.squish, .{1, 1}, dt * 4);
-    p.animation_time += dt;
+    advance(p, dt);
     if input.jump_pressed p.jump_buffer_timer = JUMP_BUFFER_TIME;
     if !p.grounded {
         p.coyote_timer = approach(p.coyote_timer, 0, dt);
@@ -72,7 +68,7 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float) -> Pawn_Events {
     p.jump_buffer_timer = approach(p.jump_buffer_timer, 0, dt);
 
     wall := wall_jump_direction(p, input.move_x);
-    events |= normal_state(p, input, wall, dt);
+    if normal events |= normal_state(p, input, wall, dt);
     p.hitbox = ifx p.ducking then RectInt.{-4, -STANDING_HEIGHT / 2, 8, STANDING_HEIGHT / 2} else RectInt.{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
 
     if p.jump_timer > 0 {
@@ -99,10 +95,14 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float) -> Pawn_Events {
     return events | refresh_grounded(p);
 }
 
-play :: (p: *Pawn, name: string, looping := true) {
-    if p.animation != name p.animation_time = 0;
-    p.animation = name;
-    p.animation_looping = looping;
+move_input :: (input: Pawn_Input) -> s32 { return ifx abs(input.move_x) < MOVE_INPUT_DEADZONE then 0 else sign(input.move_x); }
+
+horizontal_movement :: (p: *Pawn, move_x: s32, movement: float, dt: float) {
+    max_speed := ifx p.ducking then CRAWL_SPEED else ifx p.grounded then MAX_GROUND_SPEED else MAX_AIR_SPEED;
+    if p.grounded && movement != 0 max_speed *= abs(movement);
+    p.velocity.x += movement * (ifx p.grounded then GROUND_ACCEL else AIR_ACCEL) * dt;
+    if abs(p.velocity.x) > max_speed p.velocity.x = approach(p.velocity.x, sign(p.velocity.x) * max_speed, 2000 * dt);
+    if move_x == 0 && p.grounded p.velocity.x = approach(p.velocity.x, 0, FRICTION * dt);
 }
 
 #scope_file
@@ -112,7 +112,7 @@ normal_state :: (p: *Pawn, input: Pawn_Input, wall: s32, dt: float) -> Pawn_Even
     if p.grounded && input.move_y > 0 p.ducking = true;
     else if p.ducking p.ducking = !can_stand_up(p);
 
-    move_x := ifx abs(input.move_x) < MOVE_INPUT_DEADZONE then 0 else sign(input.move_x);
+    move_x := move_input(input);
     movement := ifx move_x then input.move_x else 0;
     if !p.grounded && p.wall_jump_lock_timer > 0 movement = xx p.wall_jump_direction;
 
@@ -168,14 +168,6 @@ normal_state :: (p: *Pawn, input: Pawn_Input, wall: s32, dt: float) -> Pawn_Even
         p.jump_timer = JUMP_TIME;
     }
     return events;
-}
-
-horizontal_movement :: (p: *Pawn, move_x: s32, movement: float, dt: float) {
-    max_speed := ifx p.ducking then CRAWL_SPEED else ifx p.grounded then MAX_GROUND_SPEED else MAX_AIR_SPEED;
-    if p.grounded && movement != 0 max_speed *= abs(movement);
-    p.velocity.x += movement * (ifx p.grounded then GROUND_ACCEL else AIR_ACCEL) * dt;
-    if abs(p.velocity.x) > max_speed p.velocity.x = approach(p.velocity.x, sign(p.velocity.x) * max_speed, 2000 * dt);
-    if move_x == 0 && p.grounded p.velocity.x = approach(p.velocity.x, 0, FRICTION * dt);
 }
 
 refresh_grounded :: (p: *Pawn) -> Pawn_Events {
