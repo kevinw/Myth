@@ -6,6 +6,8 @@ Player :: struct @GameActor {
     state: enum u8 { NORMAL; ATTACK; HURT; DEAD; };
     state_time: float;
     attack: enum u8 { SIDE; DOWN; UP; DUCK; };
+    footstep_frame: s32 = -1;
+    last_skid_sound: float64;
 }
 
 MAX_HEALTH :: 99;
@@ -54,6 +56,7 @@ update :: (p: *Player) {
         if p.state_time >= DEATH_DURATION respawn(p);
     }
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
+    sounds(p, events);
 
     // Touching an enemy hurts.
     if p.hit_cooldown <= 0 && p.state != .DEAD for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
@@ -74,12 +77,29 @@ spawn_player :: (at: Point2) -> *Player {
 
 #scope_file
 
+// The sounds the body's frame made, as Myth's Pawn and Player make them.
+sounds :: (p: *Player, events: Pawn_Events) {
+    GROUND_TYPE :: "Brick";  // the substance under the player; both of the slice's kits are Brick
+    if events & (.JUMPED | .WALL_JUMPED) sound("jump", p.position);
+    if events & .LANDED sound("land", p.position, "Type", GROUND_TYPE);
+    if events & .SKIDDED && now() - p.last_skid_sound > 0.5 { sound("player/skid", p.position); p.last_skid_sound = now(); }
+
+    // A footstep on every sixth frame of a running animation, like Myth's AfterStateUpdate.
+    sprite := get_sprite("player");
+    if !sprite || !p.grounded || (p.animation != "run" && p.animation != "walk" && p.animation != "run_start") { p.footstep_frame = -1; return; }
+    tag := find_tag(sprite, p.animation);
+    frame := frame_at(sprite, tag, p.animation_time, p.animation_looping);
+    if frame != p.footstep_frame && (frame - tag.first) % 6 == 0 sound("footstep", p.position, "Type", GROUND_TYPE);
+    p.footstep_frame = frame;
+}
+
 start_attack :: (p: *Player, input: Pawn_Input) {
     move_x := move_input(input);
     if !p.grounded && move_x p.facing = move_x;
     p.attack = ifx p.ducking then .DUCK else ifx !p.grounded && input.move_y > 0 then .DOWN else ifx input.move_y < 0 then .UP else .SIDE;
     p.state = .ATTACK;
     p.state_time = 0;
+    sound(ifx p.attack == .DUCK then "sword_crouched" else "sword", p.position);
 }
 
 attack_animation :: (p: *Player) -> string {
@@ -104,6 +124,7 @@ swing :: (p: *Player) {
     box.y += p.position.y;
     for context.actors.blobs if it.hit_cooldown <= 0 && overlaps(box, hitbox_rect(it)) {
         it.hit_cooldown = 0.5;
+        sound("player/sword_hit", p.position, "hit_destination", "flesh");
         hit(it, p);
         center := Vector2.{box.x + box.w * 0.5, box.y + box.h * 0.5};
         p.velocity += unit_vector(to_vector(p.position) - center) * HIT_KNOCKBACK;
@@ -122,6 +143,7 @@ hurt :: (p: *Player, by: *Actor) {
     p.state = ifx p.health > 0 then .HURT else .DEAD;
     p.state_time = 0;
     if p.state == .DEAD shake(0.4);
+    sound(ifx p.state == .DEAD then "death" else "hurt", p.position);
 }
 
 respawn :: (p: *Player) {

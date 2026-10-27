@@ -294,6 +294,9 @@ blend_normal :: (dst: *u8, src: *u8, opacity: s32) {
     dst[0], dst[1], dst[2], dst[3] = xx r, xx g, xx b, xx a;
 }
 
+#scope_export
+
+// The frame `seconds` into `tag`; a non-looping tag holds its last frame.
 frame_at :: (s: Sprite, tag: Tag, seconds: float64, looping: bool) -> s32 {
     len := tag.last - tag.first + 1;
     ping_pong := tag.loop == .PING_PONG || tag.loop == .PING_PONG_REVERSE;
@@ -312,6 +315,8 @@ frame_at :: (s: Sprite, tag: Tag, seconds: float64, looping: bool) -> s32 {
     }
     return tag.last;
 }
+
+#scope_file
 
 tag_step :: (tag: Tag, len: s32, k: s32) -> s32 {
     if k >= len k = len * 2 - 2 - k;  // ping-pong return leg

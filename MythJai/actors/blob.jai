@@ -23,6 +23,7 @@ update :: (b: *Blob) {
         if !b.grounded {
             play(b, "idle");
             b.squish = .{1.5, 0.5};
+            sound("blob/land", b.position);
         }
         b.velocity.x = approach(b.velocity.x, 0, 400 * delta);
         b.jump_timer -= delta;
@@ -33,6 +34,7 @@ update :: (b: *Blob) {
 
     if b.jump_timer <= 0 {
         play(b, "jump");
+        sound("blob/jump", b.position);
         b.jump_timer = ifx chance(0.4) then random_get_within_range(2.4, 2.9) else random_get_within_range(1.5, 2.1);
         b.velocity.y = ifx chance(0.2) then -130.0 else -90.0;
         b.squish = .{0.5, 1.5};

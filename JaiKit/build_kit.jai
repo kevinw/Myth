@@ -14,9 +14,16 @@
 // The game provides `frame :: () -> bool` (true to quit); HOTLOAD is true in hot builds.
 // shaders/*.hlsl in the game's folder compile to build/shaders for Kit's load_shader.
 
-kit_build :: (name: string) {
+// `copy`: files to put next to the executable, like dynamic libraries whose install name is @loader_path.
+kit_build :: (name: string, copy: [] string = .[]) {
     set_build_options_dc(.{do_output=false});
     args := get_build_options().compile_time_command_line;
+    make_directory_if_it_does_not_exist("build");
+    // Only when changed: overwriting a library under a running host would kill it.
+    for copy {
+        to := tprint("build/%", path_filename(it));
+        if file_modtime_and_size(to) < file_modtime_and_size(it) copy_file(it, to);
+    }
 
     if !compile_shader(tprint("%../Foster/Framework/Content/Shaders/Batcher.hlsl", JAIKIT), "batcher") return;
     // The game's own shaders: each needs vertex_main (the batcher's, usually) and fragment_main.

@@ -71,6 +71,7 @@ frame :: () -> bool {
         update_all(context.actors);
     }
     camera = clamp_camera(camera_target());
+    update_sound(camera + VIEW * 0.5);
     render();
     return false;
 }
@@ -185,6 +186,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "pack.jai";
 #load "tiles.jai";
 #load "hud.jai";
+#load "sound.jai";
 #import "Kit";
 #import "Basic";
 #import "Math";
