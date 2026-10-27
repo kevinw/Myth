@@ -16,6 +16,7 @@ update :: (b: *Blob) {
         play(b, "idle");
     }
     move(b, b.velocity * delta);
+    if fell_out(b) { free(*context.actors.blobs, b); return; }
     advance(b, delta);
     b.velocity.y += 300 * delta;
 

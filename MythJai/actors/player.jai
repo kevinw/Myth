@@ -7,6 +7,7 @@ Player :: struct @GameActor {
     state_time: float;
     attack: enum u8 { SIDE; DOWN; UP; DUCK; };
     footstep_frame: s32 = -1;
+    last_safe_ground: Point2;   // where a cliff fall puts you back
     last_skid_sound: float64;
 }
 
@@ -58,6 +59,9 @@ update :: (p: *Player) {
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
     sounds(p, events);
 
+    if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
+    if fell_out(p) && p.state != .DEAD fall_off_cliff(p);
+
     // Touching an enemy hurts.
     if p.hit_cooldown <= 0 && p.state != .DEAD for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
 }
@@ -70,6 +74,7 @@ draw :: (p: *Player) {
 spawn_player :: (at: Point2) -> *Player {
     p := add(*context.actors.players);
     p.position = at;
+    p.last_safe_ground = at;
     p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
     play(p, "idle");
     return p;
@@ -144,6 +149,15 @@ hurt :: (p: *Player, by: *Actor) {
     p.state_time = 0;
     if p.state == .DEAD shake(0.4);
     sound(ifx p.state == .DEAD then "death" else "hurt", p.position);
+}
+
+// Falling out of the room costs a hit and puts you back on the last ground you stood on.
+fall_off_cliff :: (p: *Player) {
+    hit_stun(0.4);
+    p.position = p.last_safe_ground;
+    p.velocity, p.remainder = .{}, .{};
+    hurt(p, p);
+    if p.state != .DEAD p.velocity = .{};  // no knockback off the ledge again
 }
 
 respawn :: (p: *Player) {
