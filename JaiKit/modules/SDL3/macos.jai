@@ -38280,4 +38280,4 @@ SDL_WindowFlags :: enum_flags u64 {
     NOT_FOCUSABLE :: 0x0000000080000000;
 }
 
-#if OS == .MACOS libsdl3 :: #library "../../../Foster/Framework/Internal/Native/osx-arm64/libSDL3";
+#if OS == .MACOS libsdl3 :: #library "macos/libSDL3";

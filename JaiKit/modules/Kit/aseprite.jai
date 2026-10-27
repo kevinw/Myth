@@ -1,7 +1,7 @@
 // Loads an .ase/.aseprite file into a one-row atlas texture of its frames.
 // A cut-down port of Foster's Aseprite.cs (by way of SokobanMinc/aseprite.mc): visible
-// layers with normal blending, raw / compressed / linked cels, RGBA / grayscale / indexed, tags.
-// Not handled: tilemaps, other blend modes, group opacity, cel z-index, slices.
+// layers with normal blending, raw / compressed / linked cels, RGBA / grayscale / indexed, tags,
+// the first slice's pivot. Not handled: tilemaps, other blend modes, group opacity, cel z-index.
 // Truncated or malformed files fail the load, so a sprite caught mid-save can be retried.
 
 Sprite :: struct {
@@ -10,11 +10,13 @@ Sprite :: struct {
     texture: Texture;
     frame_size: Vector2;
     durations: [] s32;  // ms
+    tags: [] Tag;
     animation: Tag;     // the first tag, or every frame
-    origin: Vector2;    // bottom center of frame 0's opaque pixels
+    origin: Vector2;    // the first slice's pivot, else the bottom center of frame 0's opaque pixels
 }
 
 Tag :: struct {
+    name: string;
     first, last: s32;
     loop: enum u8 { FORWARD; REVERSE; PING_PONG; PING_PONG_REVERSE; };
 }
@@ -44,8 +46,9 @@ load_sprite :: (path: string) -> Sprite, bool {
     }
     sprite := Sprite.{path = copy_string(path), modtime = modtime, frame_size = .{xx w, xx h}};
     sprite.durations = NewArray(frame_count, s32);
-    sprite.animation = .{0, frame_count - 1, .FORWARD};
-    has_tag := false;
+    sprite.animation = .{"", 0, frame_count - 1, .FORWARD};
+    tags: [..] Tag;
+    has_pivot := false;
 
     for f: 0..frame_count-1 {
         if r.bad break;
@@ -89,11 +92,31 @@ load_sprite :: (path: string) -> Sprite, bool {
                 }
                 cels[f * MAX_LAYERS + li] = cel;
 
-              case 0x2018;  // tags: the first is the animation
-                if read(*r, u16) && !has_tag {
-                    r.pos += 8;
-                    sprite.animation = .{read(*r, u16), read(*r, u16), xx read(*r, u8)};
-                    has_tag = true;
+              case 0x2018;  // tags
+                count := read(*r, u16);
+                r.pos += 8;
+                for 1..count {
+                    tag: Tag;
+                    tag.first = read(*r, u16);
+                    tag.last = read(*r, u16);
+                    tag.loop = xx read(*r, u8);
+                    r.pos += 12;  // repeat, reserved, color
+                    tag.name = copy_string(read_string(*r));
+                    array_add(*tags, tag);
+                }
+
+              case 0x2022;  // slice: the first one with a pivot sets the origin
+                keys := read(*r, u32);
+                flags := read(*r, u32);
+                r.pos += 4;
+                read_string(*r);
+                if keys && flags & 2 && !has_pivot {
+                    r.pos += 4;  // frame
+                    origin := Vector2.{xx read(*r, s32), xx read(*r, s32)};
+                    r.pos += 8;  // size
+                    if flags & 1 r.pos += 16;  // nine-patch center
+                    sprite.origin = origin + Vector2.{xx read(*r, s32), xx read(*r, s32)};
+                    has_pivot = true;
                 }
 
               case 0x2019;  // palette
@@ -139,14 +162,17 @@ load_sprite :: (path: string) -> Sprite, bool {
         }
     }
 
-    // Bottom center of frame 0's opaque pixels.
-    x0, x1, y1 := w, 0, 0;
-    for y: 0..h-1 for x: 0..w-1 if atlas[(y * stride + x) * 4 + 3] {
-        x0 = min(x0, x);
-        x1 = max(x1, x + 1);
-        y1 = max(y1, y + 1);
+    sprite.tags = tags;
+    if tags sprite.animation = tags[0];
+    if !has_pivot {  // bottom center of frame 0's opaque pixels
+        x0, x1, y1 := w, 0, 0;
+        for y: 0..h-1 for x: 0..w-1 if atlas[(y * stride + x) * 4 + 3] {
+            x0 = min(x0, x);
+            x1 = max(x1, x + 1);
+            y1 = max(y1, y + 1);
+        }
+        sprite.origin = ifx x1 then Vector2.{floor((x0 + x1) * 0.5 + 0.5), xx y1} else Vector2.{w * 0.5, xx h};
     }
-    sprite.origin = ifx x1 then Vector2.{floor((x0 + x1) * 0.5 + 0.5), xx y1} else Vector2.{w * 0.5, xx h};
 
     for i: 0..stride * h - 1 {
         p := atlas + i * 4;
@@ -159,6 +185,8 @@ load_sprite :: (path: string) -> Sprite, bool {
 free_sprite :: (s: *Sprite) {
     release_texture(s.texture);
     array_free(s.durations);
+    for s.tags free(it.name);
+    array_free(s.tags);
     free(s.path);
     s.* = .{};
 }
@@ -172,10 +200,23 @@ reload_if_changed :: (s: *Sprite) {
     s.* = fresh;
 }
 
-// Draws the frame `seconds` into the looping animation, with its origin at `pos`.
+// Draws the frame `seconds` into the looping default animation, with its origin at `pos`.
 draw_sprite :: (s: Sprite, pos: Vector2, seconds: float64) {
-    source := Rect.{.{frame_at(s, seconds) * s.frame_size.x, 0}, s.frame_size};
-    image(s.texture, source, pos - s.origin);
+    draw_sprite(s, s.animation, seconds, pos);
+}
+
+// Draws the frame `seconds` into `tag`, with the sprite's origin at `pos`, scaled about it
+// (a negative x flips it). A non-looping tag holds its last frame.
+draw_sprite :: (s: Sprite, tag: Tag, seconds: float64, pos: Vector2, scale := Vector2.{1, 1}, looping := true) {
+    source := Rect.{.{frame_at(s, tag, seconds, looping) * s.frame_size.x, 0}, s.frame_size};
+    push_matrix(pos, scale);
+    image(s.texture, source, -s.origin);
+    pop_matrix();
+}
+
+find_tag :: (s: Sprite, name: string) -> Tag, bool {
+    for s.tags if it.name == name return it, true;
+    return s.animation, false;
 }
 
 #scope_file
@@ -241,8 +282,7 @@ blend_normal :: (dst: *u8, src: *u8, opacity: s32) {
     dst[0], dst[1], dst[2], dst[3] = xx r, xx g, xx b, xx a;
 }
 
-frame_at :: (s: Sprite, seconds: float64) -> s32 {
-    tag := s.animation;
+frame_at :: (s: Sprite, tag: Tag, seconds: float64, looping: bool) -> s32 {
     len := tag.last - tag.first + 1;
     ping_pong := tag.loop == .PING_PONG || tag.loop == .PING_PONG_REVERSE;
     steps := ifx ping_pong && len > 1 then len * 2 - 2 else len;
@@ -250,7 +290,9 @@ frame_at :: (s: Sprite, seconds: float64) -> s32 {
     for k: 0..steps-1 total += s.durations[tag_step(tag, len, k)];
     if total <= 0 return tag.first;
 
-    t := cast(s64) (seconds * 1000) % total;
+    t := cast(s64) (seconds * 1000);
+    if !looping && t >= total return tag_step(tag, len, steps - 1);
+    t %= total;
     for k: 0..steps-1 {
         frame := tag_step(tag, len, k);
         t -= s.durations[frame];

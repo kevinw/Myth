@@ -1,12 +1,36 @@
 // A Foster-ish batcher over SDL_GPU: textured, tinted quads in pixel space,
 // drawn with Foster's own Batcher shader (see build.jai).
 
+Point2 :: struct { x, y: s32; }
+operator + :: (a: Point2, b: Point2) -> Point2 { return .{a.x + b.x, a.y + b.y}; }
+operator - :: (a: Point2, b: Point2) -> Point2 { return .{a.x - b.x, a.y - b.y}; }
+operator * :: (a: Point2, k: s32) -> Point2 #symmetric { return .{a.x * k, a.y * k}; }
+operator == :: (a: Point2, b: Point2) -> bool { return a.x == b.x && a.y == b.y; }
+to_vector :: (p: Point2) -> Vector2 { return .{xx p.x, xx p.y}; }
+
+RectInt :: struct { x, y, w, h: s32; }
+
 Rect :: struct { pos, size: Vector2; }
 inflate :: (r: Rect, by: float) -> Rect { return .{r.pos - Vector2.{by, by}, r.size + Vector2.{2*by, 2*by}}; }
 
 Color :: struct { r, g, b, a: u8; }
 rgb :: (hex: u32) -> Color { return .{xx (hex >> 16) & 0xff, xx (hex >> 8) & 0xff, xx hex & 0xff, 255}; }
+// "1A0A2E" -> Color
+rgb :: (hex: string, default := Color.{}) -> Color {
+    value, ok := string_to_int(hex, base = 16, T = u32);
+    return ifx ok && hex.count == 6 then rgb(value) else default;
+}
 WHITE :: Color.{255, 255, 255, 255};
+approach :: (value: float, target: float, amount: float) -> float {
+    return ifx value < target then min(value + amount, target) else max(value - amount, target);
+}
+approach :: (value: Vector2, target: Vector2, amount: float) -> Vector2 {
+    return .{approach(value.x, target.x, amount), approach(value.y, target.y, amount)};
+}
+sign :: (v: float) -> s32 { return cast(s32) (v > 0) - cast(s32) (v < 0); }
+
+// Premultiplied, like everything we draw.
+fade :: (c: Color, alpha: float) -> Color { return .{xx (c.r * alpha), xx (c.g * alpha), xx (c.b * alpha), xx (c.a * alpha)}; }
 
 Texture :: struct { gpu: *SDL_GPUTexture; size: Vector2; }
 
@@ -92,12 +116,13 @@ image :: (texture: Texture, source: Rect, pos: Vector2, color := WHITE) {
     quad(.{pos, source.size}, source.pos / texture.size, (source.pos + source.size) / texture.size, color, .{255, 0, 0, 0}, texture.gpu);
 }
 
-// Translate, then uniform scale, relative to the current matrix.
-push_matrix :: (translate: Vector2, scale: float) {
+// Translate, then scale, relative to the current matrix. A negative scale flips.
+push_matrix :: (translate: Vector2, scale: Vector2) {
     top := matrices[matrix_top];
     matrix_top += 1;
     matrices[matrix_top] = .{top.translate + translate * top.scale, top.scale * scale};
 }
+push_matrix :: (translate: Vector2, scale: float) { push_matrix(translate, Vector2.{scale, scale}); }
 pop_matrix :: () { matrix_top -= 1; }
 
 present :: (clear: Color) {
@@ -141,7 +166,7 @@ present :: (clear: Color) {
 Vertex :: struct { pos: Vector2; uv: Vector2; color: Color; mode: Color; }
 field_offset :: (name: string) -> u32 { _, offset := get_field(type_info(Vertex), name); return xx offset; }
 Batch :: struct { texture: *SDL_GPUTexture; start, count: u32; }
-Matrix :: struct { translate: Vector2; scale: float = 1; }
+Matrix :: struct { translate: Vector2; scale := Vector2.{1, 1}; }
 
 window: *SDL_Window;
 device: *SDL_GPUDevice;

@@ -33,6 +33,9 @@ has_player_sprite: bool;
 next_sprite_check: float64;
 
 SPRITES :: "../Myth/Assets/Sources/Sprites";
+FONTS   :: "../Myth/Assets/Fonts";
+font: Font;
+has_font: bool;
 
 main :: () { while !frame() {} }
 
@@ -57,6 +60,7 @@ frame :: () -> bool {
     }
     if update() return true;
     render();
+    pump_audio();
     return false;
 }
 
@@ -90,7 +94,31 @@ render :: () {
     push_matrix(.{floor(origin.x), floor(origin.y)}, scale);
     for y: 0..ROWS-1 for x: 0..COLUMNS-1 draw_cell(.{xx x, xx y});
     pop_matrix();
+    #if HOTLOAD draw_build_status(scale);
     present(rgb(0x16181d));
+}
+
+#if HOTLOAD {
+    // The hotload host's state: a pulsing "building" while it compiles, the error while the last build is broken.
+    draw_build_status :: (scale: float) {
+        status := hotload_status;
+        if !status.building && !status.error return;
+        if !has_font font, has_font = load_font(tprint("%/m3x6.ttf", FONTS), 16);
+        if !has_font return;
+
+        push_matrix(.{}, scale);
+        view := screen_size() / scale;
+        if status.error {
+            height := text_size(font, status.error).y + 4;
+            rect(.{.{}, .{view.x, height}}, rgb(0x4a161c));
+            text(font, status.error, .{4, 2}, rgb(0xffc8c8));
+        }
+        if status.building {
+            pulse := 0.6 + 0.4 * sin(cast(float) now() * 8);
+            text(font, "building", .{4, view.y - font.line_height - 2}, fade(rgb(0xf2cc60), pulse));
+        }
+        pop_matrix();
+    }
 }
 
 reset :: () {
@@ -107,15 +135,23 @@ try_move :: (direction: Point) {
     next := player + direction;
     beyond := next + direction;
     box := map[index(next)] == #char "$";
-    if map[index(next)] == #char "#" || box && (map[index(beyond)] == #char "#" || map[index(beyond)] == #char "$") return;
+    if map[index(next)] == #char "#" || box && (map[index(beyond)] == #char "#" || map[index(beyond)] == #char "$") {
+        sfx_bump();
+        return;
+    }
 
     array_add(*undo, .{player, next, box});
     player = next;
     if box {
         map[index(next)] = #char " ";
         map[index(beyond)] = #char "$";
+        sfx_push(beyond);
+        if LEVEL[beyond.y][beyond.x] == #char "." sfx_goal();
+    } else {
+        sfx_step();
     }
     won = all_goals_filled();
+    if won sfx_win();
 }
 
 undo_move :: () {
@@ -127,12 +163,65 @@ undo_move :: () {
     }
     player = move.player;
     won = false;
+    sfx_undo();
 }
 
 all_goals_filled :: () -> bool {
     for y: 0..ROWS-1 for x: 0..COLUMNS-1
         if LEVEL[y][x] == #char "." && map[y * COLUMNS + x] != #char "$" return false;
     return true;
+}
+
+filled_goals :: () -> int {
+    n := 0;
+    for y: 0..ROWS-1 for x: 0..COLUMNS-1
+        if LEVEL[y][x] == #char "." && map[y * COLUMNS + x] == #char "$" n += 1;
+    return n;
+}
+
+// Steps from `cell` to the nearest goal without a box.
+nearest_empty_goal :: (cell: Point) -> int {
+    best := ROWS + COLUMNS;
+    for y: 0..ROWS-1 for x: 0..COLUMNS-1 {
+        if LEVEL[y][x] != #char "." || map[y * COLUMNS + x] == #char "$" continue;
+        best = min(best, abs(x - cell.x) + abs(y - cell.y));
+    }
+    return best;
+}
+
+// --- sounds ---
+
+PENTATONIC :: float.[523.25, 587.33, 659.25, 783.99, 880];
+
+sfx_step :: () {
+    foot := ifx undo.count & 1 then 1.12 else 1.0;  // alternating feet
+    play(.{freq = 140 * foot, decay = 0.045, noise = 0.7, volume = 0.12});
+}
+
+sfx_bump :: () {
+    play(.{freq = 55, sweep = -3, decay = 0.08, square = 0.6, noise = 0.4, volume = 0.25});
+}
+
+// Pitch rises as the box nears an empty goal: hot/cold by ear.
+sfx_push :: (box: Point) {
+    near := 1.0 / (1 + nearest_empty_goal(box));
+    play(.{freq = 70 * (1 + near), sweep = -2.5, attack = 0.004, decay = 0.16, square = 0.35, noise = 0.35, volume = 0.4});
+}
+
+// One step up the scale per filled goal.
+sfx_goal :: () {
+    note := PENTATONIC[clamp(filled_goals(), 1, PENTATONIC.count) - 1];
+    play(.{freq = note, attack = 0.004, decay = 0.7, volume = 0.25});
+    play(.{freq = note * 1.5, attack = 0.004, decay = 0.4, volume = 0.08, delay = 0.03});
+}
+
+// A swell rather than a hit: time running backwards.
+sfx_undo :: () {
+    play(.{freq = 260, sweep = 2, attack = 0.12, decay = 0.02, square = 0.5, volume = 0.12});
+}
+
+sfx_win :: () {
+    for PENTATONIC play(.{freq = it, attack = 0.004, decay = 0.9, volume = 0.18, delay = 0.15 + it_index * 0.09});
 }
 
 draw_cell :: (cell: Point) {
@@ -151,8 +240,7 @@ is_pressed :: (keys: .. SDL_Keycode) -> bool {
     return false;
 }
 
-#load "gfx.jai";
-#load "aseprite.jai";
+#import "Kit";
 #import "Basic";
 #import "Math";
 #import "SDL3";

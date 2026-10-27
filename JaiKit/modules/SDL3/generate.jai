@@ -1,9 +1,9 @@
-// Regenerates the SDL3 bindings from the installed headers:
+// Regenerates the SDL3 bindings from Homebrew's sdl3 (`brew install sdl3`):
 //   jai generate.jai          (from this folder)
-// The library itself is Foster's runtime copy; see the footer.
+// Not Foster's copy: that one is built without audio.
 
 HEADERS :: "/opt/homebrew/include";
-LIB_DIR :: "../../../Foster/Framework/Internal/Native/osx-arm64";
+LIB_DIR :: "macos";  // a symlink to Homebrew's libSDL3.dylib
 
 #run,stallable {
     set_build_options_dc(.{do_output=false});
@@ -76,7 +76,7 @@ window_flags :: () -> string {
 }
 
 FOOTER :: #string END
-#if OS == .MACOS libsdl3 :: #library "../../../Foster/Framework/Internal/Native/osx-arm64/libSDL3";
+#if OS == .MACOS libsdl3 :: #library "macos/libSDL3";
 END
 
 #import "Basic";
