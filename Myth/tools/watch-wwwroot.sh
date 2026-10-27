@@ -14,7 +14,7 @@ config="${1:-Debug}"
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 myth_dir=$(cd -- "$script_dir/.." &> /dev/null && pwd)
 src="$myth_dir/Platforms/Web/wwwroot"
-bundle="$myth_dir/bin/$config/net10.0/browser-wasm/AppBundle"
+bundle="$myth_dir/bin/$config/browser-wasm/AppBundle"
 
 if ! command -v fswatch > /dev/null 2>&1; then
 	echo "fswatch not found. Install it: brew install fswatch" >&2

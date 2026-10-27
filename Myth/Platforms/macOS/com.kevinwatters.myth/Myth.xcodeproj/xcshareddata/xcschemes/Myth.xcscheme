@@ -36,7 +36,7 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
       useCustomWorkingDirectory = "YES"
-      customWorkingDirectory = "/Users/kev/src/Samples/Myth/bin/Debug/net10.0"
+      customWorkingDirectory = "/Users/kev/src/Samples/Myth/bin/Debug"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
@@ -46,7 +46,7 @@
       queueDebuggingEnableBacktraceRecording = "Yes">
       <PathRunnable
          runnableDebuggingMode = "0"
-         FilePath = "/Users/kev/src/Samples/Myth/bin/Debug/net10.0/Myth">
+         FilePath = "/Users/kev/src/Samples/Myth/bin/Debug/Myth">
       </PathRunnable>
    </LaunchAction>
    <ProfileAction
@@ -58,7 +58,7 @@
       <PathRunnable
          runnableDebuggingMode = "0"
          Location = "workspace"
-         FilePath = "../../../bin/Debug/net10.0/Myth">
+         FilePath = "../../../bin/Debug/Myth">
       </PathRunnable>
       <MacroExpansion>
          <BuildableReference

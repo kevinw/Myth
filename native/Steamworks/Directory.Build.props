@@ -9,5 +9,8 @@
        CoreCompileCache in the csproj forces a rebuild when it changes. -->
   <PropertyGroup>
     <BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath>
+    <!-- Mirrors the repo root, which this file shadows. -->
+    <TargetFramework>net$(NETCoreAppMaximumVersion)</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 </Project>

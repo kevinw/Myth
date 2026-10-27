@@ -80,7 +80,7 @@ switch (command) {
   case "build":
   case "publish":
     if (command === "publish") {
-      rmSync(resolve(repoDir, "bin", configuration, "net10.0", "browser-wasm", "AppBundle"), {
+      rmSync(resolve(repoDir, "bin", configuration, "browser-wasm", "AppBundle"), {
         recursive: true,
         force: true,
       });

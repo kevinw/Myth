@@ -104,6 +104,7 @@ public class Mosquito : Actor
 		{
 			AudioEvent("fly/die");
 			Game.Create<Pop>(Position);
+			Corpse.Spawn(this, hitInfo, pieces: 2);
 			StopBuzz(true);
 			Game.Destroy(this);
 

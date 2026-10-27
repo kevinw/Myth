@@ -1,4 +1,12 @@
 <Project>
+  <!-- Target whatever .NET the SDK pinned in global.json ships, so an upgrade is a global.json edit.
+       Projects that need something else (Myth.SourceGen's netstandard2.0) set their own. Output paths
+       leave the framework out (bin/Debug/Myth.dll), so scripts and tools never name it. -->
+  <PropertyGroup>
+    <TargetFramework>net$(NETCoreAppMaximumVersion)</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
   <!-- Keep desktop/browser restore/build state separate. The shared default obj/
        lets each flavor overwrite project.assets.json and other generated files, which
        breaks no-restore loops when switching targets. -->

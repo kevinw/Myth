@@ -262,7 +262,8 @@
       "ChestSize": 0.1145,
       "NeckSize": 0.0858,
       "ShinSize": 0.0858,
-      "FootSize": 0.0572
+      "FootSize": 0.0572,
+      "BodyStyle": "Sculpted"
     },
     {
       "Id": "bd7f0dbf9e382554",

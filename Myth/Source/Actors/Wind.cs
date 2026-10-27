@@ -133,6 +133,7 @@ public class Wind : Actor, IResizable
 			Player player => player.State != Pawn.States.Burrow && Targets.Has(WindTargets.Player),
 			Bud => Targets.Has(WindTargets.Bud),
 			Bullet or Arrow => Targets.Has(WindTargets.Projectiles),
+			Corpse => Targets.Has(WindTargets.Enemies),
 			_ => actor.Mask.Has(Masks.Enemy) && Targets.Has(WindTargets.Enemies),
 		};
 

@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Steamworks.NET built from the vendored sources in src/ (see README.md). The upstream
-       prebuilt assemblies are net48 and stamped AMD64, so they cannot load in a .NET 10 arm64
+       prebuilt assemblies are net48 and stamped AMD64, so they cannot load in an arm64 .NET
        process; building here also keeps the IL trimmable and NativeAOT-friendly. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <AssemblyName>Steamworks.NET</AssemblyName>

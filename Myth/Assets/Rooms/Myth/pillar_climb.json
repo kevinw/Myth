@@ -137,7 +137,7 @@
     {
       "Id": "dc15f257c5697a18",
       "Type": "Door",
-      "Position": [311, 49],
+      "Position": [310, 49],
       "Size": [12, 36],
       "StartsVisible": true,
       "Locked": true

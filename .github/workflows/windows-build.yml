@@ -39,7 +39,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       # Bakes the world map when needed, then publishes; room checks run in desktop-build.yml.
       - name: Publish Windows build

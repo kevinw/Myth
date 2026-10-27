@@ -145,14 +145,7 @@ if (!fs.existsSync(projectPath)) {
 	process.exit(1);
 }
 
-const csproj = fs.readFileSync(projectPath, 'utf8');
-const tfmMatch = csproj.match(/<TargetFramework>(.*?)<\/TargetFramework>/);
-if (!tfmMatch) {
-	console.error(`Could not read <TargetFramework> from ${projectPath}`);
-	process.exit(1);
-}
-const targetFramework = tfmMatch[1];
-const targetDll = path.join(repoDir, 'bin', opts.configuration, targetFramework, 'Myth.dll');
+const targetDll = path.join(repoDir, 'bin', opts.configuration, 'Myth.dll');
 
 fs.mkdirSync(runDir, { recursive: true });
 

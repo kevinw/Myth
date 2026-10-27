@@ -10,7 +10,7 @@ MEASURE="${MEASURE:-600}"
 dotnet build "$ROOT/Myth.csproj" -c "$CFG" --no-restore
 
 cd "$ROOT"
-exec "./bin/$CFG/net10.0/Myth" \
+exec "./bin/$CFG/Myth" \
 	--room "$ROOM" \
 	--headless \
 	--alloc-warmup-frames "$WARMUP" \

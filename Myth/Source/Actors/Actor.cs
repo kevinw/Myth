@@ -901,7 +901,7 @@ public class Actor
 	protected void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) => RenderSpriteSubtexture(batcher, subtextureType, Color.White);
 	protected void RenderSpriteSubtexture(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 
-	protected Sprite.Frame? CurrentSpriteFrame => sprite?.GetFrameAt(Animation, animationTime, animationLooping);
+	internal Sprite.Frame? CurrentSpriteFrame => sprite?.GetFrameAt(Animation, animationTime, animationLooping);
 
 	protected void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{

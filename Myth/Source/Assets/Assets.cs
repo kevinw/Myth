@@ -97,7 +97,7 @@ public static partial class Assets
 	{
 		get
 		{
-			// Search up from the executable (dev: bin/<config>/net10.0 under the project; bundle:
+			// Search up from the executable (dev: bin/<config> under the project; bundle:
 			// Contents/MacOS next to Resources), then from the working directory.
 			path ??= FindAssetsFrom(AppContext.BaseDirectory)
 				?? FindAssetsFrom(Environment.CurrentDirectory)

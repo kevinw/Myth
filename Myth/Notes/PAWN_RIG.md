@@ -66,7 +66,7 @@
 
 ## Verifying without eyes on the game
 
-- Dev host: `dotnet bin/Debug/net10.0/Myth.dll --dev-host` (background), then `--dev-command` with `run`, `play [World/room]`, `warp x y`, `input <left|right|up|jump-up|jump-right|roll-right|none>`, `state`, `set player Rig.PixelsPerMeter 40` (dotted paths reach nested settings), `shot path.png`, `stop` (stops the host). `play` saves the room the host booted into, so check `git status` afterwards. Each command takes ~0.3s, so short actions (a jump) are hard to screenshot.
+- Dev host: `dotnet bin/Debug/Myth.dll --dev-host` (background), then `--dev-command` with `run`, `play [World/room]`, `warp x y`, `input <left|right|up|jump-up|jump-right|roll-right|none>`, `state`, `set player Rig.PixelsPerMeter 40` (dotted paths reach nested settings), `shot path.png`, `stop` (stops the host). `play` saves the room the host booted into, so check `git status` afterwards. Each command takes ~0.3s, so short actions (a jump) are hard to screenshot.
 - Better: add a temporary `Console.WriteLine("[TAG] ...")` in `UpdateRig` (head bob range, hand position, roll angle), run, grep the host log, then restore. Numbers beat 19px screenshots.
 - Screenshots are 6016×3320. Crop around the player with PIL and resize with `NEAREST`. Frame 0 is often the camera before it settles, so poll `state` a dozen times first.
 - Ropes to test on: `Playground/start` (warp `363 460` with `input up` grabs one).

@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
   <!-- App identity lives in app.json, shared with tools/publish-macos.mjs and
@@ -219,7 +218,7 @@
 
   <ItemGroup Condition="'$(UseFosterDll)' == 'true'">
     <Reference Include="Foster.Framework">
-      <HintPath>../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll</HintPath>
+      <HintPath>../Foster/Framework/bin/$(Configuration)/Foster.Framework.dll</HintPath>
     </Reference>
     <Content Include="../Foster/Framework/Internal/Native/win-x64/**" Visible="false">
       <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToOutputDirectory>
@@ -244,8 +243,8 @@
   </ItemGroup>
 
   <Target Name="_RequireFosterDll" BeforeTargets="ResolveReferences" Condition="'$(UseFosterDll)' == 'true'">
-    <Error Condition="!Exists('../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll')"
-           Text="UseFosterDll=true requires ../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll. Build Foster once for this configuration, or omit UseFosterDll." />
+    <Error Condition="!Exists('../Foster/Framework/bin/$(Configuration)/Foster.Framework.dll')"
+           Text="UseFosterDll=true requires ../Foster/Framework/bin/$(Configuration)/Foster.Framework.dll. Build Foster once for this configuration, or omit UseFosterDll." />
   </Target>
 
   <!-- The tools/ helper projects reference Foster as a project, so their bin/ carries its own copy of
@@ -260,7 +259,7 @@
       <_ShadowFosterDll Include="tools/**/bin/**/Foster.Framework.dll" />
     </ItemGroup>
     <Copy Condition="'@(_ShadowFosterDll)' != ''"
-          SourceFiles="@(_ShadowFosterDll->'$(MSBuildProjectDirectory)/../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll')"
+          SourceFiles="@(_ShadowFosterDll->'$(MSBuildProjectDirectory)/../Foster/Framework/bin/$(Configuration)/Foster.Framework.dll')"
           DestinationFiles="@(_ShadowFosterDll)"
           SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
     <Message Importance="high" Condition="'@(_ShadowFosterDll)' != ''"

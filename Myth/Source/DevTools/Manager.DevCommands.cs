@@ -11,8 +11,8 @@ namespace Myth;
 // Verbs the dev host answers over its named pipe, so tooling can inspect and poke the session you
 // are already playing instead of launching a fresh one:
 //
-//   dotnet bin/Debug/net10.0/Myth.dll --dev-command state
-//   dotnet bin/Debug/net10.0/Myth.dll --dev-command "eval go Myth/Cellar"
+//   dotnet bin/Debug/Myth.dll --dev-command state
+//   dotnet bin/Debug/Myth.dll --dev-command "eval go Myth/Cellar"
 //
 // These run on the game thread (drained by DevHost.Pump in Update), so reading game state is safe.
 // For arbitrary C# against the live session, see DevScript (`cs`, code on stdin).

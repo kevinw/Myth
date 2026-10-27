@@ -94,7 +94,7 @@ public class Blob : Actor
 		Squish = new Vector2(0.5f, 1.00f);
 
 		if (Health <= 0)
-			Die();
+			Die(hitInfo);
 		else
 		{
 			var sign = MathF.Sign(Position.X - hitInfo.By.Position.X);
@@ -102,9 +102,11 @@ public class Blob : Actor
 		}
 	}
 
-	void Die()
+	void Die(HitInfo? hit = null)
 	{
 		Game.Create<Pop>(Position + new Point2(0, -4));
+		if (!InLava)
+			Corpse.Spawn(this, hit, pieces: 2);
 		Game.Destroy(this);
 	}
 }

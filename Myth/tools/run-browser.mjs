@@ -128,7 +128,6 @@ const appBundle = resolve(
   repoDir,
   "bin",
   configuration,
-  "net10.0",
   "browser-wasm",
   "AppBundle",
 );

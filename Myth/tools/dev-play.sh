@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 supervisor_pid_file=obj/myth-dev-watch.pid
-dll=bin/Debug/net10.0/Myth.dll
+dll=bin/Debug/Myth.dll
 
 supervisor_is_alive() {
 	[[ -f "$supervisor_pid_file" ]] || return 1

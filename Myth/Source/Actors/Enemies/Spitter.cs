@@ -45,5 +45,6 @@ public class Spitter : Actor
 		Game.HitStun(0.1f);
 		Game.Destroy(this);
 		Game.Create<Pop>(Position + new Point2(0, -4));
+		Corpse.Spawn(this, hitInfo, pieces: 2);
 	}
 }
