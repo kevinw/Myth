@@ -8,6 +8,7 @@ started: bool;
 room: Room;
 pack: Pack;
 scene: Texture;             // the world, unlit, at the view's resolution
+normals: Texture;           // its normals: rgb a direction, a how much it bends the light
 lighting: Shader;
 camera: Vector2;            // top-left of the view, in room pixels
 pressed: [..] SDL_Keycode;  // this frame
@@ -78,7 +79,8 @@ frame :: () -> bool {
 
 render :: () {
     if !scene.gpu scene = make_target(xx VIEW.x, xx VIEW.y);
-    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 2, uniforms = 1);
+    if !normals.gpu normals = make_target(xx VIEW.x, xx VIEW.y);
+    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 3, uniforms = 1);
 
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
@@ -96,9 +98,16 @@ render :: () {
     draw_all(context.actors);
     pop_matrix();
 
+    // The tiles' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
+    begin_pass(normals, clear = .{128, 128, 255, 0});
+    push_matrix(-view, 1);
+    draw_tiles(tile_draws.background, normals = true);
+    draw_tiles(tile_draws.foreground, normals = true);
+    pop_matrix();
+
     // Lit onto the window.
     uniforms := lighting_uniforms(view);
-    begin_pass(clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise]);
+    begin_pass(clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals]);
     push_matrix(origin, scale);
     image(scene, .{.{}, VIEW}, .{});
 
@@ -114,7 +123,7 @@ render :: () {
 
 MAX_LIGHTS :: 16;
 Lighting_Uniforms :: struct {
-    view, ambient, noise, noise_scale, response, dither, counts: Vector4;
+    view, ambient, noise, noise_scale, response, dither, counts, normal_light: Vector4;
     lights: [MAX_LIGHTS * 2] Vector4;
 }
 
@@ -127,6 +136,8 @@ RIM_STRENGTH :: 0.18;
 SHOULDER_KNEE :: 0.9;
 SHOULDER_CEILING :: 1.3;
 DITHER_STRENGTH :: 0.155;
+NORMAL_LIGHT_FLOOR :: 0.12;
+NORMAL_LIGHT_GAIN :: 2.15;
 
 lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u: Lighting_Uniforms;
@@ -141,12 +152,13 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     }
     u.response = .{BACKGROUND_EXPOSURE, RIM_STRENGTH, SHOULDER_KNEE, SHOULDER_CEILING};
     u.dither = .{DITHER_STRENGTH, 0, 0, 0};
+    u.normal_light = .{NORMAL_LIGHT_FLOOR, NORMAL_LIGHT_GAIN, 0, 0};
     count := 0;
     for context.actors.lights {
         if count == MAX_LIGHTS || it.intensity <= 0 continue;
         scale := flicker_scale(it);
         c := it.intensity * scale / 255.0;
-        u.lights[count * 2] = .{xx it.position.x, xx it.position.y, it.radius * scale, 0};
+        u.lights[count * 2] = .{xx it.position.x, xx it.position.y, it.radius * scale, it.height};
         u.lights[count * 2 + 1] = .{it.light_color.r * c, it.light_color.g * c, it.light_color.b * c, 0};
         count += 1;
     }

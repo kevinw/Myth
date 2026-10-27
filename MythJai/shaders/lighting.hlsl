@@ -3,7 +3,8 @@
 // Per art pixel: ambient plus each light's (1 - d/r)^2 falloff, drifting light noise, the
 // shoulder that rolls off bright light, the rim that lifts dark scenery near lights, and the
 // ordered dither that breaks light levels into patterns.
-// Not ported yet: shadows, normals, AO, emissive, tile-field dither families, spore fog.
+// Lights bend by the tiles' baked normals (LightMasks' normal_response).
+// Not ported yet: shadows, AO, emissive, tile-field dither families, spore fog.
 
 cbuffer VertexUniforms : register(b0, space1)
 {
@@ -21,13 +22,16 @@ cbuffer FragmentUniforms : register(b0, space3)
     float4 Response;    // x = background exposure, y = rim strength, z = shoulder knee, w = shoulder ceiling
     float4 Dither;      // x = strength
     float4 Counts;      // x = light count
-    float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius; [2i+1] = rgb color * intensity
+    float4 NormalLight; // x = floor, y = gain
+    float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity
 };
 
 Texture2D Texture : register(t0, space2);
 SamplerState Sampler : register(s0, space2);
 Texture2D NoiseTexture : register(t1, space2);
 SamplerState NoiseSampler : register(s1, space2);
+Texture2D NormalTexture : register(t2, space2);
+SamplerState NormalSampler : register(s2, space2);
 
 struct VsInput
 {
@@ -82,6 +86,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 scene = Texture.Sample(Sampler, uv);
     float2 world = View.zw + art_pixel + 0.5;
 
+    float4 normal_data = NormalTexture.Sample(NormalSampler, uv);
+    float3 normal = normalize(normal_data.rgb * 2.0 - 1.0);
     float4 light = Ambient;
     for (int i = 0; i < int(Counts.x); i++)
     {
@@ -89,7 +95,9 @@ float4 fragment_main(VsOutput input) : SV_Target0
         float attenuation = saturate(1.0 - length(position.xy - world) / position.z);
         if (attenuation <= 0.0)
             continue;
-        light += float4(Lights[i * 2 + 1].rgb * attenuation * attenuation, attenuation);
+        float3 to_light = float3(position.xy - world, Lights[i * 2].w);
+        float response = lerp(1.0, NormalLight.x + saturate(dot(normal, normalize(to_light))) * NormalLight.y, normal_data.a);
+        light += float4(Lights[i * 2 + 1].rgb * attenuation * attenuation * response, attenuation);
     }
     light.a = saturate(light.a);
     light.rgb *= Response.x;

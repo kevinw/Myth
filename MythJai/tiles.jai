@@ -4,9 +4,9 @@
 //  - a kit (DualGrid) draws on the dual grid, one tile per cell corner: the shape comes from
 //    which of the four cells around the corner are solid, the variant from a hash of the world
 //    tile, and where two kits meet each draws only its own quadrants.
-// Not ported yet: slopes, normals, occluders (for shadows), fill patterns spanning tiles.
+// Not ported yet: slopes, occluders (for shadows), fill patterns spanning tiles.
 
-Tile_Draw :: struct { tile: Subtex; pos: Vector2; clip: RectInt; }
+Tile_Draw :: struct { tile: Subtex; normal: Subtex; pos: Vector2; clip: RectInt; }
 
 tile_draws: struct {
     background: [..] Tile_Draw;
@@ -20,8 +20,11 @@ build_tile_draws :: () {
     build_layer(room.tiles, *tile_draws.foreground, foreground = true);
 }
 
-draw_tiles :: (draws: [] Tile_Draw) {
-    for draws draw_subtex(*pack, it.tile, it.pos, it.clip);
+draw_tiles :: (draws: [] Tile_Draw, normals := false) {
+    for draws {
+        tile := ifx normals then it.normal else it.tile;
+        if tile.source.w draw_subtex(*pack, tile, it.pos, it.clip);
+    }
 }
 
 #scope_file
@@ -55,7 +58,8 @@ build_layer :: (layer: [] u8, draws: *[..] Tile_Draw, foreground: bool) {
         if !t || !t.tiles continue;
         rng := cast(u64) (x + y * room.size.x);
         pos := Vector2.{xx (x * TILE_SIZE), xx (y * TILE_SIZE)};
-    array_add(draws, .{t.tiles[splitmix(*rng) % cast(u32) t.tiles.count], pos, .{}});
+        index := splitmix(*rng) % cast(u32) t.tiles.count;
+        array_add(draws, .{t.tiles[index], ifx index < t.normal_tiles.count then t.normal_tiles[index] else .{}, pos, .{}});
     }
 
     for c: 1..127 if kits[c] for vy: 0..room.size.y for vx: 0..room.size.x {
@@ -69,11 +73,13 @@ build_layer :: (layer: [] u8, draws: *[..] Tile_Draw, foreground: bool) {
         }
         if !material || !join continue;
         world := Point2.{room.position.x + xx vx, room.position.y + xx vy};
-        tile, ok := variant_tile(kits[c], MASK_TO_TILE[join], tile_variant_seed(world, c));
+        seed := tile_variant_seed(world, c);
+        tile, ok := variant_tile(kits[c].tiles, kits[c].variants, kits[c].rows, MASK_TO_TILE[join], seed);
         if !ok continue;
+        normal := variant_tile(kits[c].normal_tiles, kits[c].normal_variants, kits[c].rows, MASK_TO_TILE[join], seed);
         pos := Vector2.{(vx - 0.5) * TILE_SIZE, (vy - 0.5) * TILE_SIZE};
-        if material == ALL array_add(draws, .{tile, pos, .{}});
-        else for QUADRANTS if material & it.bit array_add(draws, .{tile, pos, it.clip});
+        if material == ALL array_add(draws, .{tile, normal, pos, .{}});
+        else for QUADRANTS if material & it.bit array_add(draws, .{tile, normal, pos, it.clip});
     }
 }
 
@@ -83,14 +89,14 @@ cell :: (layer: [] u8, x: int, y: int) -> u8 {
 }
 
 // Tileset.GetVariantTile with fill patterns one tile wide.
-variant_tile :: (t: *Packed_Tileset, at: Point2, seed: s32) -> Subtex, bool {
-    if !t.variants {
-        index := at.x * t.rows + at.y;
-        if index >= t.tiles.count return .{}, false;
-        return t.tiles[index], true;
+variant_tile :: (tiles: [] Subtex, variants: [] [] Subtex, rows: s32, at: Point2, seed: s32) -> Subtex, bool {
+    if !variants {
+        index := at.x * rows + at.y;
+        if index >= tiles.count return .{}, false;
+        return tiles[index], true;
     }
-    variant := t.variants[(seed & 0x7fff_ffff) % t.variants.count];
-    index := at.x * t.rows + at.y;
+    variant := variants[(seed & 0x7fff_ffff) % variants.count];
+    index := at.x * rows + at.y;
     if index >= variant.count return .{}, false;
     return variant[index], true;
 }

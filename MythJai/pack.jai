@@ -13,6 +13,8 @@ Packed_Tileset :: struct {
     fill_tiles: s32;
     tiles: [] Subtex;
     variants: [] [] Subtex;
+    normal_tiles: [] Subtex;      // tiles' baked normals, same layout
+    normal_variants: [] [] Subtex;
 }
 
 Pack :: struct {
@@ -55,8 +57,10 @@ load_pack :: () -> Pack, bool {
         variants := NewArray(read(*r, u16), [] Subtex);
         for * variants it.* = read_subtexes(*r);
         t.variants = variants;
-        read_subtexes(*r);                                  // normal tiles
-        for 1..read(*r, u16) read_subtexes(*r);             // normal variants
+        t.normal_tiles = read_subtexes(*r);
+        normal_variants := NewArray(read(*r, u16), [] Subtex);
+        for * normal_variants it.* = read_subtexes(*r);
+        t.normal_variants = normal_variants;
         skip_occluders(*r);
         for 1..read(*r, u16) skip_occluders(*r);
         array_add(*tilesets, t);
