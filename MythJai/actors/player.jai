@@ -101,6 +101,7 @@ spawn_player :: (at: Point2) -> *Player {
     light.flicker_frequency, light.flicker_intensity, light.sprite_name = 1.5, 0.02, "";
     p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
     play(p, "idle");
+    start_roll(p);  // Assets/Actors/player.json starts the player in the Roll state
     return p;
 }
 
@@ -111,6 +112,7 @@ sounds :: (p: *Player, events: Pawn_Events) {
     GROUND_TYPE :: "Brick";  // the substance under the player; both of the slice's kits are Brick
     if events & (.JUMPED | .WALL_JUMPED) sound("jump", p.position);
     if events & .LANDED sound("land", p.position, "Type", GROUND_TYPE);
+    if events & .ROLLED sound("player/roll", p.position);
     if events & .SKIDDED && now() - p.last_skid_sound > 0.5 { sound("player/skid", p.position); p.last_skid_sound = now(); }
 
     // A footstep on every sixth frame of a running animation, like Myth's AfterStateUpdate.
@@ -202,7 +204,8 @@ demo_time: float;
 
 DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
     .{0.3, SDLK_RIGHT, true},                               // run right
-    .{1.0, SDLK_SPACE, true}, .{1.4, SDLK_SPACE, false},    // a held jump
+    .{1.0, SDLK_SPACE, true}, .{1.4, SDLK_SPACE, false},    // a held jump,
+    .{1.5, SDLK_DOWN, true}, .{1.95, SDLK_DOWN, false},     // landing into a roll
     .{1.6, SDLK_RIGHT, false},
     .{2.0, SDLK_LEFT, true},                                // run back left
     .{2.4, SDLK_SPACE, true}, .{2.5, SDLK_SPACE, false},    // a short hop

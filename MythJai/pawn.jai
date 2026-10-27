@@ -1,7 +1,7 @@
 // Pawn: Myth's walking, jumping, wall-sliding body, as a library its actors call instead of a
 // base class that calls back into them. pawn_update runs one frame of the Normal state and
 // reports what happened as Pawn_Events, for the actor to react to (sounds, particles, ...).
-// Not yet ported: dash, roll, burrow, climb, carrying, liquids, air hop, turn jump, the rig.
+// Not yet ported: dash, burrow, climb, carrying, liquids, air hop, turn jump.
 
 Pawn :: struct {
     #as using actor: Actor;
@@ -17,6 +17,9 @@ Pawn :: struct {
     wall_coyote_direction: s32;
     run_start_timer: float;
     locomotion_timer: float;        // holds the run animation through brief stops
+    rolling: bool;
+    roll_time: float;
+    airborne_roll_distance: float;
 }
 
 Pawn_Input :: struct {
@@ -26,7 +29,7 @@ Pawn_Input :: struct {
     jump_down: bool;
 }
 
-Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; }
+Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; ROLLED; }
 
 MAX_GROUND_SPEED :: 93.0;
 MAX_AIR_SPEED :: 100.0;
@@ -53,10 +56,20 @@ MOVE_INPUT_DEADZONE :: 0.1;
 GROUND_LOCOMOTION_HOLD :: 0.1;
 GROUND_LOCOMOTION_SPEED :: 2.0;
 STANDING_HEIGHT :: 12;
+ROLL_MIN_HORIZONTAL_SPEED :: 45.0;
+ROLL_MIN_FALL_SPEED :: 20.0;
+ROLL_SPEED :: 145.0;
+ROLL_DURATION :: 0.36;
+ROLL_FRICTION :: 220.0;
+ROLL_JUMP_FORCE :: -82.0;
+ROLL_JUMP_TIME :: 0.11;
+ROLL_JUMP_SPEED :: 150.0;
+AIRBORNE_ROLL_DISTANCE :: 16.0;  // two tiles
 
 // One frame of the body: timers, then (with `normal`) the Normal state's steering, ducking
 // and jumping, then gravity and movement. Other states pass normal = false and steer themselves.
 pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_Events {
+    previous_velocity := p.velocity;
     events := refresh_grounded(p);
     advance(p, dt);
     if input.jump_pressed p.jump_buffer_timer = JUMP_BUFFER_TIME;
@@ -68,7 +81,8 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
     p.jump_buffer_timer = approach(p.jump_buffer_timer, 0, dt);
 
     wall := wall_jump_direction(p, input.move_x);
-    if normal events |= normal_state(p, input, wall, dt);
+    if normal && p.rolling events |= roll_state(p, input, dt);
+    else if normal events |= normal_state(p, input, wall, dt);
     p.hitbox = ifx p.ducking then RectInt.{-4, -STANDING_HEIGHT / 2, 8, STANDING_HEIGHT / 2} else RectInt.{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
 
     if p.jump_timer > 0 {
@@ -91,8 +105,13 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
             p.velocity.y = approach(p.velocity.y, WALL_SLIDE_MAX_FALL_SPEED, WALL_SLIDE_FALL_DAMPING * dt);
     }
 
-    if move(p, p.velocity * dt) & .HIT_X events |= .HIT_WALL;
-    return events | refresh_grounded(p);
+    if move(p, p.velocity * dt) & .HIT_X {
+        events |= .HIT_WALL;
+        p.rolling = false;  // a wall stops a roll (Pawn.OnCollideX)
+    }
+    landing := refresh_grounded(p);
+    if landing & .LANDED && normal && !p.rolling && try_start_roll(p, input, previous_velocity) landing |= .ROLLED;
+    return events | landing;
 }
 
 move_input :: (input: Pawn_Input) -> s32 { return ifx abs(input.move_x) < MOVE_INPUT_DEADZONE then 0 else sign(input.move_x); }
@@ -168,6 +187,60 @@ normal_state :: (p: *Pawn, input: Pawn_Input, wall: s32, dt: float) -> Pawn_Even
         p.jump_timer = JUMP_TIME;
     }
     return events;
+}
+
+// Landing with some fall and some run while holding down tucks into a roll (Pawn.TryStartRoll, flat ground).
+try_start_roll :: (p: *Pawn, input: Pawn_Input, impact: Vector2) -> bool {
+    if input.move_y <= 0 || impact.y < ROLL_MIN_FALL_SPEED || abs(impact.x) < ROLL_MIN_HORIZONTAL_SPEED return false;
+    if move_input(input) && move_input(input) != sign(impact.x) return false;  // braking, not tucking
+    p.facing = sign(impact.x);
+    p.velocity = .{p.facing * ROLL_SPEED, 0};
+    start_roll(p);
+    return true;
+}
+
+#scope_export
+
+start_roll :: (p: *Pawn) {
+    p.ducking = true;
+    p.squish = .{1.65, 0.62};
+    play(p, "roll");
+    p.rolling = true;
+    p.roll_time = 0;
+    p.airborne_roll_distance = 0;
+}
+
+#scope_file
+
+// Pawn.RollState on flat ground: tucked, easing to running speed, until it times out or down is let go.
+roll_state :: (p: *Pawn, input: Pawn_Input, dt: float) -> Pawn_Events {
+    p.ducking = true;
+    play(p, "roll");
+    p.roll_time += dt;
+    airborne := false;
+    if !p.grounded {
+        p.airborne_roll_distance += abs(p.velocity.x) * dt;
+        if p.airborne_roll_distance >= AIRBORNE_ROLL_DISTANCE { p.rolling = false; return 0; }
+        airborne = true;
+    } else {
+        p.airborne_roll_distance = 0;
+        p.velocity.x = approach(p.velocity.x, p.facing * MAX_GROUND_SPEED, ROLL_FRICTION * dt);
+    }
+    if input.jump_pressed && can_stand_up(p) {
+        p.squish = .{0.75, 1.25};
+        p.velocity.x = p.facing * max(abs(p.velocity.x), ROLL_JUMP_SPEED);
+        p.velocity.y = ROLL_JUMP_FORCE;
+        p.jump_timer = ROLL_JUMP_TIME;
+        p.rolling = false;
+        events: Pawn_Events;
+        events |= .JUMPED;
+        return events;
+    }
+    if !airborne && (p.roll_time >= ROLL_DURATION || input.move_y <= 0) {
+        p.rolling = false;
+        p.ducking = p.grounded && (input.move_y > 0 || !can_stand_up(p));
+    }
+    return 0;
 }
 
 refresh_grounded :: (p: *Pawn) -> Pawn_Events {
