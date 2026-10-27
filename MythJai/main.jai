@@ -67,7 +67,7 @@ frame :: () -> bool {
     if hit_stun_timer > 0 {
         hit_stun_timer -= delta;
     } else {
-        if demo demo_time += delta;
+        if demo { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
         update_all(context.actors);
     }
     camera = clamp_camera(camera_target());

@@ -30,7 +30,6 @@ update :: (p: *Player) {
         jump_down = key_down(SDLK_SPACE),
     };
     attack_pressed := key_pressed(SDLK_E);
-    if demo input, attack_pressed = demo_input();
 
     p.state_time += delta;
     if p.state == .NORMAL && attack_pressed start_attack(p, input);
@@ -196,22 +195,32 @@ respawn :: (p: *Player) {
 
 #scope_export
 
-// `myth demo`: a scripted run through the room, for checking movement without a keyboard.
+// `myth demo`: a scripted run through the room, played as real SDL key events pushed into the
+// event queue, so it goes through the same input path as a keyboard.
 demo: bool;
 demo_time: float;
 
-demo_input :: () -> Pawn_Input, attack: bool {
-    t := demo_time;
-    input: Pawn_Input;
-    if t > 0.3 && t < 1.6 input.move_x = 1;                     // run right
-    if t > 1.0 && t < 1.05 input.jump_pressed = true;           // jump, held
-    input.jump_down = t > 1.0 && t < 1.4;
-    if t > 2.0 && t < 3.0 input.move_x = -1;                    // run back left
-    if t > 2.4 && t < 2.45 input.jump_pressed = true;           // short hop
-    input.jump_down |= t > 2.4 && t < 2.5;
-    if t > 3.2 && t < 3.8 input.move_y = 1;                     // duck, then crawl
-    if t > 3.5 && t < 3.8 input.move_x = 1;
-    if t > 4.0 && t < 5.6 input.move_x = 1;                     // run at the blob, swinging
-    attack := t > 5.0 && t < 5.02 || t > 5.5 && t < 5.52;
-    return input, attack;
+DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
+    .{0.3, SDLK_RIGHT, true},                               // run right
+    .{1.0, SDLK_SPACE, true}, .{1.4, SDLK_SPACE, false},    // a held jump
+    .{1.6, SDLK_RIGHT, false},
+    .{2.0, SDLK_LEFT, true},                                // run back left
+    .{2.4, SDLK_SPACE, true}, .{2.5, SDLK_SPACE, false},    // a short hop
+    .{3.0, SDLK_LEFT, false},
+    .{3.2, SDLK_DOWN, true}, .{3.5, SDLK_RIGHT, true},      // duck, then crawl
+    .{3.8, SDLK_DOWN, false},
+    .{5.0, SDLK_E, true}, .{5.05, SDLK_E, false},           // swing at the blob
+    .{5.5, SDLK_E, true}, .{5.55, SDLK_E, false},
+    .{5.6, SDLK_RIGHT, false},
+];
+
+// Pushes the key events due by now.
+push_demo_keys :: (from: float, to: float) {
+    for DEMO if it.at > from && it.at <= to {
+        event: SDL_Event;
+        event.type = xx ifx it.down then SDL_EventType.KEY_DOWN else .KEY_UP;
+        event.key.key = it.key;
+        event.key.down = it.down;
+        SDL_PushEvent(*event);
+    }
 }
