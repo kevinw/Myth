@@ -9,6 +9,7 @@ Player :: struct @GameActor {
     footstep_frame: s32 = -1;
     last_safe_ground: Point2;   // where a cliff fall puts you back
     rig: Rig_Pose;
+    light: Handle(Light);       // the warm glow around you (Player.CreatePlayerLight)
     last_skid_sound: float64;
 }
 
@@ -65,20 +66,40 @@ update :: (p: *Player) {
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
     if fell_out(p) && p.state != .DEAD fall_off_cliff(p);
 
+    light := get(*context.actors.lights, p.light);
+    if light light.position = p.position + Point2.{0, -6};
+
     // Touching an enemy hurts.
     if p.hit_cooldown <= 0 && p.state != .DEAD for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
 }
 
 draw :: (p: *Player) {
     if p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;  // i-frame blink
-    if p.rig.posed draw_rig(*p.rig, to_vector(p.position));
-    else draw_sprite(p, "player");
+    if p.rig.posed {
+        draw_rig(*p.rig, to_vector(p.position), PLAYER_LOOK);
+        // The hat sits on the rig's head (Player.RenderHat, RigHatPosition).
+        head, radius := rig_head(*p.rig);
+        hat := get_sprite("hat");
+        if hat {
+            origin := Vector2.{floor(hat.frame_size.x * 0.5), hat.frame_size.y};
+            push_matrix(to_vector(p.position) + head - Vector2.{0, radius} + Vector2.{0, 1}, Vector2.{xx p.facing, 1});
+            draw_frame(hat, 0, -origin);
+            pop_matrix();
+        }
+    } else {
+        draw_sprite(p, "player");
+    }
 }
 
 spawn_player :: (at: Point2) -> *Player {
     p := add(*context.actors.players);
     p.position = at;
     p.last_safe_ground = at;
+    // Assets/Actors/player-glow-light.json
+    light: *Light;
+    light, p.light = add(*context.actors.lights);
+    light.position, light.radius, light.intensity, light.light_color, light.height = at, 36, 0.45, rgb(0xffcfa0), 16;
+    light.flicker_frequency, light.flicker_intensity, light.sprite_name = 1.5, 0.02, "";
     p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
     play(p, "idle");
     return p;

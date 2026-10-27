@@ -35,7 +35,7 @@ frame :: () -> bool {
         build_tile_draws();
         context.actors = *all_actors;
         for room.actors.items if !spawn(context.actors, it) log_error("no actor type %", as_string(get(it, "Type")));
-        spawn_player(start_position());
+        spawn_bud(spawn_player(start_position()));
         demo = array_find(get_command_line_arguments(), "demo");
         camera = clamp_camera(camera_target());
         started = true;

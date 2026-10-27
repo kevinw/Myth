@@ -2,8 +2,10 @@
 // played as the takes in Assets/Rigs/ual2.takes.json and cross-faded between, posed at the
 // rig's own frame rate, turned to face the actor, projected flat, and drawn as depth-ordered
 // tapered capsules over a silhouette outline.
+// The costume (Assets/Sources/Costumes) wraps bands and studs onto bones by tag.
 // Not ported yet: foot IK, turns, leans and other pose modifiers, secondary motion, ragdoll,
-// costumes, the sculpted head (a circle stands in), hands' fingers, skin modes, normals.
+// spikes/kilts/trousers and costume surfaces, the sculpted head (a circle stands in), hands'
+// fingers, skin modes, normals.
 
 Rig_Pose :: struct {
     take: s32 = -1;
@@ -27,11 +29,20 @@ RIG :: struct {
     HEAD_SIZE :: 0.074;
     NECK_EXTENSION :: 0.054;
     TORSO :: 0.141; CHEST :: 0.116; NECK :: 0.25; BICEP :: 0.083; FOREARM :: 0.101; THIGH :: 0.125; SHIN :: 0.063; FOOT :: 0.07;
-    FAR :: #run rgb(0x435263); NEAR :: #run rgb(0xb7cdd0); CORE :: #run rgb(0x708b94);
     OUTLINE :: Color.{0, 0, 0, 0xaa};
     FRONT_LIMB_OUTLINE :: 0.35;
     FRONT_LIMB_DEPTH :: 0.05;
 };
+
+// What tells one rigged actor from another: its palette and costume (Assets/Actors/<name>.json).
+Rig_Look :: struct {
+    far := #run rgb(0x435263);
+    near := #run rgb(0xb7cdd0);
+    core := #run rgb(0x708b94);
+    costume: string;
+}
+PLAYER_LOOK :: Rig_Look.{costume = "brass-wanderer"};
+BUD_LOOK :: Rig_Look.{far = #run rgb(0x45648c), near = #run rgb(0xabcfff), core = #run rgb(0x7fb6ff), costume = "bud-crest"};
 
 // Which take a pawn animation plays (Myth's Pawn.RigClipFor).
 take_for :: (animation: string) -> string {
@@ -103,7 +114,14 @@ update_rig :: (pose: *Rig_Pose, facing: s32, dt: float) {
     }
 }
 
-draw_rig :: (pose: *Rig_Pose, at: Vector2) {
+// Where the head is, from the actor's position.
+rig_head :: (pose: *Rig_Pose) -> Vector2, radius: float {
+    if !rig_ready() return .{}, 0;
+    return pose.projected[rig.head], RIG.HEAD_SIZE * RIG.PIXELS_PER_METER;
+}
+
+draw_rig :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
+    pieces_of_costume := costume_for(look.costume);
     if !rig_ready() || !pose.posed return;
     Piece :: struct { bone: s32; depth: float; from, to: Vector2; from_width, to_width: float; }
     pieces: [BONES.count] Piece;
@@ -120,22 +138,29 @@ draw_rig :: (pose: *Rig_Pose, at: Vector2) {
     pelvis_depth := pose.depth[rig.pelvis];
 
     // The silhouette: every piece grown a pixel, in the outline color, under everything.
-    for pieces capsule(it.from, it.to, joint_radius(it.from_width) + 1, joint_radius(it.to_width) + 1, joint_steps(joint_radius(it.to_width) + 1), RIG.OUTLINE, from_cap = false);
+    for pieces {
+        capsule(it.from, it.to, joint_radius(it.from_width) + 1, joint_radius(it.to_width) + 1, joint_steps(joint_radius(it.to_width) + 1), RIG.OUTLINE, from_cap = false);
+        draw_costume(it, pieces_of_costume, RIG.OUTLINE, silhouette = true);
+    }
     circle(head, head_radius + 1.4, 14, RIG.OUTLINE);
 
     head_drawn := false;
     for pieces {
         bone := BONES[it.bone];
-        if !head_drawn && pose.depth[rig.head] <= it.depth { circle(head, head_radius, 14, RIG.NEAR); head_drawn = true; }
+        if !head_drawn && pose.depth[rig.head] <= it.depth { circle(head, head_radius, 14, look.near); head_drawn = true; }
         core := bone.from == "pelvis";
         t := clamp(it.depth + 0.5, 0, 1);
-        color := ifx core then RIG.CORE else mix(RIG.FAR, RIG.NEAR, t);
+        color := ifx core then look.core else mix(look.far, look.near, t);
         // Limbs in front of the body get a faint outline of their own.
         if bone.limb && it.depth - pelvis_depth > RIG.FRONT_LIMB_DEPTH
             capsule(it.from, it.to, joint_radius(it.from_width) + 1, joint_radius(it.to_width) + 1, joint_steps(joint_radius(it.to_width) + 1), fade(rgb(0), RIG.FRONT_LIMB_OUTLINE));
         capsule(it.from, it.to, joint_radius(it.from_width), joint_radius(it.to_width), joint_steps(joint_radius(it.to_width)), color);
+        // Clothing darkens with depth as much as the limb under it does.
+        ratio :: (far: u8, near: u8) -> u8 #expand { return xx (ifx near then min(255.0, 255.0 * far / near) else 255); }
+        shade := ifx core then WHITE else mix(Color.{ratio(look.far.r, look.near.r), ratio(look.far.g, look.near.g), ratio(look.far.b, look.near.b), 255}, WHITE, t);
+        draw_costume(it, pieces_of_costume, shade);
     }
-    if !head_drawn circle(head, head_radius, 14, RIG.NEAR);
+    if !head_drawn circle(head, head_radius, 14, look.near);
 }
 
 #scope_file
@@ -143,32 +168,109 @@ draw_rig :: (pose: *Rig_Pose, at: Vector2) {
 MAX_JOINTS :: 128;
 NO_END :: 3.4e38;
 
-Bone_Spec :: struct { from, to: string; size: float; limb: bool; }
+// Myth's RigTags: what costume pieces match.
+Rig_Tags :: enum_flags u16 { TRUNK; WAIST; NECK; SHOULDER; UPPER_ARM; FOREARM; HAND; HIP; THIGH; SHIN; FOOT; TAIL; LEFT; RIGHT; }
+
+Bone_Spec :: struct { from, to: string; size: float; limb: bool; tags: Rig_Tags; }
 BONES :: Bone_Spec.[
-    .{"pelvis", "spine_01", RIG.TORSO, false},
-    .{"spine_01", "spine_02", RIG.TORSO, false},
-    .{"spine_02", "spine_03", RIG.TORSO, false},
-    .{"spine_03", "neck_01", RIG.CHEST, false},
-    .{"neck_01", "Head", RIG.NECK, false},
-    .{"clavicle_l", "upperarm_l", RIG.BICEP, false},
-    .{"upperarm_l", "lowerarm_l", RIG.BICEP, true},
-    .{"lowerarm_l", "hand_l", RIG.FOREARM, true},
-    .{"hand_l", "middle_01_l", RIG.FOREARM, true},
-    .{"clavicle_r", "upperarm_r", RIG.BICEP, false},
-    .{"upperarm_r", "lowerarm_r", RIG.BICEP, true},
-    .{"lowerarm_r", "hand_r", RIG.FOREARM, true},
-    .{"hand_r", "middle_01_r", RIG.FOREARM, true},
-    .{"pelvis", "thigh_l", RIG.THIGH, false},
-    .{"thigh_l", "calf_l", RIG.THIGH, true},
-    .{"calf_l", "foot_l", RIG.SHIN, true},
-    .{"foot_l", "ball_l", RIG.FOOT, true},
-    .{"ball_l", "ball_leaf_l", RIG.FOOT, true},
-    .{"pelvis", "thigh_r", RIG.THIGH, false},
-    .{"thigh_r", "calf_r", RIG.THIGH, true},
-    .{"calf_r", "foot_r", RIG.SHIN, true},
-    .{"foot_r", "ball_r", RIG.FOOT, true},
-    .{"ball_r", "ball_leaf_r", RIG.FOOT, true},
+    .{"pelvis", "spine_01", RIG.TORSO, false, .WAIST},
+    .{"spine_01", "spine_02", RIG.TORSO, false, .TRUNK},
+    .{"spine_02", "spine_03", RIG.TORSO, false, .TRUNK},
+    .{"spine_03", "neck_01", RIG.CHEST, false, .TRUNK},
+    .{"neck_01", "Head", RIG.NECK, false, .NECK},
+    .{"clavicle_l", "upperarm_l", RIG.BICEP, false, .SHOULDER | .LEFT},
+    .{"upperarm_l", "lowerarm_l", RIG.BICEP, true, .UPPER_ARM | .LEFT},
+    .{"lowerarm_l", "hand_l", RIG.FOREARM, true, .FOREARM | .LEFT},
+    .{"hand_l", "middle_01_l", RIG.FOREARM, true, .HAND | .LEFT},
+    .{"clavicle_r", "upperarm_r", RIG.BICEP, false, .SHOULDER | .RIGHT},
+    .{"upperarm_r", "lowerarm_r", RIG.BICEP, true, .UPPER_ARM | .RIGHT},
+    .{"lowerarm_r", "hand_r", RIG.FOREARM, true, .FOREARM | .RIGHT},
+    .{"hand_r", "middle_01_r", RIG.FOREARM, true, .HAND | .RIGHT},
+    .{"pelvis", "thigh_l", RIG.THIGH, false, .HIP | .LEFT},
+    .{"thigh_l", "calf_l", RIG.THIGH, true, .THIGH | .LEFT},
+    .{"calf_l", "foot_l", RIG.SHIN, true, .SHIN | .LEFT},
+    .{"foot_l", "ball_l", RIG.FOOT, true, .FOOT | .LEFT},
+    .{"ball_l", "ball_leaf_l", RIG.FOOT, true, .FOOT | .LEFT},
+    .{"pelvis", "thigh_r", RIG.THIGH, false, .HIP | .RIGHT},
+    .{"thigh_r", "calf_r", RIG.THIGH, true, .THIGH | .RIGHT},
+    .{"calf_r", "foot_r", RIG.SHIN, true, .SHIN | .RIGHT},
+    .{"foot_r", "ball_r", RIG.FOOT, true, .FOOT | .RIGHT},
+    .{"ball_r", "ball_leaf_r", RIG.FOOT, true, .FOOT | .RIGHT},
 ];
+
+Costume_Piece :: struct {
+    stud: bool;
+    bones: Rig_Tags;
+    from: float;
+    to := 1.0;
+    count := 1;
+    width := 1.0;
+    color := WHITE;
+}
+costumes: [8] struct { name: string; pieces: [..] Costume_Piece; };
+
+costume_for :: (name: string) -> [] Costume_Piece {
+    if !name return .[];
+    for * costumes if it.name == name return it.pieces;
+    for * costumes if !it.name { it.name = copy_string(name); load_costume(name, *it.pieces); return it.pieces; }
+    return .[];
+}
+
+// The costume's pieces on a drawn bone, in their order (RigDraw.DrawCostume, sleeves and studs).
+draw_costume :: (piece: $T, costume: [] Costume_Piece, shade: Color, silhouette := false) {
+    tags := BONES[piece.bone].tags;
+    SIDES :: Rig_Tags.LEFT | .RIGHT;
+    for c: costume {
+        if !(tags & c.bones & ~SIDES) || (c.bones & SIDES) && !(tags & c.bones & SIDES) continue;
+        color := ifx silhouette then shade else multiply(c.color, shade);
+        for i: 0..c.count-1 {
+            start := c.from + (c.to - c.from) * i / c.count;
+            end := c.from + (c.to - c.from) * (i + ifx c.count == 1 then 1.0 else 0.6) / c.count;
+            from := piece.from + (piece.to - piece.from) * start;
+            to := piece.from + (piece.to - piece.from) * end;
+            from_width := (piece.from_width + (piece.to_width - piece.from_width) * start) * c.width;
+            to_width := (piece.from_width + (piece.to_width - piece.from_width) * end) * c.width;
+            grow := ifx silhouette then 2.0 else 0;
+            if c.stud circle((from + to) * 0.5, (from_width + to_width) * 0.25 + grow * 0.5, 10, color);
+            else bone_quad(from, to, from_width + grow, to_width + grow, color);
+        }
+    }
+}
+
+load_costume :: (name: string, costume: *[..] Costume_Piece) {
+    text, ok := read_entire_file(tprint("%/Sources/Costumes/%.json", ASSETS, name), log_errors = false);
+    if !ok { log_error("no costume %", name); return; }
+    json:, ok = parse_json(text);
+    if !ok { log_error("costume % isn't valid JSON", name); return; }
+    for get(json, "Pieces").items {
+        piece: Costume_Piece;
+        kind := as_string(get(it, "Kind"), "Sleeve");
+        if kind != "Sleeve" && kind != "Stud" continue;  // spikes, kilts and trousers aren't ported
+        piece.stud = kind == "Stud";
+        for split(as_string(get(it, "Bones")), ",",, temp) {
+            name := trim(it);
+            for name_of: type_info(Rig_Tags).names if equal_nocase(replace(name_of, "_", "",, temp), name) piece.bones |= xx type_info(Rig_Tags).values[it_index];
+        }
+        piece.from = as_float(get(it, "From"), 0);
+        piece.to = as_float(get(it, "To"), 1);
+        piece.count = as_int(get(it, "Count"), 1);
+        piece.width = as_float(get(it, "Width"), 1);
+        piece.color = rgb(as_string(get(it, "Color"), "ffffff"), default = WHITE);
+        array_add(costume, piece);
+    }
+}
+
+bone_quad :: (from: Vector2, to: Vector2, from_width: float, to_width: float, color: Color) {
+    along := to - from;
+    span := length(along);
+    along = ifx span > 0.0001 then along / span else Vector2.{0, 1};
+    across := Vector2.{along.y, -along.x};
+    polygon(from + across * from_width * 0.5, from - across * from_width * 0.5, to - across * to_width * 0.5, to + across * to_width * 0.5, color);
+}
+
+multiply :: (a: Color, b: Color) -> Color {
+    return .{xx (cast(u32) a.r * b.r / 255), xx (cast(u32) a.g * b.g / 255), xx (cast(u32) a.b * b.b / 255), xx (cast(u32) a.a * b.a / 255)};
+}
 
 Rig_Take :: struct { name: string; clip: s32; start, end: float; loop: bool; speed: float; }
 

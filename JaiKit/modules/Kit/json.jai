@@ -100,8 +100,19 @@ pascal_case :: (snake: string) -> string {
 
 Json_Parser :: struct { rest: string; failed: bool; }
 
+// Also skips // and /* */ comments, which hand-written files use.
 skip_space :: (p: *Json_Parser) {
-    while p.rest && (p.rest[0] == #char " " || p.rest[0] == #char "\n" || p.rest[0] == #char "\r" || p.rest[0] == #char "\t") advance(*p.rest);
+    while p.rest {
+        c := p.rest[0];
+        if c == #char " " || c == #char "\n" || c == #char "\r" || c == #char "\t" { advance(*p.rest); continue; }
+        if begins_with(p.rest, "//") { while p.rest && p.rest[0] != #char "\n" advance(*p.rest); continue; }
+        if begins_with(p.rest, "/*") {
+            found, _, after := split_from_left(slice(p.rest, 2, p.rest.count - 2), "*/");
+            p.rest = ifx found then after else "";
+            continue;
+        }
+        break;
+    }
 }
 
 expect :: (p: *Json_Parser, c: u8) -> bool {
@@ -128,7 +139,12 @@ parse_value :: (p: *Json_Parser) -> Json {
             if !expect(p, #char ":") break;
             array_add(*items, parse_value(p));
             skip_space(p);
-            if p.rest && p.rest[0] == #char "," { advance(*p.rest); continue; }
+            if p.rest && p.rest[0] == #char "," {
+                advance(*p.rest);
+                skip_space(p);
+                if p.rest && p.rest[0] == #char "}" { advance(*p.rest); break; }  // a trailing comma
+                continue;
+            }
             expect(p, #char "}");
             break;
         }
@@ -142,7 +158,12 @@ parse_value :: (p: *Json_Parser) -> Json {
         while !p.failed {
             array_add(*items, parse_value(p));
             skip_space(p);
-            if p.rest && p.rest[0] == #char "," { advance(*p.rest); continue; }
+            if p.rest && p.rest[0] == #char "," {
+                advance(*p.rest);
+                skip_space(p);
+                if p.rest && p.rest[0] == #char "]" { advance(*p.rest); break; }  // a trailing comma
+                continue;
+            }
             expect(p, #char "]");
             break;
         }

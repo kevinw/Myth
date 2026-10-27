@@ -130,6 +130,7 @@ move_pixel :: (a: *Actor, dir: Point2) -> bool {
 #load "sprites.jai";
 #load "pawn.jai";
 #load "actors/player.jai";
+#load "actors/bud.jai";
 #load "actors/player_start.jai";
 #load "actors/blob.jai";
 #load "actors/light.jai";
