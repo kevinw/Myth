@@ -17,6 +17,7 @@ Packed_Tileset :: struct {
 
 Pack :: struct {
     atlas: Texture;
+    lighting_noise: Texture;
     tilesets: [] Packed_Tileset;
 }
 
@@ -31,7 +32,7 @@ load_pack :: () -> Pack, bool {
 
     pack: Pack;
     atlas_name := read_string(*r);
-    if read(*r, bool) read_string(*r);  // lighting noise
+    noise_name := ifx read(*r, bool) then read_string(*r) else "";
 
     for 1..read(*r, u16) { read_string(*r); skip_subtex(*r); }  // named subtextures
     for 1..read(*r, u16) {  // sprites: we load these from their .ase instead
@@ -63,14 +64,21 @@ load_pack :: () -> Pack, bool {
     pack.tilesets = tilesets;
     if r.bad { log_error("couldn't read the visual pack"); return .{}, false; }
 
-    atlas_file:, ok = read_entire_file(tprint("%/%/%", ASSETS, PACK_DIR, atlas_name), log_errors = false);
+    pack.atlas, ok = load_qoi(atlas_name);
     if !ok return .{}, false;
-    pixels, w, h, decoded := decode_qoi(xx atlas_file);
-    if !decoded { log_error("couldn't decode %", atlas_name); return .{}, false; }
-    premultiply(pixels);
-    pack.atlas = make_texture(pixels.data, w, h);
-    array_free(pixels);
+    if noise_name pack.lighting_noise = load_qoi(noise_name);
     return pack, true;
+}
+
+load_qoi :: (name: string) -> Texture, bool {
+    file, ok := read_entire_file(tprint("%/%/%", ASSETS, PACK_DIR, name), log_errors = false);
+    if !ok return .{}, false;
+    defer free(file);
+    pixels, w, h, decoded := decode_qoi(xx file);
+    if !decoded { log_error("couldn't decode %", name); return .{}, false; }
+    defer array_free(pixels);
+    premultiply(pixels);
+    return make_texture(pixels.data, w, h), true;
 }
 
 find_tileset :: (pack: *Pack, name: string) -> *Packed_Tileset {

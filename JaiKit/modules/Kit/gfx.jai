@@ -1,5 +1,6 @@
-// A Foster-ish batcher over SDL_GPU: textured, tinted quads in pixel space,
-// drawn with Foster's own Batcher shader (see build.jai).
+// A Foster-ish batcher over SDL_GPU: textured, tinted quads in pixel space, drawn with
+// Foster's own Batcher shader (see build_kit.jai), into passes: each pass draws into the
+// window or a render target, optionally through a game's own fragment shader.
 
 Point2 :: struct { x, y: s32; }
 operator + :: (a: Point2, b: Point2) -> Point2 { return .{a.x + b.x, a.y + b.y}; }
@@ -39,45 +40,66 @@ gfx_init :: (w: *SDL_Window) -> bool {
     device = SDL_CreateGPUDevice(.MSL, true, null);
     if !device || !SDL_ClaimWindowForGPUDevice(device, window) return false;
 
-    dir := path_strip_filename(get_path_of_running_executable());
-    vs := load_shader(tprint("%shaders/batcher.vertex.msl", dir), .VERTEX, samplers = 0, uniforms = 1);
-    fs := load_shader(tprint("%shaders/batcher.fragment.msl", dir), .FRAGMENT, samplers = 1, uniforms = 0);
-    if !vs || !fs return false;
-    defer { SDL_ReleaseGPUShader(device, vs); SDL_ReleaseGPUShader(device, fs); }
-
-    buffer := SDL_GPUVertexBufferDescription.{slot = 0, pitch = size_of(Vertex), input_rate = .VERTEX};
-    attributes := SDL_GPUVertexAttribute.[
-        .{0, 0, .FLOAT2,      #run field_offset("pos")},
-        .{1, 0, .FLOAT2,      #run field_offset("uv")},
-        .{2, 0, .UBYTE4_NORM, #run field_offset("color")},
-        .{3, 0, .UBYTE4_NORM, #run field_offset("mode")},
-    ];
-    // Premultiplied alpha, like Foster.
-    target := SDL_GPUColorTargetDescription.{
-        format = SDL_GetGPUSwapchainTextureFormat(device, window),
-        blend_state = .{
-            src_color_blendfactor = .ONE, dst_color_blendfactor = .ONE_MINUS_SRC_ALPHA, color_blend_op = .ADD,
-            src_alpha_blendfactor = .ONE, dst_alpha_blendfactor = .ONE_MINUS_SRC_ALPHA, alpha_blend_op = .ADD,
-            enable_blend = true,
-        },
-    };
-    info: SDL_GPUGraphicsPipelineCreateInfo;
-    info.vertex_shader = vs;
-    info.fragment_shader = fs;
-    info.vertex_input_state = .{*buffer, 1, attributes.data, attributes.count};
-    info.primitive_type = .TRIANGLELIST;
-    info.target_info = .{color_target_descriptions = *target, num_color_targets = 1};
-    pipeline = SDL_CreateGPUGraphicsPipeline(device, *info);
+    ok: bool;
+    batcher, ok = load_shader("batcher", samplers = 1);
+    if !ok return false;
 
     sampler = SDL_CreateGPUSampler(device, *(SDL_GPUSamplerCreateInfo.{
         min_filter = .NEAREST, mag_filter = .NEAREST,
         address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
     }));
+    repeat_sampler = SDL_CreateGPUSampler(device, *(SDL_GPUSamplerCreateInfo.{
+        min_filter = .NEAREST, mag_filter = .NEAREST,
+        address_mode_u = .REPEAT, address_mode_v = .REPEAT, address_mode_w = .REPEAT,
+    }));
     vertex_buffer = SDL_CreateGPUBuffer(device, *(SDL_GPUBufferCreateInfo.{usage = .VERTEX, size = size_of(type_of(vertices))}));
     upload = SDL_CreateGPUTransferBuffer(device, *(SDL_GPUTransferBufferCreateInfo.{usage = .UPLOAD, size = size_of(type_of(vertices))}));
     pixel := WHITE;
     white = make_texture(xx *pixel, 1, 1);  // rects draw it in fill mode, which ignores it
-    return pipeline && sampler && vertex_buffer && upload && white.gpu;
+    return sampler && vertex_buffer && upload && white.gpu;
+}
+
+// A fragment shader from build/shaders/<name>.fragment.msl, drawn with the batcher's vertex
+// shader and vertex layout. Its first sampler is the batch's texture; the rest are a pass's
+// extra textures. `uniforms` is how many fragment uniform buffers it takes (0 or 1).
+Shader :: struct {
+    name: string;
+    samplers: u32;
+    uniforms: u32;
+    pipelines: [2] *SDL_GPUGraphicsPipeline;  // for the window, for render targets
+}
+
+load_shader :: (name: string, samplers: u32 = 1, uniforms: u32 = 0) -> Shader, bool {
+    shader := Shader.{name = copy_string(name), samplers = samplers, uniforms = uniforms};
+    for format: 0..1 {
+        shader.pipelines[format] = make_pipeline(name, samplers, uniforms, ifx format then .R8G8B8A8_UNORM else SDL_GetGPUSwapchainTextureFormat(device, window));
+        if !shader.pipelines[format] { log_error("can't load shader %", name); return shader, false; }
+    }
+    return shader, true;
+}
+
+// A texture to draw into, then draw with.
+make_target :: (w: s32, h: s32) -> Texture {
+    texture := SDL_CreateGPUTexture(device, *(SDL_GPUTextureCreateInfo.{
+        type = ._2D, format = .R8G8B8A8_UNORM, usage = .SAMPLER | .COLOR_TARGET, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
+    }));
+    return .{texture, .{xx w, xx h}};
+}
+
+// Starts a pass: what follows draws into `target` (the window when it has no texture),
+// cleared to `clear` unless `keep`, through `shader` (the batcher when null) with `uniforms`
+// and `extra` textures in its samplers after the first.
+begin_pass :: (target := Texture.{}, clear := Color.{}, keep := false, shader: *Shader = null, uniforms: [] u8 = .[], extra: [] Texture = .[]) {
+    p: Pass;
+    p.target = target;
+    p.clear = clear;
+    p.keep = keep;
+    p.shader = shader;
+    p.first_batch = batches.count;
+    p.uniform_count = min(uniforms.count, p.uniforms.count);
+    memcpy(p.uniforms.data, uniforms.data, p.uniform_count);
+    for extra if it_index < p.extra.count p.extra[it_index] = it;
+    array_add(*passes, p);
 }
 
 // pixels: w*h premultiplied RGBA8
@@ -125,8 +147,10 @@ push_matrix :: (translate: Vector2, scale: Vector2) {
 push_matrix :: (translate: Vector2, scale: float) { push_matrix(translate, Vector2.{scale, scale}); }
 pop_matrix :: () { matrix_top -= 1; }
 
-present :: (clear: Color) {
-    defer { vertex_count = 0; batches.count = 0; }
+// Draws everything since the last present. With no begin_pass, it all went to the window, cleared to `clear`.
+present :: (clear := Color.{}) {
+    defer { vertex_count = 0; batches.count = 0; passes.count = 0; }
+    if !passes.count || passes[0].first_batch > 0 array_insert_at(*passes, .{clear = clear}, 0);
     cmd := SDL_AcquireGPUCommandBuffer(device);
     swapchain: *SDL_GPUTexture;
     w, h: u32;
@@ -145,18 +169,30 @@ present :: (clear: Color) {
     }
 
     k := 1.0 / 255;
-    target := SDL_GPUColorTargetInfo.{texture = swapchain, clear_color = .{clear.r * k, clear.g * k, clear.b * k, clear.a * k}, load_op = .CLEAR, store_op = .STORE};
-    pass := SDL_BeginGPURenderPass(cmd, *target, 1, null);
-    SDL_BindGPUGraphicsPipeline(pass, pipeline);
-    SDL_BindGPUVertexBuffers(pass, 0, *(SDL_GPUBufferBinding.{buffer = vertex_buffer}), 1);
-    // Pixels to clip space, column-major.
-    ortho := float.[2.0 / w, 0, 0, 0,  0, -2.0 / h, 0, 0,  0, 0, 1, 0,  -1, 1, 0, 1];
-    SDL_PushGPUVertexUniformData(cmd, 0, ortho.data, size_of(type_of(ortho)));
-    for batches {
-        SDL_BindGPUFragmentSamplers(pass, 0, *(SDL_GPUTextureSamplerBinding.{it.texture, sampler}), 1);
-        SDL_DrawGPUPrimitives(pass, it.count, 1, it.start, 0);
+    for p, index: passes {
+        last_batch := ifx index + 1 < passes.count then passes[index + 1].first_batch else batches.count;
+        texture := ifx p.target.gpu then p.target.gpu else swapchain;
+        size := ifx p.target.gpu then p.target.size else Vector2.{xx w, xx h};
+        clear := p.clear;
+        target := SDL_GPUColorTargetInfo.{texture = texture, clear_color = .{clear.r * k, clear.g * k, clear.b * k, clear.a * k}, load_op = ifx p.keep then .LOAD else .CLEAR, store_op = .STORE};
+        pass := SDL_BeginGPURenderPass(cmd, *target, 1, null);
+        shader := ifx p.shader then p.shader else *batcher;
+        SDL_BindGPUGraphicsPipeline(pass, shader.pipelines[cast(int) (p.target.gpu != null)]);
+        SDL_BindGPUVertexBuffers(pass, 0, *(SDL_GPUBufferBinding.{buffer = vertex_buffer}), 1);
+        // Pixels to clip space, column-major.
+        ortho := float.[2 / size.x, 0, 0, 0,  0, -2 / size.y, 0, 0,  0, 0, 1, 0,  -1, 1, 0, 1];
+        SDL_PushGPUVertexUniformData(cmd, 0, ortho.data, size_of(type_of(ortho)));
+        if shader.uniforms SDL_PushGPUFragmentUniformData(cmd, 0, p.uniforms.data, xx p.uniform_count);
+        for b: p.first_batch..last_batch-1 {
+            it := batches[b];
+            bindings: [4] SDL_GPUTextureSamplerBinding;
+            bindings[0] = .{it.texture, sampler};
+            for 1..shader.samplers-1 bindings[it] = .{ifx p.extra[it - 1].gpu then p.extra[it - 1].gpu else white.gpu, repeat_sampler};
+            SDL_BindGPUFragmentSamplers(pass, 0, bindings.data, shader.samplers);
+            SDL_DrawGPUPrimitives(pass, it.count, 1, it.start, 0);
+        }
+        SDL_EndGPURenderPass(pass);
     }
-    SDL_EndGPURenderPass(pass);
     SDL_SubmitGPUCommandBuffer(cmd);
 }
 
@@ -166,12 +202,24 @@ present :: (clear: Color) {
 Vertex :: struct { pos: Vector2; uv: Vector2; color: Color; mode: Color; }
 field_offset :: (name: string) -> u32 { _, offset := get_field(type_info(Vertex), name); return xx offset; }
 Batch :: struct { texture: *SDL_GPUTexture; start, count: u32; }
+Pass :: struct {
+    target: Texture;
+    clear: Color;
+    keep: bool;
+    shader: *Shader;
+    uniforms: [1024] u8;
+    uniform_count: int;
+    extra: [3] Texture;
+    first_batch: int;
+}
 Matrix :: struct { translate: Vector2; scale := Vector2.{1, 1}; }
 
 window: *SDL_Window;
 device: *SDL_GPUDevice;
-pipeline: *SDL_GPUGraphicsPipeline;
+batcher: Shader;
 sampler: *SDL_GPUSampler;
+repeat_sampler: *SDL_GPUSampler;
+passes: [..] Pass;
 vertex_buffer: *SDL_GPUBuffer;
 upload: *SDL_GPUTransferBuffer;
 white: Texture;
@@ -182,8 +230,9 @@ batches: [..] Batch;     // runs of vertices sharing a texture
 matrices: [16] Matrix;
 matrix_top: int;
 
-load_shader :: (path: string, stage: SDL_GPUShaderStage, samplers: u32, uniforms: u32) -> *SDL_GPUShader {
-    code, ok := read_entire_file(path);
+load_stage :: (name: string, stage: SDL_GPUShaderStage, samplers: u32, uniforms: u32) -> *SDL_GPUShader {
+    dir := path_strip_filename(get_path_of_running_executable());
+    code, ok := read_entire_file(tprint("%shaders/%.%.msl", dir, name, ifx stage == .VERTEX then "vertex" else "fragment"));
     if !ok return null;
     defer free(code);
     return SDL_CreateGPUShader(device, *(SDL_GPUShaderCreateInfo.{
@@ -192,9 +241,41 @@ load_shader :: (path: string, stage: SDL_GPUShaderStage, samplers: u32, uniforms
     }));
 }
 
+make_pipeline :: (name: string, samplers: u32, uniforms: u32, format: SDL_GPUTextureFormat) -> *SDL_GPUGraphicsPipeline {
+    vs := load_stage("batcher", .VERTEX, samplers = 0, uniforms = 1);
+    fs := load_stage(name, .FRAGMENT, samplers, uniforms);
+    defer { if vs SDL_ReleaseGPUShader(device, vs); if fs SDL_ReleaseGPUShader(device, fs); }
+    if !vs || !fs return null;
+
+    buffer := SDL_GPUVertexBufferDescription.{slot = 0, pitch = size_of(Vertex), input_rate = .VERTEX};
+    attributes := SDL_GPUVertexAttribute.[
+        .{0, 0, .FLOAT2,      #run field_offset("pos")},
+        .{1, 0, .FLOAT2,      #run field_offset("uv")},
+        .{2, 0, .UBYTE4_NORM, #run field_offset("color")},
+        .{3, 0, .UBYTE4_NORM, #run field_offset("mode")},
+    ];
+    // Premultiplied alpha, like Foster.
+    target := SDL_GPUColorTargetDescription.{
+        format = format,
+        blend_state = .{
+            src_color_blendfactor = .ONE, dst_color_blendfactor = .ONE_MINUS_SRC_ALPHA, color_blend_op = .ADD,
+            src_alpha_blendfactor = .ONE, dst_alpha_blendfactor = .ONE_MINUS_SRC_ALPHA, alpha_blend_op = .ADD,
+            enable_blend = true,
+        },
+    };
+    info: SDL_GPUGraphicsPipelineCreateInfo;
+    info.vertex_shader = vs;
+    info.fragment_shader = fs;
+    info.vertex_input_state = .{*buffer, 1, attributes.data, attributes.count};
+    info.primitive_type = .TRIANGLELIST;
+    info.target_info = .{color_target_descriptions = *target, num_color_targets = 1};
+    return SDL_CreateGPUGraphicsPipeline(device, *info);
+}
+
 quad :: (r: Rect, uv0: Vector2, uv1: Vector2, color: Color, mode: Color, texture: *SDL_GPUTexture) {
     if vertex_count + 6 > vertices.count return;
-    if !batches.count || peek(batches).texture != texture array_add(*batches, .{texture, vertex_count, 0});
+    pass_start := passes.count && peek(passes).first_batch == batches.count;
+    if !batches.count || pass_start || peek(batches).texture != texture array_add(*batches, .{texture, vertex_count, 0});
     m := matrices[matrix_top];
     p0 := r.pos * m.scale + m.translate;
     p1 := (r.pos + r.size) * m.scale + m.translate;

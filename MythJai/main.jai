@@ -7,6 +7,8 @@ ROOM :: "Rooms/Myth/super_simple.json";
 started: bool;
 room: Room;
 pack: Pack;
+scene: Texture;             // the world, unlit, at the view's resolution
+lighting: Shader;
 camera: Vector2;            // top-left of the view, in room pixels
 pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
@@ -74,28 +76,80 @@ frame :: () -> bool {
 }
 
 render :: () {
+    if !scene.gpu scene = make_target(xx VIEW.x, xx VIEW.y);
+    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 2, uniforms = 1);
+
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
     origin := (size - VIEW * scale) * 0.5;
-    push_matrix(.{floor(origin.x), floor(origin.y)}, scale);
-    rect(.{.{}, VIEW}, room.backdrop);
+    origin = .{floor(origin.x), floor(origin.y)};
+    view := camera;
+    if shake_timer > 0 view += Vector2.{random_get_within_range(-1, 1), random_get_within_range(-1, 1)} * 2;
+    view = .{floor(view.x), floor(view.y)};
 
-    shaken := camera;
-    if shake_timer > 0 shaken += Vector2.{random_get_within_range(-1, 1), random_get_within_range(-1, 1)} * 2;
-    push_matrix(-Vector2.{floor(shaken.x), floor(shaken.y)}, 1);
+    // The world, unlit.
+    begin_pass(scene, clear = room.backdrop);
+    push_matrix(-view, 1);
     draw_tiles(tile_draws.background);
     draw_tiles(tile_draws.foreground);
     draw_all(context.actors);
     pop_matrix();
-    pop_matrix();
 
-    // Letterbox: cover whatever the world drew outside the view.
-    black := rgb(0);
-    rect(.{.{}, .{size.x, origin.y}}, black);
-    rect(.{.{0, origin.y + VIEW.y * scale}, .{size.x, size.y}}, black);
-    rect(.{.{}, .{origin.x, size.y}}, black);
-    rect(.{.{origin.x + VIEW.x * scale, 0}, .{size.x, size.y}}, black);
-    present(black);
+    // Lit onto the window.
+    uniforms := lighting_uniforms(view);
+    begin_pass(clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise]);
+    push_matrix(origin, scale);
+    image(scene, .{.{}, VIEW}, .{});
+
+    // Unlit on top: what glows.
+    begin_pass(keep = true);
+    push_matrix(-view, 1);
+    for context.actors.lights draw_emissive(it);
+    pop_matrix();
+    pop_matrix();
+    present();
+}
+
+MAX_LIGHTS :: 16;
+Lighting_Uniforms :: struct {
+    view, ambient, noise, noise_scale, response, dither, counts: Vector4;
+    lights: [MAX_LIGHTS * 2] Vector4;
+}
+
+// Myth's defaults: Manager.Visuals and Room.
+LIGHT_NOISE :: 0.30;
+LIGHT_NOISE_PIVOT :: 0.48;
+LIGHT_NOISE_DRIFT :: Vector2.{5, 0};    // world pixels per second
+BACKGROUND_EXPOSURE :: 1.0;
+RIM_STRENGTH :: 0.18;
+SHOULDER_KNEE :: 0.9;
+SHOULDER_CEILING :: 1.3;
+DITHER_STRENGTH :: 0.155;
+
+lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
+    u: Lighting_Uniforms;
+    u.view = .{VIEW.x, VIEW.y, view.x, view.y};
+    k := room.ambient_intensity / 255.0;
+    u.ambient = .{room.ambient.r * k, room.ambient.g * k, room.ambient.b * k, room.ambient_intensity};
+    noise_size := pack.lighting_noise.size;
+    if noise_size.x > 0 {
+        drift := LIGHT_NOISE_DRIFT * cast(float) now() / noise_size;
+        u.noise = .{LIGHT_NOISE, LIGHT_NOISE_PIVOT, drift.x - floor(drift.x), drift.y - floor(drift.y)};
+        u.noise_scale = .{1 / noise_size.x, 1 / noise_size.y, 0, 0};
+    }
+    u.response = .{BACKGROUND_EXPOSURE, RIM_STRENGTH, SHOULDER_KNEE, SHOULDER_CEILING};
+    u.dither = .{DITHER_STRENGTH, 0, 0, 0};
+    count := 0;
+    for context.actors.lights {
+        if count == MAX_LIGHTS || it.intensity <= 0 continue;
+        scale := flicker_scale(it);
+        c := it.intensity * scale / 255.0;
+        u.lights[count * 2] = .{xx it.position.x, xx it.position.y, it.radius * scale, 0};
+        u.lights[count * 2 + 1] = .{it.light_color.r * c, it.light_color.g * c, it.light_color.b * c, 0};
+        count += 1;
+    }
+    u.counts.x = xx count;
+    return u;
 }
 
 hit_stun :: (seconds: float) { hit_stun_timer = max(hit_stun_timer, seconds); }

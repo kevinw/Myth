@@ -12,12 +12,15 @@
 //   jai build.jai - game N   build build/game_N.dylib (what the host runs on a change)
 //
 // The game provides `frame :: () -> bool` (true to quit); HOTLOAD is true in hot builds.
+// shaders/*.hlsl in the game's folder compile to build/shaders for Kit's load_shader.
 
 kit_build :: (name: string) {
     set_build_options_dc(.{do_output=false});
     args := get_build_options().compile_time_command_line;
 
     if !compile_shader(tprint("%../Foster/Framework/Content/Shaders/Batcher.hlsl", JAIKIT), "batcher") return;
+    // The game's own shaders: each needs vertex_main (the batcher's, usually) and fragment_main.
+    for file_list("shaders") if ends_with(it, ".hlsl") && !compile_shader(it, path_strip_extension(path_filename(it))) return;
 
     if array_find(args, "game") {
         build(tprint("game_%", args[args.count - 1]), .DYNAMIC_LIBRARY, "main.jai");
