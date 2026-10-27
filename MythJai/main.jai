@@ -1,12 +1,12 @@
 // Human Questions (Myth), the Jai port: a vertical slice that plays Myth's own rooms.
 
-VIEW_TILES :: Point2.{40, 23};  // enough to cover Myth's 320x180 game resolution
 VIEW :: Vector2.{320, 180};
 ASSETS :: "../Myth/Assets";
 ROOM :: "Rooms/Myth/super_simple.json";
 
 started: bool;
 room: Room;
+pack: Pack;
 camera: Vector2;            // top-left of the view, in room pixels
 pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
@@ -28,6 +28,9 @@ frame :: () -> bool {
         ok: bool;
         room, ok = load_room(tprint("%/%", ASSETS, ROOM));
         if !ok { log_error("can't load %", ROOM); return true; }
+        pack, ok = load_pack();
+        if !ok { log_error("can't load the visual pack"); return true; }
+        build_tile_draws();
         context.actors = *all_actors;
         for room.actors.items if !spawn(context.actors, it) log_error("no actor type %", as_string(get(it, "Type")));
         spawn_player(start_position());
@@ -80,16 +83,8 @@ render :: () {
     shaken := camera;
     if shake_timer > 0 shaken += Vector2.{random_get_within_range(-1, 1), random_get_within_range(-1, 1)} * 2;
     push_matrix(-Vector2.{floor(shaken.x), floor(shaken.y)}, 1);
-    first := Point2.{xx floor(camera.x / TILE_SIZE), xx floor(camera.y / TILE_SIZE)};
-    last := first + VIEW_TILES;
-    for y: first.y..last.y for x: first.x..last.x {
-        cell := Point2.{xx x, xx y};
-        bounds := Rect.{to_vector(cell * TILE_SIZE), .{TILE_SIZE, TILE_SIZE}};
-        back := tile_at(room.background, room, cell);
-        if back != #char "0" rect(bounds, fade(tile_color(back), 0.4));
-        front := tile_at(room.tiles, room, cell);
-        if front != #char "0" rect(bounds, tile_color(front));
-    }
+    draw_tiles(tile_draws.background);
+    draw_tiles(tile_draws.foreground);
     draw_all(context.actors);
     pop_matrix();
     pop_matrix();
@@ -101,14 +96,6 @@ render :: () {
     rect(.{.{}, .{origin.x, size.y}}, black);
     rect(.{.{origin.x + VIEW.x * scale, 0}, .{size.x, size.y}}, black);
     present(black);
-}
-
-// A stable color per tile type, from its legend name, so types are told apart before their real look is ported.
-tile_color :: (c: u8) -> Color {
-    name := room.legend[c];
-    hash: u32 = 2166136261;
-    for 0..name.count-1 hash = (hash ^ name[it]) * 16777619;
-    return .{xx (90 + hash % 120), xx (70 + (hash >> 8) % 110), xx (60 + (hash >> 16) % 100), 255};
 }
 
 hit_stun :: (seconds: float) { hit_stun_timer = max(hit_stun_timer, seconds); }
@@ -140,6 +127,8 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 
 #load "room.jai";
 #load "actor.jai";
+#load "pack.jai";
+#load "tiles.jai";
 #import "Kit";
 #import "Basic";
 #import "Math";

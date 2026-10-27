@@ -4,6 +4,7 @@
 TILE_SIZE :: 8;
 
 Room :: struct {
+    position: Point2;           // in world tiles
     size: Point2;               // in tiles
     backdrop: Color;
     ambient: Color;
@@ -23,6 +24,8 @@ load_room :: (path: string) -> Room, bool {
     room: Room;
     size := as_vector2(get(json, "size"));
     room.size = .{xx size.x, xx size.y};
+    position := as_vector2(get(json, "position"));
+    room.position = .{xx position.x, xx position.y};
     room.backdrop = rgb(as_string(get(json, "backdropColor")), default = rgb(0x1a0a2e));
     room.ambient = rgb(as_string(get(json, "ambientColor")), default = rgb(0x525252));
     room.ambient_intensity = as_float(get(json, "ambientIntensity"), 0.8);

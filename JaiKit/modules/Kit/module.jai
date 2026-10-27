@@ -5,3 +5,4 @@
 #load "audio.jai";
 #load "json.jai";
 #load "pool.jai";
+#load "qoi.jai";
