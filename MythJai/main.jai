@@ -187,6 +187,8 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "tiles.jai";
 #load "hud.jai";
 #load "sound.jai";
+#load "ozz.jai";
+#load "rig.jai";
 #import "Kit";
 #import "Basic";
 #import "Math";

@@ -138,6 +138,42 @@ image :: (texture: Texture, source: Rect, pos: Vector2, color := WHITE) {
     quad(.{pos, source.size}, source.pos / texture.size, (source.pos + source.size) / texture.size, color, .{255, 0, 0, 0}, texture.gpu);
 }
 
+// Filled shapes in the current color fill mode (the white texture, ignored).
+triangle :: (a: Vector2, b: Vector2, c: Vector2, color: Color) {
+    if vertex_count + 3 > vertices.count return;
+    batch_for(white.gpu);
+    m := matrices[matrix_top];
+    mode := Color.{0, 0, 255, 0};
+    for p: Vector2.[a, b, c] { vertices[vertex_count] = .{p * m.scale + m.translate, .{}, color, mode}; vertex_count += 1; }
+    peek_pointer(batches).count += 3;
+}
+
+polygon :: (a: Vector2, b: Vector2, c: Vector2, d: Vector2, color: Color) {
+    triangle(a, b, c, color);
+    triangle(a, c, d, color);
+}
+
+circle :: (center: Vector2, radius: float, steps: int, color: Color) {
+    previous := center + Vector2.{radius, 0};
+    for 1..steps {
+        angle := it * TAU / steps;
+        next := center + Vector2.{cos(angle), sin(angle)} * radius;
+        triangle(center, previous, next, color);
+        previous = next;
+    }
+}
+
+// Foster's Batcher.Capsule: a tapered quad from `from` to `to`, with round caps.
+capsule :: (from: Vector2, to: Vector2, from_radius: float, to_radius: float, steps: int, color: Color, from_cap := true, to_cap := true) {
+    along := to - from;
+    span := length(along);
+    along = ifx span > 0.0001 then along / span else Vector2.{0, 1};
+    across := Vector2.{along.y, -along.x};
+    polygon(from + across * from_radius, from - across * from_radius, to - across * to_radius, to + across * to_radius, color);
+    if from_cap circle(from, from_radius, steps, color);
+    if to_cap circle(to, to_radius, steps, color);
+}
+
 // Translate, then scale, relative to the current matrix. A negative scale flips.
 push_matrix :: (translate: Vector2, scale: Vector2) {
     top := matrices[matrix_top];
@@ -272,10 +308,15 @@ make_pipeline :: (name: string, samplers: u32, uniforms: u32, format: SDL_GPUTex
     return SDL_CreateGPUGraphicsPipeline(device, *info);
 }
 
-quad :: (r: Rect, uv0: Vector2, uv1: Vector2, color: Color, mode: Color, texture: *SDL_GPUTexture) {
-    if vertex_count + 6 > vertices.count return;
+// The batch to add vertices to: the current one unless the texture changes or a pass starts.
+batch_for :: (texture: *SDL_GPUTexture) {
     pass_start := passes.count && peek(passes).first_batch == batches.count;
     if !batches.count || pass_start || peek(batches).texture != texture array_add(*batches, .{texture, vertex_count, 0});
+}
+
+quad :: (r: Rect, uv0: Vector2, uv1: Vector2, color: Color, mode: Color, texture: *SDL_GPUTexture) {
+    if vertex_count + 6 > vertices.count return;
+    batch_for(texture);
     m := matrices[matrix_top];
     p0 := r.pos * m.scale + m.translate;
     p1 := (r.pos + r.size) * m.scale + m.translate;

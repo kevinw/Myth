@@ -8,6 +8,7 @@ Player :: struct @GameActor {
     attack: enum u8 { SIDE; DOWN; UP; DUCK; };
     footstep_frame: s32 = -1;
     last_safe_ground: Point2;   // where a cliff fall puts you back
+    rig: Rig_Pose;
     last_skid_sound: float64;
 }
 
@@ -57,6 +58,8 @@ update :: (p: *Player) {
         if p.state_time >= DEATH_DURATION respawn(p);
     }
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
+    play_rig(*p.rig, p.animation, restart = p.state == .ATTACK && p.state_time <= delta);
+    update_rig(*p.rig, p.facing, delta);
     sounds(p, events);
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
@@ -68,7 +71,8 @@ update :: (p: *Player) {
 
 draw :: (p: *Player) {
     if p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;  // i-frame blink
-    draw_sprite(p, "player");
+    if p.rig.posed draw_rig(*p.rig, to_vector(p.position));
+    else draw_sprite(p, "player");
 }
 
 spawn_player :: (at: Point2) -> *Player {
