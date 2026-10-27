@@ -106,6 +106,7 @@ render :: () {
     push_matrix(-view, 1);
     for context.actors.lights draw_emissive(it);
     pop_matrix();
+    draw_hud();
     pop_matrix();
     present();
 }
@@ -183,6 +184,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "actor.jai";
 #load "pack.jai";
 #load "tiles.jai";
+#load "hud.jai";
 #import "Kit";
 #import "Basic";
 #import "Math";

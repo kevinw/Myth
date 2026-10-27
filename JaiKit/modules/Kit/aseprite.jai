@@ -221,6 +221,11 @@ tag_duration :: (s: Sprite, tag: Tag) -> float {
     return ms / 1000.0;
 }
 
+// One frame by index, its top-left at `pos` (ignoring the origin), tinted.
+draw_frame :: (s: Sprite, frame: s32, pos: Vector2, color := WHITE) {
+    image(s.texture, .{.{frame * s.frame_size.x, 0}, s.frame_size}, pos, color);
+}
+
 find_tag :: (s: Sprite, name: string) -> Tag, bool {
     for s.tags if it.name == name return it, true;
     return s.animation, false;
