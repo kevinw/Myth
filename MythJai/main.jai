@@ -9,7 +9,10 @@ room: Room;
 pack: Pack;
 scene: Texture;             // the world, unlit, at the view's resolution
 normals: Texture;           // its normals: rgb a direction, a how much it bends the light
+lit: Texture;               // the world lit, before the CRT pass scales it to the window
 lighting: Shader;
+crt: Shader;                // Myth's own Assets/Shaders/Crt.hlsl
+no_tile_field: Texture;
 camera: Vector2;            // top-left of the view, in room pixels
 pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
@@ -80,6 +83,9 @@ frame :: () -> bool {
 render :: () {
     if !scene.gpu scene = make_target(xx VIEW.x, xx VIEW.y);
     if !normals.gpu normals = make_target(xx VIEW.x, xx VIEW.y);
+    if !lit.gpu lit = make_target(xx VIEW.x, xx VIEW.y);
+    if !crt.pipelines[0] crt = load_shader("Crt", samplers = 2, uniforms = 1);
+    if !no_tile_field.gpu { clear: Color; no_tile_field = make_texture(xx *clear, 1, 1); }
     if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 3, uniforms = 1);
 
     size := screen_size();
@@ -105,17 +111,25 @@ render :: () {
     draw_tiles(tile_draws.foreground, normals = true);
     pop_matrix();
 
-    // Lit onto the window.
+    // Lit.
     uniforms := lighting_uniforms(view);
-    begin_pass(clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals]);
-    push_matrix(origin, scale);
+    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals]);
     image(scene, .{.{}, VIEW}, .{});
 
     // Unlit on top: what glows.
-    begin_pass(keep = true);
+    begin_pass(lit, keep = true);
     push_matrix(-view, 1);
     for context.actors.lights draw_emissive(it);
     pop_matrix();
+
+    // Through Myth's CRT filter onto the window, with Myth's default settings (Manager.Visuals).
+    output := VIEW * scale;
+    crt_uniforms := float.[output.x, output.y, 0.09, 0.06, 1.5, 0, 0.35, 0.1, 1, scale, 0, 0.06, 1];
+    begin_pass(clear = rgb(0), shader = *crt, uniforms = .{size_of(type_of(crt_uniforms)), xx crt_uniforms.data}, extra = .[no_tile_field]);
+    push_matrix(origin, scale);
+    image(lit, .{.{}, VIEW}, .{});
+
+    begin_pass(keep = true);
     draw_hud();
     pop_matrix();
     present();

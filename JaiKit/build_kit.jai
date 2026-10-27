@@ -15,7 +15,8 @@
 // shaders/*.hlsl in the game's folder compile to build/shaders for Kit's load_shader.
 
 // `copy`: files to put next to the executable, like dynamic libraries whose install name is @loader_path.
-kit_build :: (name: string, copy: [] string = .[]) {
+// `shaders`: HLSL files from elsewhere to compile too (named after the file).
+kit_build :: (name: string, copy: [] string = .[], shaders: [] string = .[]) {
     set_build_options_dc(.{do_output=false});
     args := get_build_options().compile_time_command_line;
     make_directory_if_it_does_not_exist("build");
@@ -28,6 +29,7 @@ kit_build :: (name: string, copy: [] string = .[]) {
     if !compile_shader(tprint("%../Foster/Framework/Content/Shaders/Batcher.hlsl", JAIKIT), "batcher") return;
     // The game's own shaders: each needs vertex_main (the batcher's, usually) and fragment_main.
     for file_list("shaders") if ends_with(it, ".hlsl") && !compile_shader(it, path_strip_extension(path_filename(it))) return;
+    for shaders if !compile_shader(it, path_strip_extension(path_filename(it))) return;
 
     if array_find(args, "game") {
         build(tprint("game_%", args[args.count - 1]), .DYNAMIC_LIBRARY, "main.jai");
@@ -51,7 +53,8 @@ compile_shader :: (source: string, name: string) -> bool {
         out := tprint("build/shaders/%.%.msl", name, stage);
         entry := tprint("%_main", stage);
         if file_modtime_and_size(out) > file_modtime_and_size(source) continue;
-        if run_command(SHADERCROSS, source, "-e", entry, "-t", stage, "-s", "HLSL", "-d", "MSL", "-o", out).exit_code != 0 {
+        // -I: the shader's own folder, for its #includes.
+        if run_command(SHADERCROSS, source, "-e", entry, "-t", stage, "-s", "HLSL", "-d", "MSL", "-I", path_strip_filename(source), "-o", out).exit_code != 0 {
             compiler_report(tprint("can't compile % (%)", source, stage));
             return false;
         }
