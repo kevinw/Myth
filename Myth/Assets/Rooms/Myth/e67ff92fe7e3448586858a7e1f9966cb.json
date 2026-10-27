@@ -4,7 +4,7 @@
   "lightNoise": 0.492,
   "reverb": 0.873,
   "colorFields": {
-    "foreground": "7eeed4c9e24cc007.png"
+    "foreground": "41efb8b9260a74de.png"
   },
   "legend": {
     "#": "back",
@@ -24,7 +24,7 @@
     "w": "water"
   },
   "tiles": [
-    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1111",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1111111111",
     "TTTTTTTTTi0TTTTTT000000000TT0TTTTT000011",
     "000000000000000000000000000T000000000011",
     "0000000000000000000000000000000000000011",
