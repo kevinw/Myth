@@ -4,7 +4,8 @@
 // tapered capsules over a silhouette outline.
 // The costume (Assets/Sources/Costumes) wraps bands, studs and spikes onto bones by tag, and
 // trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
-// Not ported yet: foot IK, turns, leans and other pose modifiers, secondary motion, ragdoll,
+// The pose leans into speed and acceleration (UpdateVelocityLean) and squashes with the actor.
+// Not ported yet: foot IK, turns and the other pose modifiers, secondary motion, ragdoll,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes, normals.
 
@@ -19,6 +20,8 @@ Rig_Pose :: struct {
     instance: *void;
     projected: [MAX_JOINTS] Vector2;    // rig-local pixels from the actor's position
     depth: [MAX_JOINTS] float;          // meters toward the camera
+    lean, lean_rate: float;             // radians, a spring
+    previous_velocity_x: float;
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -33,6 +36,8 @@ RIG :: struct {
     OUTLINE :: Color.{0, 0, 0, 0xaa};
     FRONT_LIMB_OUTLINE :: 0.35;
     FRONT_LIMB_DEPTH :: 0.05;
+    VELOCITY_LEAN :: 0.6;
+    SQUISH_RESPONSE :: 0.6;
 };
 
 // What tells one rigged actor from another: its palette and costume (Assets/Actors/<name>.json).
@@ -75,14 +80,16 @@ play_rig :: (pose: *Rig_Pose, animation: string, restart := false) {
     pose.time = rig.takes[take].start;
 }
 
-// Advances the takes; poses and projects a new frame at the rig's frame rate. `facing` is -1 or 1.
-update_rig :: (pose: *Rig_Pose, facing: s32, dt: float) {
+// Advances the takes; poses and projects a new frame at the rig's frame rate, turned to face
+// the actor's way, leaning with its motion and squashed with it.
+update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
     if !rig_ready() || pose.take < 0 return;
     pose.time = advance_take(pose.take, pose.time, dt);
     if pose.previous >= 0 pose.previous_time = advance_take(pose.previous, pose.previous_time, dt);
     pose.blend = min(1.0, pose.blend + dt / RIG.BLEND_TIME);
     pose.step += dt;
     if pose.posed && pose.step < 1 / RIG.VISUAL_FPS return;
+    visual_delta := ifx pose.posed then pose.step else dt;
     pose.step = 0;
     pose.posed = true;
 
@@ -106,13 +113,40 @@ update_rig :: (pose: *Rig_Pose, facing: s32, dt: float) {
     along := positions[rig.head] - positions[rig.neck];
     if length(along) > 0.001 positions[rig.head] += unit_vector(along) * RIG.NECK_EXTENSION;
     // Facing left looks down -Z's projection; facing right turns half around (FacingYaw).
-    turn := ifx facing > 0 then -1.0 else 1.0;
+    turn := ifx a.facing > 0 then -1.0 else 1.0;
     for 0..rig.joints.count-1 {
         p := positions[it];
         turned := Vector3.{p.x * turn, p.y, p.z * turn};
-        projected := Vector2.{-turned.z, -p.y} * RIG.PIXELS_PER_METER;
-        pose.projected[it] = .{floor(projected.x + 0.5), floor(projected.y + 0.5)};  // pixel snap
+        pose.projected[it] = Vector2.{-turned.z, -p.y} * RIG.PIXELS_PER_METER;
         pose.depth[it] = turned.x;
+    }
+
+    // A spring toward leaning into the speed and the change in it, the upper body turning about the pelvis.
+    VELOCITY_LEAN_MAX_ANGLE :: 0.35;
+    VELOCITY_LEAN_FULL_SPEED :: 280.0;
+    VELOCITY_LEAN_FULL_ACCELERATION :: 900.0;
+    VELOCITY_LEAN_SPRING :: 140.0;
+    VELOCITY_LEAN_DAMPING :: 9.0;
+    acceleration := (a.velocity.x - pose.previous_velocity_x) / visual_delta;
+    pose.previous_velocity_x = a.velocity.x;
+    target := clamp(a.velocity.x / VELOCITY_LEAN_FULL_SPEED + acceleration / VELOCITY_LEAN_FULL_ACCELERATION, -1, 1) * VELOCITY_LEAN_MAX_ANGLE * RIG.VELOCITY_LEAN;
+    pose.lean_rate += (target - pose.lean) * VELOCITY_LEAN_SPRING * visual_delta;
+    pose.lean_rate *= exp(-VELOCITY_LEAN_DAMPING * visual_delta);
+    pose.lean += pose.lean_rate * visual_delta;
+    pivot := pose.projected[rig.pelvis];
+    c, s := cos(pose.lean), sin(pose.lean);
+    for 0..rig.joints.count-1 if rig.upper_body[it] > 0 {
+        v := pose.projected[it] - pivot;
+        leaned := pivot + Vector2.{v.x * c - v.y * s, v.x * s + v.y * c};
+        pose.projected[it] += (leaned - pose.projected[it]) * rig.upper_body[it];
+    }
+
+    // Squash and stretch about the feet (ApplySquish).
+    squish := Vector2.{1, 1} + (a.squish - Vector2.{1, 1}) * RIG.SQUISH_RESPONSE;
+    ground := Vector2.{pivot.x, 0};
+    for 0..rig.joints.count-1 {
+        p := ground + (pose.projected[it] - ground) * squish;
+        pose.projected[it] = .{floor(p.x + 0.5), floor(p.y + 0.5)};  // pixel snap
     }
 }
 
@@ -365,6 +399,7 @@ rig: struct {
     bone_parents: [BONES.count] s32;
     pelvis, neck, head: s32;
     legs: [2][5] s32;  // left, right: hip, knee, ankle, toe, tip (Leg)
+    upper_body: [MAX_JOINTS] float;  // how much each joint leans with the upper body
 };
 positions: [MAX_JOINTS] Vector3;
 rotations: [MAX_JOINTS] Vector4;
@@ -395,6 +430,14 @@ rig_ready :: () -> bool {
     rig.pelvis, rig.neck, rig.head = joint("pelvis"), joint("neck_01"), joint("Head");
     for side, s: string.["l", "r"] for part, p: string.["thigh", "calf", "foot", "ball", "ball_leaf"]
         rig.legs[s][p] = joint(tprint("%_%", part, side));
+    // The upper body: spine_01 and everything above it, eased in through the lower spine.
+    spine_01, spine_02 := joint("spine_01"), joint("spine_02");
+    for 0..joint_count-1 {
+        j: s32 = xx it;
+        while j >= 0 && j != spine_01 j = myth_ozz_rig_joint_parent(handle, j);
+        rig.upper_body[it] = ifx j == spine_01 then 1.0 else 0.0;
+    }
+    rig.upper_body[spine_01], rig.upper_body[spine_02] = 0.25, 0.6;
 
     // Saved takes, then every raw clip as a take of its own.
     text, read := read_entire_file(tprint("%/Rigs/ual2.takes.json", ASSETS), log_errors = false);

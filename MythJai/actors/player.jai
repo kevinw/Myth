@@ -59,7 +59,7 @@ update :: (p: *Player) {
     }
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
     play_rig(*p.rig, p.animation, restart = p.state == .ATTACK && p.state_time <= delta);
-    update_rig(*p.rig, p.facing, delta);
+    update_rig(*p.rig, p, delta);
     sounds(p, events);
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;

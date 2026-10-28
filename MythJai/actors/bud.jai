@@ -35,7 +35,7 @@ update :: (b: *Bud) {
     b.blocked_time = ifx events & .HIT_WALL then b.blocked_time + delta else 0;
     if b.position.y > room.size.y * TILE_SIZE + 12 b.respawn_timer = BUD_FALL_RESPAWN_DELAY;
     play_rig(*b.rig, b.animation);
-    update_rig(*b.rig, b.facing, delta);
+    update_rig(*b.rig, b, delta);
 }
 
 draw :: (b: *Bud) { if b.respawn_timer <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
