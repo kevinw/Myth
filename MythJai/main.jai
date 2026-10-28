@@ -24,9 +24,9 @@ hit_stun_timer: float;      // the world freezes briefly on a hit
 shake_timer: float;
 next_sprite_check: float64;
 show_light_mask: bool;      // `myth lightmask`: the background's light alone, like Myth's LightMask view
-shot_path: string;          // `myth shot <path>`: save the lit view there after SHOT_FRAME frames and quit
+shot_path: string;          // `myth shot <path> [frame]`: save the lit view there at that frame (default 90) and quit
+shot_frame := 90;
 frame_count: int;
-SHOT_FRAME :: 90;
 
 main :: () { while !frame() {} }
 
@@ -51,7 +51,9 @@ frame :: () -> bool {
         show_light_mask = array_find(args, "lightmask");
         found, at := array_find(args, "shot");
         if found && at + 1 < args.count shot_path = copy_string(args[at + 1]);
+        if found && at + 2 < args.count shot_frame = string_to_int(args[at + 2]);
         camera = clamp_camera(camera_target());
+        load_story();
         started = true;
     }
 
@@ -83,12 +85,13 @@ frame :: () -> bool {
     } else {
         if demo { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
         update_all(context.actors);
+        update_story();
     }
     camera = clamp_camera(camera_target());
     update_sound(camera + VIEW * 0.5);
     render();
     frame_count += 1;
-    if shot_path && frame_count == SHOT_FRAME {
+    if shot_path && frame_count == shot_frame {
         if !save_png(lit, shot_path) log_error("can't write %", shot_path);
         return true;
     }
@@ -146,6 +149,7 @@ render :: () {
     push_matrix(-view, 1);
     for context.actors.lights draw_emissive(it);
     pop_matrix();
+    draw_speech(view);
 
     // Through Myth's CRT filter onto the window, with Myth's default settings (Manager.Visuals).
     output := VIEW * scale;
@@ -245,6 +249,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "pack.jai";
 #load "tiles.jai";
 #load "shadows.jai";
+#load "story.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";

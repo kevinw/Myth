@@ -175,6 +175,7 @@ hurt :: (p: *Player, by: *Actor) {
     p.state_time = 0;
     if p.state == .DEAD shake(0.4);
     sound(ifx p.state == .DEAD then "death" else "hurt", p.position);
+    bark(.PLAYER_HURT);
 }
 
 // Falling out of the room costs a hit and puts you back on the last ground you stood on.

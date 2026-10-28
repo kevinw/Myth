@@ -19,6 +19,7 @@ FMOD_Studio_EventDescription_CreateInstance :: (description: *void, instance: **
 FMOD_Studio_EventInstance_Start :: (instance: *void) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Release :: (instance: *void) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Set3DAttributes :: (instance: *void, attributes: *FMOD_3D_Attributes) -> s32 #foreign fmodstudio;
+FMOD_Studio_EventInstance_SetVolume :: (instance: *void, volume: float) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_SetParameterByName :: (instance: *void, name: *u8, value: float, ignore_seek_speed: s32) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_SetParameterByNameWithLabel :: (instance: *void, name: *u8, label: *u8, ignore_seek_speed: s32) -> s32 #foreign fmodstudio;
 

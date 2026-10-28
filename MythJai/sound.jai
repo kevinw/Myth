@@ -3,17 +3,28 @@
 // with the listener at the view's centre. Music isn't hooked up yet.
 
 sound :: (path: string, at: Point2, parameter := "", label := "") {
-    if !sound_ready() return;
+    instance := start_sound(path, to_vector(at));
+    if !instance return;
+    if parameter FMOD_Studio_EventInstance_SetParameterByNameWithLabel(instance, temp_c_string(parameter), temp_c_string(label), 1);
+    finish_sound(instance);
+}
+
+// An instance of the event placed at `at`, to set parameters on before finish_sound plays it.
+start_sound :: (path: string, at: Vector2) -> *void {
+    if !sound_ready() return null;
     description: *void;
     if FMOD_Studio_System_GetEvent(fmod_system, temp_c_string(tprint("event:/%", path)), *description) != FMOD_OK {
         if !array_find(missing_events, path) { array_add(*missing_events, copy_string(path)); log_error("no sound event %", path); }
-        return;
+        return null;
     }
     instance: *void;
-    if FMOD_Studio_EventDescription_CreateInstance(description, *instance) != FMOD_OK return;
-    attributes := audio_attributes(to_vector(at));
+    if FMOD_Studio_EventDescription_CreateInstance(description, *instance) != FMOD_OK return null;
+    attributes := audio_attributes(at);
     FMOD_Studio_EventInstance_Set3DAttributes(instance, *attributes);
-    if parameter FMOD_Studio_EventInstance_SetParameterByNameWithLabel(instance, temp_c_string(parameter), temp_c_string(label), 1);
+    return instance;
+}
+
+finish_sound :: (instance: *void) {
     FMOD_Studio_EventInstance_Start(instance);
     FMOD_Studio_EventInstance_Release(instance);  // freed once it finishes playing
 }

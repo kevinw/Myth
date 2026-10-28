@@ -51,7 +51,7 @@ hit :: (b: *Blob, by: *Actor) {
     b.health -= 1;
     hit_stun(0.09);
     b.squish = .{0.5, 1};
-    if b.health <= 0 { free(*context.actors.blobs, b); return; }
+    if b.health <= 0 { free(*context.actors.blobs, b); bark(.ENEMY_KILLED); return; }
     b.velocity.x = sign(xx (b.position.x - by.position.x)) * 120.0;
 }
 
