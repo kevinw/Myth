@@ -102,23 +102,29 @@ begin_pass :: (target := Texture.{}, clear := Color.{}, keep := false, shader: *
     array_add(*passes, p);
 }
 
-// pixels: w*h premultiplied RGBA8
-make_texture :: (pixels: *u8, w: s32, h: s32) -> Texture {
-    bytes := cast(u32) (w * h * 4);
+// pixels: w*h premultiplied RGBA8, or another 4-byte `format` (R32_FLOAT).
+make_texture :: (pixels: *u8, w: s32, h: s32, format := SDL_GPUTextureFormat.R8G8B8A8_UNORM) -> Texture {
     texture := SDL_CreateGPUTexture(device, *(SDL_GPUTextureCreateInfo.{
-        type = ._2D, format = .R8G8B8A8_UNORM, usage = .SAMPLER, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
+        type = ._2D, format = format, usage = .SAMPLER, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
     }));
-    transfer := SDL_CreateGPUTransferBuffer(device, *(SDL_GPUTransferBufferCreateInfo.{usage = .UPLOAD, size = bytes}));
+    result := Texture.{texture, .{xx w, xx h}};
+    update_texture(result, pixels);
+    return result;
+}
+
+// Replaces all of `t`'s pixels (4 bytes each), ahead of the next present.
+update_texture :: (t: Texture, pixels: *u8) {
+    w, h := cast(u32) t.size.x, cast(u32) t.size.y;
+    transfer := SDL_CreateGPUTransferBuffer(device, *(SDL_GPUTransferBufferCreateInfo.{usage = .UPLOAD, size = w * h * 4}));
     defer SDL_ReleaseGPUTransferBuffer(device, transfer);
-    memcpy(SDL_MapGPUTransferBuffer(device, transfer, false), pixels, bytes);
+    memcpy(SDL_MapGPUTransferBuffer(device, transfer, false), pixels, w * h * 4);
     SDL_UnmapGPUTransferBuffer(device, transfer);
 
     cmd := SDL_AcquireGPUCommandBuffer(device);
     copy := SDL_BeginGPUCopyPass(cmd);
-    SDL_UploadToGPUTexture(copy, *(SDL_GPUTextureTransferInfo.{transfer_buffer = transfer}), *(SDL_GPUTextureRegion.{texture = texture, w = xx w, h = xx h, d = 1}), false);
+    SDL_UploadToGPUTexture(copy, *(SDL_GPUTextureTransferInfo.{transfer_buffer = transfer}), *(SDL_GPUTextureRegion.{texture = t.gpu, w = w, h = h, d = 1}), false);
     SDL_EndGPUCopyPass(copy);
     SDL_SubmitGPUCommandBuffer(cmd);
-    return .{texture, .{xx w, xx h}};
 }
 
 release_texture :: (t: Texture) { SDL_ReleaseGPUTexture(device, t.gpu); }

@@ -6,6 +6,7 @@
 // A trimmed image in the atlas: `source` is where its pixels are, `frame` places them in the
 // untrimmed image (x/y are minus the trim), like Foster's Subtexture.
 Subtex :: struct { source: RectInt; frame: RectInt; }
+Segment :: struct { a, b: Vector2; }
 
 Packed_Tileset :: struct {
     name: string;
@@ -15,6 +16,8 @@ Packed_Tileset :: struct {
     variants: [] [] Subtex;
     normal_tiles: [] Subtex;      // tiles' baked normals, same layout
     normal_variants: [] [] Subtex;
+    occluders: [] [] Segment;     // per tile, the edges that cast shadows, in tile pixels
+    occluder_variants: [] [] [] Segment;
 }
 
 Pack :: struct {
@@ -61,8 +64,10 @@ load_pack :: () -> Pack, bool {
         normal_variants := NewArray(read(*r, u16), [] Subtex);
         for * normal_variants it.* = read_subtexes(*r);
         t.normal_variants = normal_variants;
-        skip_occluders(*r);
-        for 1..read(*r, u16) skip_occluders(*r);
+        t.occluders = read_occluders(*r);
+        occluder_variants := NewArray(read(*r, u16), [] [] Segment);
+        for * occluder_variants it.* = read_occluders(*r);
+        t.occluder_variants = occluder_variants;
         array_add(*tilesets, t);
     }
     pack.tilesets = tilesets;
@@ -142,9 +147,17 @@ read_subtexes :: (r: *Reader) -> [] Subtex {
     return result;
 }
 
-skip_occluders :: (r: *Reader) {
-    // (Not `r.pos += read(...) * 16`: that reads r.pos before read() advances it.)
-    for 1..read(r, u16) { segments := read(r, u16); r.pos += segments * 16; }
+read_occluders :: (r: *Reader) -> [] [] Segment {
+    result := NewArray(read(r, u16), [] Segment);
+    for * tile: result {
+        tile.* = NewArray(read(r, u16), Segment);
+        for * tile.* {
+            // One read per statement: the order a struct literal's fields are evaluated in isn't promised.
+            it.a.x = read(r, float); it.a.y = read(r, float);
+            it.b.x = read(r, float); it.b.y = read(r, float);
+        }
+    }
+    return result;
 }
 
 premultiply :: (pixels: [] u8) {

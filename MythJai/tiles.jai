@@ -6,7 +6,8 @@
 //    tile, and where two kits meet each draws only its own quadrants.
 // Also Myth's tile field, which picks the lighting dither per tile: every cell gets a variant
 // from a hash of its world tile, and the foreground tiles stamp their own over it, family and all.
-// Not ported yet: slopes, occluders (for shadows), fill patterns spanning tiles.
+// And the edges that cast shadows: the room's bounds and the foreground kits' occluders.
+// Not ported yet: slopes, fill patterns spanning tiles.
 
 Tile_Draw :: struct { tile: Subtex; normal: Subtex; pos: Vector2; clip: RectInt; field: Color; }
 
@@ -14,10 +15,15 @@ tile_draws: struct {
     background: [..] Tile_Draw;
     foreground: [..] Tile_Draw;
 };
+occluders: [..] Segment;  // room pixels
 
 build_tile_draws :: () {
     tile_draws.background.count = 0;
     tile_draws.foreground.count = 0;
+    occluders.count = 0;
+    size := Vector2.{xx (room.size.x * TILE_SIZE), xx (room.size.y * TILE_SIZE)};
+    corners := Vector2.[.{}, .{size.x, 0}, size, .{0, size.y}];
+    for corners array_add(*occluders, .{it, corners[(it_index + 1) % 4]});
     build_layer(room.background, *tile_draws.background, foreground = false);
     build_layer(room.tiles, *tile_draws.foreground, foreground = true);
 }
@@ -104,6 +110,12 @@ build_layer :: (layer: [] u8, draws: *[..] Tile_Draw, foreground: bool) {
         normal := variant_tile(kits[c].normal_tiles, kits[c].normal_variants, kits[c].rows, MASK_TO_TILE[join], seed);
         pos := Vector2.{(vx - 0.5) * TILE_SIZE, (vy - 0.5) * TILE_SIZE};
         field := tile_field_color(xx c, world);
+        if foreground for variant_occluders(kits[c], MASK_TO_TILE[join], seed) {
+            mid := (it.a + it.b) * 0.5;
+            quadrant := ifx mid.x < TILE_SIZE / 2 then ifx mid.y < TILE_SIZE / 2 then TOP_LEFT else BOTTOM_LEFT
+                        else ifx mid.y < TILE_SIZE / 2 then TOP_RIGHT else BOTTOM_RIGHT;
+            if material & quadrant array_add(*occluders, .{pos + it.a, pos + it.b});
+        }
         if material == ALL array_add(draws, .{tile, normal, pos, .{}, field});
         else for QUADRANTS if material & it.bit array_add(draws, .{tile, normal, pos, it.clip, field});
     }
@@ -125,6 +137,13 @@ variant_tile :: (tiles: [] Subtex, variants: [] [] Subtex, rows: s32, at: Point2
     index := at.x * rows + at.y;
     if index >= variant.count return .{}, false;
     return variant[index], true;
+}
+
+// Tileset.GetVariantOccluders, picked like variant_tile.
+variant_occluders :: (t: *Packed_Tileset, at: Point2, seed: s32) -> [] Segment {
+    tiles := ifx t.occluder_variants then t.occluder_variants[(seed & 0x7fff_ffff) % t.occluder_variants.count] else t.occluders;
+    index := at.x * t.rows + at.y;
+    return ifx index < tiles.count then tiles[index] else .[];
 }
 
 // Kit's Hash32.TileVariantSeed.

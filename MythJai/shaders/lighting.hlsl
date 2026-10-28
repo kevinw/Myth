@@ -7,7 +7,8 @@
 // the background gets exposure and noise, and the foreground's rim is added even where it's
 // transparent, so a faint glow of the light hangs over the backdrop.
 // Lights bend by the tiles' baked normals (LightMasks' normal_response).
-// Not ported yet: shadows, AO, emissive, spore fog, the player's dither glitch.
+// Lights are shadowed by the occluders (shadows.jai), softened like LightMasks' point_visibility.
+// Not ported yet: sprite shadows, AO, emissive, spore fog, the player's dither glitch.
 
 cbuffer VertexUniforms : register(b0, space1)
 {
@@ -24,9 +25,9 @@ cbuffer FragmentUniforms : register(b0, space3)
     float4 NoiseScale;  // xy = noise uv per world pixel
     float4 Response;    // x = background exposure, y = rim strength, z = shoulder knee, w = shoulder ceiling
     float4 Dither;      // x = strength, y = pattern scale
-    float4 Counts;      // x = light count
+    float4 Counts;      // x = light count, y = shadow bias, z = 1 to show the background's light instead
     float4 NormalLight; // x = floor, y = gain
-    float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity
+    float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity, a shadow source radius
 };
 
 Texture2D Texture : register(t0, space2);
@@ -39,6 +40,9 @@ Texture2D FrontTexture : register(t3, space2);
 SamplerState FrontSampler : register(s3, space2);
 Texture2D TileFieldTexture : register(t4, space2);  // per tile: r = variant, g = dither family << 5
 SamplerState TileFieldSampler : register(s4, space2);
+Texture2D ShadowDepth : register(t5, space2);  // row per light: r = how far each of its rays gets
+SamplerState ShadowSampler : register(s5, space2);
+#define SHADOW_SAMPLES 512
 
 struct VsInput
 {
@@ -262,6 +266,27 @@ float3 light_shoulder(float3 light)
     return light * (knee + (ceiling - knee) * over / (1.0 + over)) / peak;
 }
 
+float shadow_sample(int light, int index, float distance)
+{
+    index = (index % SHADOW_SAMPLES + SHADOW_SAMPLES) % SHADOW_SAMPLES;
+    return distance > ShadowDepth.Load(int3(index, light, 0)).r + Counts.y ? 0.0 : 1.0;
+}
+
+// Five rays around the pixel's, spread wider with distance and the light's size.
+float shadow_visibility(int light, float2 delta, float distance, float radius, float source_radius)
+{
+    float angle = atan2(delta.y, delta.x);
+    if (angle < 0.0)
+        angle += 6.28318530718;
+    int center = (int)round(angle / 6.28318530718 * SHADOW_SAMPLES - 0.5);
+    int step = max(1, (int)round(source_radius * saturate(distance / radius)));
+    static const float weights[5] = { 0.1, 0.2, 0.4, 0.2, 0.1 };
+    float visibility = 0.0;
+    for (int i = 0; i < 5; i++)
+        visibility += weights[i] * shadow_sample(light, center + (i - 2) * step, distance);
+    return visibility;
+}
+
 // LightingComposite's dither_light_intensity without the player's dither glitch.
 float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, float dither_mask)
 {
@@ -290,19 +315,25 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 normal_data = NormalTexture.Sample(NormalSampler, uv);
     float3 normal = normalize(normal_data.rgb * 2.0 - 1.0);
     float4 light = Ambient;
+    float4 back_light = Ambient;
     for (int i = 0; i < int(Counts.x); i++)
     {
         float4 position = Lights[i * 2];
-        float attenuation = saturate(1.0 - length(position.xy - world) / position.z);
+        float distance = length(position.xy - world);
+        float attenuation = saturate(1.0 - distance / position.z);
         if (attenuation <= 0.0)
             continue;
-        float3 to_light = float3(position.xy - world, Lights[i * 2].w);
+        float3 to_light = float3(position.xy - world, position.w);
         float response = lerp(1.0, NormalLight.x + saturate(dot(normal, normalize(to_light))) * NormalLight.y, normal_data.a);
-        light += float4(Lights[i * 2 + 1].rgb * attenuation * attenuation * response, attenuation);
+        float4 contribution = float4(Lights[i * 2 + 1].rgb * attenuation * attenuation * response, attenuation);
+        light += contribution;
+        back_light += contribution * shadow_visibility(i, world - position.xy, distance, position.z, Lights[i * 2 + 1].a);
     }
     light.a = saturate(light.a);
+    back_light.a = saturate(back_light.a);
+    if (Counts.z > 0.0)
+        return float4(back_light.rgb, 1.0);
 
-    float4 back_light = light;
     back_light.rgb *= Response.x;
     if (Noise.x > 0.0)
     {

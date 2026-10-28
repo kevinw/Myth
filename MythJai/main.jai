@@ -23,6 +23,7 @@ last_ticks: u64;
 hit_stun_timer: float;      // the world freezes briefly on a hit
 shake_timer: float;
 next_sprite_check: float64;
+show_light_mask: bool;      // `myth lightmask`: the background's light alone, like Myth's LightMask view
 shot_path: string;          // `myth shot <path>`: save the lit view there after SHOT_FRAME frames and quit
 frame_count: int;
 SHOT_FRAME :: 90;
@@ -47,6 +48,7 @@ frame :: () -> bool {
         spawn_bud(spawn_player(start_position()));
         args := get_command_line_arguments();
         demo = array_find(args, "demo");
+        show_light_mask = array_find(args, "lightmask");
         found, at := array_find(args, "shot");
         if found && at + 1 < args.count shot_path = copy_string(args[at + 1]);
         camera = clamp_camera(camera_target());
@@ -101,7 +103,7 @@ render :: () {
     if !lit.gpu lit = make_target(xx VIEW.x, xx VIEW.y);
     if !crt.pipelines[0] crt = load_shader("Crt", samplers = 2, uniforms = 1);
     if !no_tile_field.gpu { clear: Color; no_tile_field = make_texture(xx *clear, 1, 1); }
-    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 5, uniforms = 1);
+    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 6, uniforms = 1);
 
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
@@ -136,7 +138,7 @@ render :: () {
 
     // Lit.
     uniforms := lighting_uniforms(view);
-    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field]);
+    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field, shadow_depths]);
     image(scene, .{.{}, VIEW}, .{});
 
     // Unlit on top: what glows.
@@ -176,6 +178,8 @@ DITHER_STRENGTH :: 0.155;
 DITHER_SCALE :: 1.0;
 NORMAL_LIGHT_FLOOR :: 0.12;
 NORMAL_LIGHT_GAIN :: 2.15;
+SHADOW_BIAS :: 0.5;
+SHADOW_SOURCE_RADIUS :: 2.3;
 
 lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u: Lighting_Uniforms;
@@ -192,15 +196,20 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u.dither = .{DITHER_STRENGTH, DITHER_SCALE, 0, 0};
     u.normal_light = .{NORMAL_LIGHT_FLOOR, NORMAL_LIGHT_GAIN, 0, 0};
     count := 0;
+    positions: [MAX_LIGHTS] Vector2;
     for context.actors.lights {
         if count == MAX_LIGHTS || it.intensity <= 0 continue;
         scale := flicker_scale(it);
         c := it.intensity * scale / 255.0;
-        u.lights[count * 2] = .{xx it.position.x, xx it.position.y, it.radius * scale, it.height};
-        u.lights[count * 2 + 1] = .{it.light_color.r * c, it.light_color.g * c, it.light_color.b * c, 0};
+        // The soft shadow's penumbra breathes with the flicker (Light.RenderShadowSourceRadius).
+        source_radius := SHADOW_SOURCE_RADIUS * (1 + (scale / (1 + it.flicker_intensity) - 1) * 0.45);
+        positions[count] = .{xx it.position.x, xx it.position.y};
+        u.lights[count * 2] = .{positions[count].x, positions[count].y, it.radius * scale, it.height};
+        u.lights[count * 2 + 1] = .{it.light_color.r * c, it.light_color.g * c, it.light_color.b * c, source_radius};
         count += 1;
     }
-    u.counts.x = xx count;
+    update_shadow_depths(array_view(positions, 0, count));
+    u.counts = .{xx count, SHADOW_BIAS, xx show_light_mask, 0};
     return u;
 }
 
@@ -235,6 +244,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "actor.jai";
 #load "pack.jai";
 #load "tiles.jai";
+#load "shadows.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";
