@@ -133,3 +133,4 @@ move_pixel :: (a: *Actor, dir: Point2) -> bool {
 #load "actors/player_start.jai";
 #load "actors/blob.jai";
 #load "actors/light.jai";
+#load "actors/pop.jai";

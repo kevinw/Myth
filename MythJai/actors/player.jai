@@ -35,6 +35,7 @@ update :: (p: *Player) {
 
     p.state_time += delta;
     if p.state == .NORMAL && attack_pressed start_attack(p, input);
+    falling := p.velocity.y;  // before this frame's landing stops it
     events: Pawn_Events;
     if p.state == {
       case .NORMAL;
@@ -75,6 +76,7 @@ update :: (p: *Player) {
     play_rig(*p.rig, rig_animation, restart = p.state == .ATTACK && p.state_time <= delta);
     update_rig(*p.rig, p, delta);
     sounds(p, events);
+    dust(p, events, falling);
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
     if p.state == .BURROW p.grounded = false;  // a point on the surface, not standing on it
@@ -146,6 +148,22 @@ sounds :: (p: *Player, events: Pawn_Events) {
     p.footstep_frame = frame;
 }
 
+// Dust kicked up by jumps, skids, wall jumps and hard landings (Player.EmitJumpParticles).
+dust :: (p: *Player, events: Pawn_Events, falling: float) {
+    HARD_LANDING_SPEED :: 200.0;
+    kick :: (at: Point2) #expand { emit("jump", to_vector(at), 8, PI / 2, 2.51, 59 * PI / 180); }
+    if events & .JUMPED kick(p.position);
+    if events & .SKIDDED kick(p.position + Point2.{p.facing * 8, 0});
+    if events & .WALL_JUMPED kick(p.position - Point2.{p.facing * p.hitbox.w / 2, 0});
+    if events & .LANDED && falling >= HARD_LANDING_SPEED kick(p.position);
+}
+
+// The duck attack's spray of plasma along the blade (Player.EmitPlasmaStrike).
+plasma_strike :: (p: *Player) {
+    direction := Vector2.{xx p.facing, 0};
+    emit_line("plasma_strike", to_vector(p.position) + direction * 5 + Vector2.{0, -3}, direction, 7, Vector2.{20.0 * p.facing + p.velocity.x, p.velocity.y * 0.9});
+}
+
 start_attack :: (p: *Player, input: Pawn_Input) {
     move_x := move_input(input);
     if !p.grounded && move_x p.facing = move_x;
@@ -154,6 +172,16 @@ start_attack :: (p: *Player, input: Pawn_Input) {
     p.state_time = 0;
     p.dash_run_armed = false;  // leaving Normal ends a sprint
     sound(ifx p.attack == .DUCK then "sword_crouched" else "sword", p.position);
+
+    // The swipe, centred on what the swing hits and led a little by your motion (Player.AttackState).
+    box := attack_box(p);
+    at := Point2.{box.x + box.w / 2, box.y + box.h / 2} + Point2.{xx (p.velocity.x * 14 * delta), xx (p.velocity.y * 9 * delta)};
+    if p.attack == {
+      case .DOWN; spawn_pop(at - Point2.{0, 8}, "strike_down_sm", p.facing);
+      case .UP;   spawn_pop(at + Point2.{0, 12}, "strike_down_sm", p.facing, flip_y = true);
+      case .SIDE; spawn_pop(at - Point2.{17, 0}, "strike_right_sm", p.facing);
+      case .DUCK; plasma_strike(p);
+    }
 }
 
 attack_animation :: (p: *Player) -> string {
@@ -164,8 +192,8 @@ attack_animation :: (p: *Player) -> string {
     }
 }
 
-// Hits whatever the swing's box touches this frame.
-swing :: (p: *Player) {
+// The swing's reach, in room pixels.
+attack_box :: (p: *Player) -> RectInt {
     box: RectInt;
     if p.attack == {
       case .DUCK; box = .{3, -6, 13, 6};
@@ -176,6 +204,12 @@ swing :: (p: *Player) {
     if p.facing < 0 box.x = -(box.x + box.w);
     box.x += p.position.x;
     box.y += p.position.y;
+    return box;
+}
+
+// Hits whatever the swing's box touches this frame.
+swing :: (p: *Player) {
+    box := attack_box(p);
     for context.actors.blobs if it.hit_cooldown <= 0 && overlaps(box, hitbox_rect(it)) {
         it.hit_cooldown = 0.5;
         sound("player/sword_hit", p.position, "hit_destination", "flesh");

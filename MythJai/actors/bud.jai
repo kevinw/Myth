@@ -35,6 +35,7 @@ update :: (b: *Bud) {
         b.pop_delay -= delta;
         if b.pop_delay > 0 return;
         b.position, b.velocity, b.squish, b.facing = b.pop_at, b.pop_velocity, b.pop_squish, b.pop_facing;
+        spawn_pop(b.position + Point2.{0, -6});
         b.remainder = .{};
         b.jump_timer, b.jump_cut_immune = JUMP_TIME * 0.9, true;
     }
@@ -62,6 +63,7 @@ bud_rides_burrow :: (b: *Bud, player: *Pawn) -> bool {
     if b.respawn_timer > 0 || b.riding || b.pop_delay > 0 || length(to_vector(b.position - player.position)) > BUD_BURROW_RIDE_RADIUS return false;
     b.riding = true;
     b.velocity = .{};
+    spawn_pop(b.position + Point2.{0, -6});
     return true;
 }
 

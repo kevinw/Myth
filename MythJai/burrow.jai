@@ -6,8 +6,9 @@
 // you and shortening it. Letting go (or running out) pops you out with a leap stronger than a
 // jump, carrying the glide; climbing a wall pops you into a wall slide. Bud, close by, rides along
 // as a white dot and pops out after you. The HUD's bar drains with it and refills on landing.
-// Not ported: burrow lines, doors and switches, seams, room crossings, quantum tunnels, sparks,
-// the ground churn, the rig sinking in.
+// Sparks fly out of the surface as you go, and burst as you leave.
+// Not ported: burrow lines, doors and switches, seams, room crossings, quantum tunnels, the
+// ground churn, the rig sinking in.
 
 Burrow :: struct {
     heading: Point2;            // travel direction along the surface
@@ -36,6 +37,7 @@ Burrow :: struct {
     glow: [80] Vector2;         // the traced line, room pixels
     glow_count: s32;
     passenger: bool;            // Bud rides along
+    sparks: float;              // sparks owed, fractional
     sound: *void;               // the burrow loop
     dive_held: s32;             // wall dive: the vertical direction held last frame,
     dive_last_tap: s32;         // the previous tap's,
@@ -171,6 +173,17 @@ burrow_state :: (p: *Pawn, input: Pawn_Input, dt: float) -> bool {
     spread := MIN_SPREAD + (1 - MIN_SPREAD) * (1 - cast(float) b.interval / (INTERVALS - 1));
     b.spread = approach(b.spread, spread, SPREAD_EASE_RATE * dt);
 
+    // Sparks thrown out of the surface, more the faster you go (EmitBurrowSparks).
+    speed01 := b.speed / BURROW_MAX_SPEED;
+    if speed01 > 0.05 {
+        b.sparks += SPARK_RATE * speed01 * dt;
+        count := cast(int) b.sparks;
+        b.sparks -= count;
+        outward := -b.toward;
+        origin := to_vector(p.position) + ifx outward.y != 0 then outward else Vector2.{};
+        if count emit("sparks", origin, count, atan2(outward.y, outward.x), 0.4 + 0.6 * speed01);
+    }
+
     update_glow(p, burrowing = true);
     if b.sound {
         place_sound(b.sound, to_vector(p.position));
@@ -226,6 +239,7 @@ burrow_light :: (p: *Pawn, burrowing: bool, light: *Light, dt: float) {
 #scope_file
 
 ATTACH_PROBE :: 8;
+SPARK_RATE :: 160.0;  // sparks a second at full speed
 ACCEL :: 500.0;
 FRICTION :: 600.0;
 REVERSE_FLIP_SPEED :: 8.0;
@@ -296,6 +310,9 @@ pop_out :: (p: *Pawn, input: Pawn_Input) {
     b.glow_exit_timer = GLOW_EXIT_TIME;
     b.needs_grounding = true;
     if b.sound { FMOD_Studio_EventInstance_Stop(b.sound, FMOD_STUDIO_STOP_ALLOWFADEOUT); FMOD_Studio_EventInstance_Release(b.sound); b.sound = null; }
+    // A last burst up and away from the way you left.
+    burst_at := to_vector(b.glow_anchor) - exit * 2 - unit_vector(to_vector(b.heading)) * 3;
+    emit("sparks", burst_at, 20, atan2(p.velocity.x, p.velocity.y) + PI / 2, 2.5, 19 * PI / 180);
     if b.passenger for context.actors.buds bud_pop_from_burrow(it, p);
     b.passenger = false;
     sound("jump", p.position);

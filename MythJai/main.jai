@@ -92,6 +92,7 @@ frame :: () -> bool {
     } else {
         if demo { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
         update_all(context.actors);
+        update_particles(delta);
         update_story();
     }
     ZOOM_RATE :: 12.0;
@@ -175,6 +176,7 @@ render :: () {
     begin_pass(lit, keep = true);
     push_matrix(-view * zoom, zoom);
     for context.actors.lights draw_emissive(it);
+    draw_particles();
     for context.actors.players draw_burrow_glow(it, it.state == .BURROW);
     pop_matrix();
     draw_speech(view);
@@ -284,6 +286,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "story.jai";
 #load "burrow.jai";
 #load "controls.jai";
+#load "particles.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";
