@@ -154,6 +154,7 @@ render :: () {
     draw_tiles(tile_draws.foreground, normals = true);
     for context.actors.players draw_normals(it);
     for context.actors.buds draw_normals(it);
+    for context.actors.blobs draw_normals(it);
     pop_matrix();
 
     begin_pass(tile_field);

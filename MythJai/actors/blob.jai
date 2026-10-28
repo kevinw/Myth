@@ -56,5 +56,6 @@ hit :: (b: *Blob, by: *Actor) {
 }
 
 draw :: (b: *Blob) { draw_sprite(b, "blob"); }
+draw_normals :: (b: *Blob) { draw_sprite_normals(b, "blob"); }
 
 chance :: (p: float) -> bool { return random_get_zero_to_one() < p; }

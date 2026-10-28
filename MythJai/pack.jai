@@ -20,10 +20,18 @@ Packed_Tileset :: struct {
     occluder_variants: [] [] [] Segment;
 }
 
+// A sprite's baked normals, frame by frame (the sprite itself we load from its .ase).
+Packed_Sprite :: struct {
+    name: string;
+    origin: Vector2;
+    normals: [] Subtex;
+}
+
 Pack :: struct {
     atlas: Texture;
     lighting_noise: Texture;
     tilesets: [] Packed_Tileset;
+    sprites: [] Packed_Sprite;
 }
 
 PACK_DIR :: "Packed/Visuals";
@@ -40,10 +48,20 @@ load_pack :: () -> Pack, bool {
     noise_name := ifx read(*r, bool) then read_string(*r) else "";
 
     for 1..read(*r, u16) { read_string(*r); skip_subtex(*r); }  // named subtextures
-    for 1..read(*r, u16) {  // sprites: we load these from their .ase instead
-        read_string(*r);
-        r.pos += 8;
-        for 1..read(*r, u16) { for 1..4 skip_subtex(*r); r.pos += 4; read_string(*r); r.pos += 8 + 4 + 4 + 4; }
+    sprites: [..] Packed_Sprite;
+    for 1..read(*r, u16) {  // sprites: just their normals; the rest we load from their .ase
+        sprite: Packed_Sprite;
+        sprite.name = read_string(*r);
+        sprite.origin.x = read(*r, float);
+        sprite.origin.y = read(*r, float);
+        sprite.normals = NewArray(read(*r, u16), Subtex);
+        for * sprite.normals {
+            skip_subtex(*r); skip_subtex(*r);  // color, visible
+            it.* = read_subtex(*r);
+            skip_subtex(*r);                   // emissive
+            r.pos += 4; read_string(*r); r.pos += 8 + 4 + 4 + 4;
+        }
+        array_add(*sprites, sprite);
         for 1..read(*r, u16) { read_string(*r); r.pos += 12; }
         for 1..read(*r, u16) { read_string(*r); r.pos += 16; }
         for 1..read(*r, u16) { read_string(*r); poses := read(*r, u16); r.pos += poses * 17; }
@@ -71,6 +89,7 @@ load_pack :: () -> Pack, bool {
         array_add(*tilesets, t);
     }
     pack.tilesets = tilesets;
+    pack.sprites = sprites;
     if r.bad { log_error("couldn't read the visual pack"); return .{}, false; }
 
     pack.atlas, ok = load_qoi(atlas_name);
@@ -88,6 +107,11 @@ load_qoi :: (name: string) -> Texture, bool {
     defer array_free(pixels);
     premultiply(pixels);
     return make_texture(pixels.data, w, h), true;
+}
+
+find_packed_sprite :: (pack: *Pack, name: string) -> *Packed_Sprite {
+    for * pack.sprites if it.name == name return it;
+    return null;
 }
 
 find_tileset :: (pack: *Pack, name: string) -> *Packed_Tileset {

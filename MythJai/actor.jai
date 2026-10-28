@@ -45,6 +45,18 @@ draw_sprite :: (a: *Actor, name: string) {
     draw_sprite(sprite, tag, a.animation_time, to_vector(a.position), .{a.facing * a.squish.x, a.squish.y}, a.animation_looping);
 }
 
+// Its baked normals for the same frame, from the visual pack (Actor.RenderNormals).
+draw_sprite_normals :: (a: *Actor, name: string) {
+    sprite := get_sprite(name);
+    packed := find_packed_sprite(*pack, name);
+    if !sprite || !packed return;
+    frame := frame_at(sprite, find_tag(sprite, a.animation), a.animation_time, a.animation_looping);
+    if frame < 0 || frame >= packed.normals.count return;
+    push_matrix(to_vector(a.position), .{a.facing * a.squish.x, a.squish.y});
+    draw_subtex(*pack, packed.normals[frame], -packed.origin);
+    pop_matrix();
+}
+
 hitbox_rect :: (a: *Actor) -> RectInt {
     return .{a.position.x + a.hitbox.x, a.position.y + a.hitbox.y, a.hitbox.w, a.hitbox.h};
 }
