@@ -1,4 +1,4 @@
-// The player: Myth's controls (arrows, Space to jump, E to attack) driving a Pawn.
+// The player: Myth's controls (controls.jai) driving a Pawn.
 
 Player :: struct @GameActor {
     #as using pawn: Pawn;
@@ -24,14 +24,14 @@ HIT_KNOCKBACK :: 30.0;      // what hitting something pushes you back by
 
 update :: (p: *Player) {
     input := Pawn_Input.{
-        move_x = cast(float) (cast(s32) key_down(SDLK_RIGHT) - cast(s32) key_down(SDLK_LEFT)),
-        move_y = cast(s32) key_down(SDLK_DOWN) - cast(s32) key_down(SDLK_UP),
-        jump_pressed = key_pressed(SDLK_SPACE),
-        jump_down = key_down(SDLK_SPACE),
-        dash_pressed = key_pressed(SDLK_LSHIFT) || key_pressed(SDLK_F),
-        dash_down = key_down(SDLK_LSHIFT) || key_down(SDLK_F),
+        move_x = control_move_x(),
+        move_y = control_move_y(),
+        jump_pressed = control_jump_pressed(),
+        jump_down = control_jump_down(),
+        dash_pressed = control_dash_pressed(),
+        dash_down = control_dash_down(),
     };
-    attack_pressed := key_pressed(SDLK_E);
+    attack_pressed := control_attack_pressed();
 
     p.state_time += delta;
     if p.state == .NORMAL && attack_pressed start_attack(p, input);

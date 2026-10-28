@@ -35,7 +35,7 @@ main :: () { while !frame() {} }
 // whichever build is newest, with every global carried over from the previous one.
 frame :: () -> bool {
     if !started {
-        if !SDL_Init(.VIDEO) { log_error("SDL_Init: %", to_string(SDL_GetError())); return true; }
+        if !SDL_Init(.VIDEO | .GAMEPAD) { log_error("SDL_Init: %", to_string(SDL_GetError())); return true; }
         window := SDL_CreateWindow("Human Questions", 1280, 720, .RESIZABLE | .HIGH_PIXEL_DENSITY);
         if !window || !gfx_init(window) { log_error("%", to_string(SDL_GetError())); return true; }
         ok: bool;
@@ -62,8 +62,10 @@ frame :: () -> bool {
     context.actors = *all_actors;
     reset_temporary_storage();
     pressed.count = 0;
+    begin_control_frame();
     event: SDL_Event;
     while SDL_PollEvent(*event) {
+        control_event(event);
         if event.type == xx SDL_EventType.QUIT return true;
         if event.type == xx SDL_EventType.KEY_DOWN && !event.key.repeat {
             array_add(*pressed, event.key.key);
@@ -72,6 +74,7 @@ frame :: () -> bool {
         if event.type == xx SDL_EventType.KEY_UP array_unordered_remove_by_value(*held, event.key.key);
     }
     if array_find(pressed, SDLK_ESCAPE) return true;
+    update_controls();
 
     ticks := SDL_GetTicksNS();
     delta = ifx last_ticks then min(cast(float) (ticks - last_ticks) / 1_000_000_000, 1.0 / 20) else 1.0 / 60;
@@ -274,6 +277,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "shadows.jai";
 #load "story.jai";
 #load "burrow.jai";
+#load "controls.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";
