@@ -2,10 +2,11 @@
 // played as the takes in Assets/Rigs/ual2.takes.json and cross-faded between, posed at the
 // rig's own frame rate, turned to face the actor, projected flat, and drawn as depth-ordered
 // tapered capsules over a silhouette outline.
-// The costume (Assets/Sources/Costumes) wraps bands and studs onto bones by tag.
+// The costume (Assets/Sources/Costumes) wraps bands, studs and spikes onto bones by tag, and
+// trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
 // Not ported yet: foot IK, turns, leans and other pose modifiers, secondary motion, ragdoll,
-// spikes/kilts/trousers and costume surfaces, the sculpted head (a circle stands in), hands'
-// fingers, skin modes, normals.
+// kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
+// head (a circle stands in), hands' fingers, skin modes, normals.
 
 Rig_Pose :: struct {
     take: s32 = -1;
@@ -137,17 +138,23 @@ draw_rig :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
     head := at + pose.projected[rig.head];
     head_radius := RIG.HEAD_SIZE * RIG.PIXELS_PER_METER;
     pelvis_depth := pose.depth[rig.pelvis];
+    faces: [9] Garment_Face;
+    face_count := 0;
+    for pieces_of_costume if it.kind == .TROUSERS { face_count = trouser_faces(pose, at, it, *faces); break; }
 
     // The silhouette: every piece grown a pixel, in the outline color, under everything.
     for pieces {
         capsule(it.from, it.to, joint_radius(it.from_width) + 1, joint_radius(it.to_width) + 1, joint_steps(joint_radius(it.to_width) + 1), RIG.OUTLINE, from_cap = false);
         draw_costume(it, pieces_of_costume, RIG.OUTLINE, silhouette = true);
     }
+    for 0..face_count-1 draw_face(faces[it], RIG.OUTLINE, grow = 1);
     circle(head, head_radius + 1.4, 14, RIG.OUTLINE);
 
     head_drawn := false;
+    next_face := 0;
     for pieces {
         bone := BONES[it.bone];
+        while next_face < face_count && faces[next_face].depth <= it.depth { draw_face(faces[next_face], faces[next_face].color); next_face += 1; }
         if !head_drawn && pose.depth[rig.head] <= it.depth { circle(head, head_radius, 14, look.near); head_drawn = true; }
         core := bone.from == "pelvis";
         t := clamp(it.depth + 0.5, 0, 1);
@@ -161,6 +168,7 @@ draw_rig :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
         shade := ifx core then WHITE else mix(Color.{ratio(look.far.r, look.near.r), ratio(look.far.g, look.near.g), ratio(look.far.b, look.near.b), 255}, WHITE, t);
         draw_costume(it, pieces_of_costume, shade);
     }
+    while next_face < face_count { draw_face(faces[next_face], faces[next_face].color); next_face += 1; }
     if !head_drawn circle(head, head_radius, 14, look.near);
 }
 
@@ -200,12 +208,14 @@ BONES :: Bone_Spec.[
 ];
 
 Costume_Piece :: struct {
-    stud: bool;
+    kind: enum u8 { SLEEVE; STUD; SPIKES; TROUSERS; };
     bones: Rig_Tags;
     from: float;
     to := 1.0;
     count := 1;
     width := 1.0;
+    length := 1.0;   // spikes: how far out, in the bone's widths; negative for the other side
+    flare := 0.3;    // trousers: how much wider the hem is than the shin
     color := WHITE;
 }
 costumes: [8] struct { name: string; pieces: [..] Costume_Piece; };
@@ -232,8 +242,17 @@ draw_costume :: (piece: $T, costume: [] Costume_Piece, shade: Color, silhouette 
             from_width := (piece.from_width + (piece.to_width - piece.from_width) * start) * c.width;
             to_width := (piece.from_width + (piece.to_width - piece.from_width) * end) * c.width;
             grow := ifx silhouette then 2.0 else 0;
-            if c.stud circle((from + to) * 0.5, (from_width + to_width) * 0.25 + grow * 0.5, 10, color);
-            else bone_quad(from, to, from_width + grow, to_width + grow, color);
+            if c.kind == {
+              case .SLEEVE; bone_quad(from, to, from_width + grow, to_width + grow, color);
+              case .STUD;   circle((from + to) * 0.5, (from_width + to_width) * 0.25 + grow * 0.5, 10, color);
+              case .SPIKES;
+                along := unit_vector(piece.to - piece.from);
+                side := Vector2.{along.y, -along.x} * ifx c.length < 0 then -1.0 else 1.0;
+                a, b := from + side * from_width * 0.5, to + side * to_width * 0.5;
+                tip := (a + b) * 0.5 + side * abs(c.length) * (from_width + to_width) * 0.5;
+                if silhouette triangle(a - along, b + along, tip + side, color);
+                else triangle(a, b, tip, color);
+            }
         }
     }
 }
@@ -246,8 +265,13 @@ load_costume :: (name: string, costume: *[..] Costume_Piece) {
     for get(json, "Pieces").items {
         piece: Costume_Piece;
         kind := as_string(get(it, "Kind"), "Sleeve");
-        if kind != "Sleeve" && kind != "Stud" continue;  // spikes, kilts and trousers aren't ported
-        piece.stud = kind == "Stud";
+        if kind == {
+          case "Sleeve";   piece.kind = .SLEEVE;
+          case "Stud";     piece.kind = .STUD;
+          case "Spikes";   piece.kind = .SPIKES;
+          case "Trousers"; piece.kind = .TROUSERS;
+          case; continue;  // kilts aren't ported
+        }
         for split(as_string(get(it, "Bones")), ",",, temp) {
             name := trim(it);
             for name_of: type_info(Rig_Tags).names if equal_nocase(replace(name_of, "_", "",, temp), name) piece.bones |= xx type_info(Rig_Tags).values[it_index];
@@ -256,18 +280,74 @@ load_costume :: (name: string, costume: *[..] Costume_Piece) {
         piece.to = as_float(get(it, "To"), 1);
         piece.count = as_int(get(it, "Count"), 1);
         piece.width = as_float(get(it, "Width"), 1);
+        piece.length = as_float(get(it, "Length"), 1);
+        piece.flare = as_float(get(it, "Flare"), 0.3);
         piece.color = rgb(as_string(get(it, "Color"), "ffffff"), default = WHITE);
         array_add(costume, piece);
     }
 }
 
 bone_quad :: (from: Vector2, to: Vector2, from_width: float, to_width: float, color: Color) {
+    a, b, c, d := bone_corners(from, to, from_width, to_width);
+    polygon(a, b, c, d, color);
+}
+
+bone_corners :: (from: Vector2, to: Vector2, from_width: float, to_width: float) -> Vector2, Vector2, Vector2, Vector2 {
     along := to - from;
     span := length(along);
     along = ifx span > 0.0001 then along / span else Vector2.{0, 1};
     across := Vector2.{along.y, -along.x};
-    polygon(from + across * from_width * 0.5, from - across * from_width * 0.5, to - across * to_width * 0.5, to + across * to_width * 0.5, color);
+    return from + across * from_width * 0.5, from - across * from_width * 0.5, to - across * to_width * 0.5, to + across * to_width * 0.5;
 }
+
+Garment_Face :: struct { disc: bool; a, b, c, d: Vector2; radius: float; depth: float; color: Color; }
+
+// AddTrouserFaces and AddTrouserSeat: a tube per leg, its knee bulging as it bends and its hem
+// flaring, hung a little above the ankle so the foot shows; the far leg's a shade darker; a seat
+// joins them. Sorted far to near.
+trouser_faces :: (pose: *Rig_Pose, at: Vector2, trousers: Costume_Piece, faces: *[9] Garment_Face) -> int {
+    TROUSER_HEM_RAISE :: 0.12;
+    TROUSER_KNEE_BULGE :: 0.4;
+    SEAT_DROP :: 0.35;
+    count := 0;
+    add :: (face: Garment_Face) #expand { faces.*[count] = face; count += 1; }
+    leg_depth :: (leg: [5] s32) -> float #expand { d := 0.0; for leg d += pose.depth[it]; return d / 5; }
+    back := ifx leg_depth(rig.legs[0]) < leg_depth(rig.legs[1]) then 0 else 1;
+    thigh := RIG.THIGH * RIG.PIXELS_PER_METER * trousers.width;
+    shin := RIG.SHIN * RIG.PIXELS_PER_METER * trousers.width;
+    for leg, side: rig.legs {
+        hip, knee, ankle := at + pose.projected[leg[0]], at + pose.projected[leg[1]], at + pose.projected[leg[2]];
+        hem := ankle + (knee - ankle) * TROUSER_HEM_RAISE;
+        hem = .{floor(hem.x + 0.5), floor(hem.y + 0.5)};
+        upper, lower := knee - hip, hem - knee;
+        bend := ifx dot(upper, upper) > 0.01 && dot(lower, lower) > 0.01 then abs(sin(atan2(upper.x * lower.y - upper.y * lower.x, dot(upper, lower)))) else 0.0;
+        knee_width := (thigh + shin) * 0.5 + thigh * TROUSER_KNEE_BULGE * bend;
+        depth := (pose.depth[leg[0]] + pose.depth[leg[1]] + pose.depth[leg[2]]) / 3 + 0.001;
+        color := ifx side == back then darken(trousers.color, 0.8) else trousers.color;
+        a, b, c, d := bone_corners(hip, knee, thigh, knee_width);
+        add(.{false, a, b, c, d, 0, depth, color});
+        a, b, c, d = bone_corners(knee, hem, knee_width, shin * (1 + trousers.flare));
+        add(.{false, a, b, c, d, 0, depth, color});
+        add(.{true, knee, .{}, .{}, .{}, knee_width * 0.5, depth, color});
+        add(.{true, hip, .{}, .{}, .{}, thigh * 0.5, depth, color});
+    }
+    left, right := at + pose.projected[rig.legs[0][0]], at + pose.projected[rig.legs[1][0]];
+    raise := Vector2.{0, -RIG.THIGH * RIG.PIXELS_PER_METER * 0.5};
+    left_low := left + (at + pose.projected[rig.legs[0][1]] - left) * SEAT_DROP;
+    right_low := right + (at + pose.projected[rig.legs[1][1]] - right) * SEAT_DROP;
+    add(.{false, left + raise, right + raise, right_low, left_low, 0, min(pose.depth[rig.legs[0][0]], pose.depth[rig.legs[1][0]]) - 0.001, darken(trousers.color, 0.9)});
+    quick_sort(array_view(faces.*, 0, count), (x: Garment_Face, y: Garment_Face) -> s64 { return ifx x.depth < y.depth then -1 else ifx x.depth > y.depth then 1 else 0; });
+    return count;
+}
+
+// DrawGarment; `grow` nudges it a pixel each way for the outline.
+draw_face :: (face: Garment_Face, color: Color, grow := 0.0) {
+    if face.disc { circle(face.a, face.radius + grow, 10, color); return; }
+    if grow <= 0 { polygon(face.a, face.b, face.c, face.d, color); return; }
+    for Vector2.[.{1, 0}, .{-1, 0}, .{0, 1}, .{0, -1}] polygon(face.a + it * grow, face.b + it * grow, face.c + it * grow, face.d + it * grow, color);
+}
+
+darken :: (c: Color, k: float) -> Color { return .{xx (c.r * k), xx (c.g * k), xx (c.b * k), 255}; }
 
 multiply :: (a: Color, b: Color) -> Color {
     return .{xx (cast(u32) a.r * b.r / 255), xx (cast(u32) a.g * b.g / 255), xx (cast(u32) a.b * b.b / 255), xx (cast(u32) a.a * b.a / 255)};
@@ -284,6 +364,7 @@ rig: struct {
     bone_joints: [BONES.count] [2] s32;
     bone_parents: [BONES.count] s32;
     pelvis, neck, head: s32;
+    legs: [2][5] s32;  // left, right: hip, knee, ankle, toe, tip (Leg)
 };
 positions: [MAX_JOINTS] Vector3;
 rotations: [MAX_JOINTS] Vector4;
@@ -312,6 +393,8 @@ rig_ready :: () -> bool {
         for BONES if it.to == bone.from { rig.bone_parents[index] = xx it_index; break; }
     }
     rig.pelvis, rig.neck, rig.head = joint("pelvis"), joint("neck_01"), joint("Head");
+    for side, s: string.["l", "r"] for part, p: string.["thigh", "calf", "foot", "ball", "ball_leaf"]
+        rig.legs[s][p] = joint(tprint("%_%", part, side));
 
     // Saved takes, then every raw clip as a take of its own.
     text, read := read_entire_file(tprint("%/Rigs/ual2.takes.json", ASSETS), log_errors = false);
