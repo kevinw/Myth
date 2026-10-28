@@ -28,6 +28,8 @@ update :: (p: *Player) {
         move_y = cast(s32) key_down(SDLK_DOWN) - cast(s32) key_down(SDLK_UP),
         jump_pressed = key_pressed(SDLK_SPACE),
         jump_down = key_down(SDLK_SPACE),
+        dash_pressed = key_pressed(SDLK_LSHIFT) || key_pressed(SDLK_F),
+        dash_down = key_down(SDLK_LSHIFT) || key_down(SDLK_F),
     };
     attack_pressed := key_pressed(SDLK_E);
 
@@ -66,7 +68,11 @@ update :: (p: *Player) {
     }
     update_burrow_always(p, delta);
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
-    play_rig(*p.rig, p.animation, restart = p.state == .ATTACK && p.state_time <= delta);
+    // Sprinting gets the full run, and the sprint once it's really moving (Pawn.RigClipFor).
+    rig_animation := p.animation;
+    if (p.animation == "run" || p.animation == "run_start") && dash_running(p) && p.state == .NORMAL
+        rig_animation = ifx abs(p.velocity.x) > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
+    play_rig(*p.rig, rig_animation, restart = p.state == .ATTACK && p.state_time <= delta);
     update_rig(*p.rig, p, delta);
     sounds(p, events);
 
@@ -128,6 +134,7 @@ sounds :: (p: *Player, events: Pawn_Events) {
     if events & (.JUMPED | .WALL_JUMPED) sound("jump", p.position);
     if events & .LANDED sound("land", p.position, "Type", GROUND_TYPE);
     if events & .ROLLED sound("player/roll", p.position);
+    if events & .DASH_HIT_WALL sound("player/dash_wall", p.position);
     if events & .SKIDDED && now() - p.last_skid_sound > 0.5 { sound("player/skid", p.position); p.last_skid_sound = now(); }
 
     // A footstep on every sixth frame of a running animation, like Myth's AfterStateUpdate.
@@ -145,6 +152,7 @@ start_attack :: (p: *Player, input: Pawn_Input) {
     p.attack = ifx p.ducking then .DUCK else ifx !p.grounded && input.move_y > 0 then .DOWN else ifx input.move_y < 0 then .UP else .SIDE;
     p.state = .ATTACK;
     p.state_time = 0;
+    p.dash_run_armed = false;  // leaving Normal ends a sprint
     sound(ifx p.attack == .DUCK then "sword_crouched" else "sword", p.position);
 }
 
@@ -234,6 +242,9 @@ DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
     .{6.2, SDLK_SPACE, true},                               // jump and keep holding: the landing burrows,
     .{6.9, SDLK_RIGHT, true},                               // travel along the floor,
     .{7.4, SDLK_SPACE, false}, .{7.5, SDLK_RIGHT, false},   // and let go to pop out
+    .{9.2, SDLK_LEFT, true}, .{9.3, SDLK_LSHIFT, true},     // sprint left,
+    .{9.8, SDLK_SPACE, true}, .{10.0, SDLK_SPACE, false},   // jumping at speed
+    .{10.4, SDLK_LSHIFT, false}, .{10.5, SDLK_LEFT, false},
 ];
 
 // Pushes the key events due by now.

@@ -1,7 +1,9 @@
 // Pawn: Myth's walking, jumping, wall-sliding body, as a library its actors call instead of a
 // base class that calls back into them. pawn_update runs one frame of the Normal state and
 // reports what happened as Pawn_Events, for the actor to react to (sounds, particles, ...).
-// Burrowing is burrow.jai's. Not yet ported: dash, climb, carrying, liquids, air hop, turn jump.
+// Burrowing is burrow.jai's. The dash runs: pressing it arms a sprint held for as long as the
+// button is (Player's DashEngagesRunOnly). Not yet ported: climb, carrying, liquids, air hop,
+// turn jump.
 
 Pawn :: struct {
     #as using actor: Actor;
@@ -22,6 +24,10 @@ Pawn :: struct {
     airborne_roll_distance: float;
     jump_cut_immune: bool;          // a burrow pop keeps its float even with jump let go
     carry_speed: float;             // a launch's speed, which the air speed cap only bleeds down from
+    dash_run_armed: bool;           // sprinting while the dash button stays held
+    dash_cooldown: float;
+    dash_needs_grounding: bool;     // one dash per landing
+    dash_cancel_braking: bool;      // ducked out of a sprint: sliding to a stop
     burrows: bool;                  // has the ability at all (PawnAbilities.Burrow): the player, not Bud
     burrow: Burrow;
     burrow_light: float;            // 0..1, how far the glow has turned to its burrowing color
@@ -32,9 +38,11 @@ Pawn_Input :: struct {
     move_y: s32;                    // -1 up, 1 down
     jump_pressed: bool;
     jump_down: bool;
+    dash_pressed: bool;
+    dash_down: bool;
 }
 
-Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; ROLLED; BURROWED; }
+Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; ROLLED; BURROWED; DASH_HIT_WALL; }
 
 MAX_GROUND_SPEED :: 93.0;
 MAX_AIR_SPEED :: 100.0;
@@ -71,6 +79,12 @@ ROLL_JUMP_TIME :: 0.11;
 ROLL_JUMP_SPEED :: 150.0;
 AIRBORNE_ROLL_DISTANCE :: 16.0;  // two tiles
 AIR_DRAG :: 150.0;              // how fast launched speed over MAX_AIR_SPEED bleeds away
+DASH_RUN_GROUND_SPEED :: 145.0;
+DASH_RUN_AIR_SPEED :: 155.0;
+DASH_RUN_ACCEL_MULTIPLIER :: 1.5;
+DASH_RUN_REVERSE_ACCEL_MULTIPLIER :: 0.85;
+DASH_COOLDOWN :: 0.154;
+DASH_CANCEL_FRICTION :: 900.0;
 
 // One frame of the body: timers, then (with `normal`) the Normal state's steering, ducking
 // and jumping, then gravity and movement. Other states pass normal = false and steer themselves.
@@ -79,6 +93,8 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
     events := refresh_grounded(p);
     advance(p, dt);
     if input.jump_pressed p.jump_buffer_timer = JUMP_BUFFER_TIME;
+    if !input.dash_down p.dash_run_armed = false;
+    p.dash_cooldown = approach(p.dash_cooldown, 0, dt);
     if !p.grounded {
         p.coyote_timer = approach(p.coyote_timer, 0, dt);
         p.wall_jump_lock_timer = approach(p.wall_jump_lock_timer, 0, dt);
@@ -117,8 +133,11 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
     if move(p, p.velocity * dt) & .HIT_X {
         events |= .HIT_WALL;
         p.rolling = false;  // a wall stops a roll (Pawn.OnCollideX)
+        if dash_running(p) events |= .DASH_HIT_WALL;
+        p.dash_cooldown, p.dash_run_armed = 0, false;
     }
     landing := refresh_grounded(p);
+    if p.grounded p.dash_needs_grounding = false;
     // Landing with jump held dives into a burrow, ahead of anything else a landing does.
     if landing & .LANDED && normal && input.jump_down && can_burrow(p) && try_start_burrow(p, previous_velocity) return events | .BURROWED;
     if landing & .LANDED && normal && !p.rolling && try_start_roll(p, input, previous_velocity) landing |= .ROLLED;
@@ -127,12 +146,37 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
 
 move_input :: (input: Pawn_Input) -> s32 { return ifx abs(input.move_x) < MOVE_INPUT_DEADZONE then 0 else sign(input.move_x); }
 
+dash_running :: (p: *Pawn) -> bool { return p.dash_run_armed && !p.ducking; }
+
 horizontal_movement :: (p: *Pawn, move_x: s32, movement: float, dt: float) {
-    max_speed := ifx p.ducking then CRAWL_SPEED else ifx p.grounded then MAX_GROUND_SPEED else max(MAX_AIR_SPEED, p.carry_speed);
+    running := dash_running(p);
+    max_speed := ifx p.grounded then (ifx running then DASH_RUN_GROUND_SPEED else MAX_GROUND_SPEED) else (ifx running then DASH_RUN_AIR_SPEED else MAX_AIR_SPEED);
+    if p.ducking max_speed = CRAWL_SPEED;
     if p.grounded && movement != 0 max_speed *= abs(movement);
-    p.velocity.x += movement * (ifx p.grounded then GROUND_ACCEL else AIR_ACCEL) * dt;
+    accel := ifx p.grounded then GROUND_ACCEL else AIR_ACCEL;
+    if running accel *= DASH_RUN_ACCEL_MULTIPLIER;
+    if running && p.wall_jump_lock_timer <= 0 && movement != 0 && p.velocity.x != 0 && sign(movement) != sign(p.velocity.x) accel *= DASH_RUN_REVERSE_ACCEL_MULTIPLIER;
+    p.velocity.x += movement * accel * dt;
+    if p.dash_cancel_braking max_speed = max(max_speed, abs(p.velocity.x));
+    if !p.grounded max_speed = max(max_speed, p.carry_speed);
     if abs(p.velocity.x) > max_speed p.velocity.x = approach(p.velocity.x, sign(p.velocity.x) * max_speed, 2000 * dt);
-    if move_x == 0 && p.grounded p.velocity.x = approach(p.velocity.x, 0, FRICTION * dt);
+    if p.dash_cancel_braking {
+        target := ifx p.ducking then movement * CRAWL_SPEED else 0.0;
+        p.velocity.x = approach(p.velocity.x, target, DASH_CANCEL_FRICTION * dt);
+        p.dash_cancel_braking = p.velocity.x != target;
+    } else if move_x == 0 && p.grounded p.velocity.x = approach(p.velocity.x, 0, FRICTION * dt);
+}
+
+// Player.TryStartDash: arms the sprint, once per landing.
+try_start_dash :: (p: *Pawn, input: Pawn_Input, move_x: s32) -> bool {
+    if p.dash_cooldown > 0 || p.dash_needs_grounding || p.ducking && !can_stand_up(p) return false;
+    p.facing = ifx move_x then move_x else ifx p.facing then p.facing else 1;
+    p.dash_cooldown = DASH_COOLDOWN;
+    p.dash_needs_grounding = true;
+    p.dash_run_armed = input.dash_down;
+    p.ducking = false;
+    p.squish = .{1.35, 0.82};
+    return true;
 }
 
 #scope_file
@@ -141,6 +185,7 @@ normal_state :: (p: *Pawn, input: Pawn_Input, wall: s32, dt: float) -> Pawn_Even
     events: Pawn_Events;
     if p.grounded && input.move_y > 0 p.ducking = true;
     else if p.ducking p.ducking = !can_stand_up(p);
+    if p.ducking && p.dash_run_armed { p.dash_cancel_braking = true; p.dash_cooldown = 0; p.dash_run_armed = false; }
 
     move_x := move_input(input);
     movement := ifx move_x then input.move_x else 0;
@@ -197,6 +242,7 @@ normal_state :: (p: *Pawn, input: Pawn_Input, wall: s32, dt: float) -> Pawn_Even
         p.velocity.y = JUMP_FORCE;
         p.jump_timer = JUMP_TIME;
     }
+    if input.dash_pressed try_start_dash(p, input, move_x);
     return events;
 }
 

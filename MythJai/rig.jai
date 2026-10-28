@@ -63,6 +63,8 @@ take_for :: (animation: string) -> string {
       case "duck";                return "Crouch_Idle_Loop";
       case "crawl";               return "PlayerCrawl";
       case "roll";                return "PlayerRoll";
+      case "jog";                 return "Jog_Fwd_Loop";
+      case "sprint";              return "Sprint_Loop";
       case "hurt";                return "Hit_Knockback";
     }
     if begins_with(animation, "jump") || animation == "dive" return "PlayerAir";
