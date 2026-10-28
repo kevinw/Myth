@@ -1,6 +1,7 @@
 // Myth's sound: FMOD Studio events from the banks Myth builds (Assets/Sounds/FMOD/Build/Desktop),
 // fired the way Myth's actors fire them (Game.PlayAudioEvent): one-shot instances placed in 3D,
-// with the listener at the view's centre. Music isn't hooked up yet.
+// with the listener at the view's centre, ringing with the room's reverb. Music isn't hooked
+// up: this room is outside every music region, so Myth plays silence there too.
 
 sound :: (path: string, at: Point2, parameter := "", label := "") {
     instance := start_sound(path, to_vector(at));
@@ -55,6 +56,7 @@ sound_ready :: () -> bool {
         if FMOD_Studio_System_LoadBankFile(system, temp_c_string(tprint("%/Sounds/FMOD/Build/Desktop/%", ASSETS, it)), 0, *bank) != FMOD_OK log_error("can't load bank %", it);
     }
     fmod_system = system;
+    if FMOD_Studio_System_SetParameterByName(system, "RoomReverb", room.reverb, 1) != FMOD_OK log_error("no RoomReverb parameter");  // Game.ApplyRoomReverb
     return true;
 }
 

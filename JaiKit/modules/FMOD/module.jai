@@ -14,6 +14,7 @@ FMOD_Studio_System_Initialize :: (system: *void, max_channels: s32, studio_flags
 FMOD_Studio_System_Update :: (system: *void) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_LoadBankFile :: (system: *void, filename: *u8, flags: u32, bank: **void) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_GetEvent :: (system: *void, path: *u8, description: **void) -> s32 #foreign fmodstudio;
+FMOD_Studio_System_SetParameterByName :: (system: *void, name: *u8, value: float, ignore_seek_speed: s32) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_SetListenerAttributes :: (system: *void, listener: s32, attributes: *FMOD_3D_Attributes, attenuation_position: *FMOD_Vector) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventDescription_CreateInstance :: (description: *void, instance: **void) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Start :: (instance: *void) -> s32 #foreign fmodstudio;

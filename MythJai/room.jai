@@ -9,6 +9,7 @@ Room :: struct {
     backdrop: Color;
     ambient: Color;
     ambient_intensity: float;
+    reverb: float;              // how much the room rings (the FMOD global RoomReverb)
     legend: [128] string;       // tile char -> tile type name ("ember", "ruin", ...)
     tiles: [] u8;               // size.x * size.y chars, row by row; '0' is empty
     background: [] u8;
@@ -29,6 +30,7 @@ load_room :: (path: string) -> Room, bool {
     room.backdrop = rgb(as_string(get(json, "backdropColor")), default = rgb(0x1a0a2e));
     room.ambient = rgb(as_string(get(json, "ambientColor")), default = rgb(0x525252));
     room.ambient_intensity = as_float(get(json, "ambientIntensity"), 0.8);
+    room.reverb = as_float(get(json, "reverb"));
     legend := get(json, "legend");
     for legend.keys if it.count == 1 && it[0] < 128 room.legend[it[0]] = as_string(legend.items[it_index]);
     room.tiles = read_layer(get(json, "tiles"), room.size);
