@@ -5,7 +5,8 @@
 // The costume (Assets/Sources/Costumes) wraps bands, studs and spikes onto bones by tag, and
 // trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
 // The pose leans into speed and acceleration (UpdateVelocityLean) and squashes with the actor.
-// Not ported yet: foot IK, turns and the other pose modifiers, secondary motion, ragdoll,
+// Turning round eases through the front (UpdateTurn).
+// Not ported yet: foot IK, clip-driven turns and the other pose modifiers, secondary motion, ragdoll,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes, normals.
 
@@ -28,6 +29,9 @@ Rig_Pose :: struct {
     run_lean_time: float;
     was_running: bool;
     extra_lean: float;                  // degrees, leaning into a run's start
+    yaw: float;                         // radians the figure is turned: 0 facing left, PI right
+    turn_from, turn_to, turn_time: float;
+    turning_to: s32;                    // the facing it's turning toward, 0 before the first pose
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -152,11 +156,21 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
     // The head sits out along the neck (HeadPosition3D).
     along := positions[rig.head] - positions[rig.neck];
     if length(along) > 0.001 positions[rig.head] += unit_vector(along) * RIG.NECK_EXTENSION;
-    // Facing left looks down -Z's projection; facing right turns half around (FacingYaw).
-    turn := ifx a.facing > 0 then -1.0 else 1.0;
+    // Facing left looks down -Z's projection; facing right turns half around (FacingYaw), and a
+    // change of facing eases round through the front over the turn's duration (UpdateTurn).
+    TURN_DURATION :: 0.05;
+    facing_yaw := ifx a.facing > 0 then PI else 0.0;
+    if !pose.turning_to { pose.turning_to = a.facing; pose.yaw = facing_yaw; pose.turn_time = TURN_DURATION; }
+    if a.facing != pose.turning_to { pose.turning_to = a.facing; pose.turn_from, pose.turn_to, pose.turn_time = pose.yaw, facing_yaw, 0; }
+    if pose.turn_time < TURN_DURATION {
+        pose.turn_time = min(pose.turn_time + visual_delta, TURN_DURATION);
+        t := pose.turn_time / TURN_DURATION;
+        pose.yaw = pose.turn_from + (pose.turn_to - pose.turn_from) * t * t * (3 - 2 * t);
+    }
+    yaw_cos, yaw_sin := cos(pose.yaw), sin(pose.yaw);
     for 0..rig.joints.count-1 {
         p := positions[it];
-        turned := Vector3.{p.x * turn, p.y, p.z * turn};
+        turned := Vector3.{p.x * yaw_cos + p.z * yaw_sin, p.y, -p.x * yaw_sin + p.z * yaw_cos};
         pose.projected[it] = Vector2.{-turned.z, -p.y} * RIG.PIXELS_PER_METER;
         pose.depth[it] = turned.x;
     }
