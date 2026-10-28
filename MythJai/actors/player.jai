@@ -3,7 +3,7 @@
 Player :: struct @GameActor {
     #as using pawn: Pawn;
     health := MAX_HEALTH;
-    state: enum u8 { NORMAL; ATTACK; HURT; DEAD; };
+    state: enum u8 { NORMAL; ATTACK; HURT; DEAD; BURROW; };
     state_time: float;
     attack: enum u8 { SIDE; DOWN; UP; DUCK; };
     footstep_frame: s32 = -1;
@@ -37,6 +37,13 @@ update :: (p: *Player) {
     if p.state == {
       case .NORMAL;
         events = pawn_update(p, input, delta);
+        if events & .BURROWED { p.state = .BURROW; p.state_time = 0; }
+      case .BURROW;
+        if burrow_state(p, input, delta) {
+            p.state = .NORMAL;
+            p.state_time = 0;
+            if demo log("%: POPPED at % vel %", demo_time, p.position, p.velocity);
+        }
       case .ATTACK;
         move_x := move_input(input);
         horizontal_movement(p, move_x, ifx move_x then input.move_x else 0, delta);
@@ -57,12 +64,14 @@ update :: (p: *Player) {
         events = pawn_update(p, .{}, delta, normal = false);
         if p.state_time >= DEATH_DURATION respawn(p);
     }
+    update_burrow_always(p, delta);
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
     play_rig(*p.rig, p.animation, restart = p.state == .ATTACK && p.state_time <= delta);
     update_rig(*p.rig, p, delta);
     sounds(p, events);
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
+    if p.state == .BURROW p.grounded = false;  // a point on the surface, not standing on it
     // Player.CheckRoomBounds: well below the room is a cliff fall; at the other edges, where Myth
     // would move on to the next room, the player is held.
     size := room.size * TILE_SIZE;
@@ -70,13 +79,14 @@ update :: (p: *Player) {
     else p.position = .{clamp(p.position.x, 0, size.x), max(p.position.y, 0)};
 
     light := get(*context.actors.lights, p.light);
-    if light light.position = p.position + Point2.{0, -6};
+    if light { light.position = p.position + Point2.{0, -6}; burrow_light(p, p.state == .BURROW, light, delta); }
 
-    // Touching an enemy hurts.
-    if p.hit_cooldown <= 0 && p.state != .DEAD for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
+    // Touching an enemy hurts, except underground.
+    if p.hit_cooldown <= 0 && p.state != .DEAD && p.state != .BURROW for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
 }
 
 draw :: (p: *Player) {
+    if burrow_hides(p, p.state == .BURROW) return;
     if p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;  // i-frame blink
     if p.rig.posed {
         draw_rig(*p.rig, to_vector(p.position), PLAYER_LOOK);
@@ -104,6 +114,7 @@ spawn_player :: (at: Point2) -> *Player {
     light.position, light.radius, light.intensity, light.light_color, light.height = at, 36, 0.45, rgb(0xffcfa0), 16;
     light.flicker_frequency, light.flicker_intensity, light.sprite_name = 1.5, 0.02, "";
     p.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
+    p.burrows = true;
     play(p, "idle");
     start_roll(p);  // Assets/Actors/player.json starts the player in the Roll state
     return p;
@@ -220,6 +231,9 @@ DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
     .{5.0, SDLK_E, true}, .{5.05, SDLK_E, false},           // swing at the blob
     .{5.5, SDLK_E, true}, .{5.55, SDLK_E, false},
     .{5.6, SDLK_RIGHT, false},
+    .{6.2, SDLK_SPACE, true},                               // jump and keep holding: the landing burrows,
+    .{6.9, SDLK_RIGHT, true},                               // travel along the floor,
+    .{7.4, SDLK_SPACE, false}, .{7.5, SDLK_RIGHT, false},   // and let go to pop out
 ];
 
 // Pushes the key events due by now.

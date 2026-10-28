@@ -25,6 +25,12 @@ start_sound :: (path: string, at: Vector2) -> *void {
     return instance;
 }
 
+// Moves a playing instance (a loop that follows its source).
+place_sound :: (instance: *void, at: Vector2) {
+    attributes := audio_attributes(at);
+    FMOD_Studio_EventInstance_Set3DAttributes(instance, *attributes);
+}
+
 finish_sound :: (instance: *void) {
     FMOD_Studio_EventInstance_Start(instance);
     FMOD_Studio_EventInstance_Release(instance);  // freed once it finishes playing

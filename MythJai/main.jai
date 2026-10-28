@@ -166,6 +166,7 @@ render :: () {
     begin_pass(lit, keep = true);
     push_matrix(-view, 1);
     for context.actors.lights draw_emissive(it);
+    for context.actors.players draw_burrow_glow(it, it.state == .BURROW);
     pop_matrix();
     draw_speech(view);
 
@@ -272,6 +273,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "tiles.jai";
 #load "shadows.jai";
 #load "story.jai";
+#load "burrow.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";

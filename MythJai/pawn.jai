@@ -1,7 +1,7 @@
 // Pawn: Myth's walking, jumping, wall-sliding body, as a library its actors call instead of a
 // base class that calls back into them. pawn_update runs one frame of the Normal state and
 // reports what happened as Pawn_Events, for the actor to react to (sounds, particles, ...).
-// Not yet ported: dash, burrow, climb, carrying, liquids, air hop, turn jump.
+// Burrowing is burrow.jai's. Not yet ported: dash, climb, carrying, liquids, air hop, turn jump.
 
 Pawn :: struct {
     #as using actor: Actor;
@@ -20,6 +20,11 @@ Pawn :: struct {
     rolling: bool;
     roll_time: float;
     airborne_roll_distance: float;
+    jump_cut_immune: bool;          // a burrow pop keeps its float even with jump let go
+    carry_speed: float;             // a launch's speed, which the air speed cap only bleeds down from
+    burrows: bool;                  // has the ability at all (PawnAbilities.Burrow): the player, not Bud
+    burrow: Burrow;
+    burrow_light: float;            // 0..1, how far the glow has turned to its burrowing color
 }
 
 Pawn_Input :: struct {
@@ -29,7 +34,7 @@ Pawn_Input :: struct {
     jump_down: bool;
 }
 
-Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; ROLLED; }
+Pawn_Events :: enum_flags u8 { LANDED; JUMPED; WALL_JUMPED; SKIDDED; HIT_WALL; ROLLED; BURROWED; }
 
 MAX_GROUND_SPEED :: 93.0;
 MAX_AIR_SPEED :: 100.0;
@@ -65,6 +70,7 @@ ROLL_JUMP_FORCE :: -82.0;
 ROLL_JUMP_TIME :: 0.11;
 ROLL_JUMP_SPEED :: 150.0;
 AIRBORNE_ROLL_DISTANCE :: 16.0;  // two tiles
+AIR_DRAG :: 150.0;              // how fast launched speed over MAX_AIR_SPEED bleeds away
 
 // One frame of the body: timers, then (with `normal`) the Normal state's steering, ducking
 // and jumping, then gravity and movement. Other states pass normal = false and steer themselves.
@@ -86,13 +92,15 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
     p.hitbox = ifx p.ducking then RectInt.{-4, -STANDING_HEIGHT / 2, 8, STANDING_HEIGHT / 2} else RectInt.{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
 
     if p.jump_timer > 0 {
-        if !input.jump_down {  // released early: cut the jump short
+        if !input.jump_down && !p.jump_cut_immune {  // released early: cut the jump short
             p.jump_timer = 0;
             p.velocity.y *= JUMP_CUT_MULTIPLIER;
         } else {
             p.jump_timer -= dt;
         }
     }
+    if p.jump_timer <= 0 p.jump_cut_immune = false;
+    p.carry_speed = ifx p.grounded then 0.0 else min(approach(p.carry_speed, 0, AIR_DRAG * dt), abs(p.velocity.x));
 
     if !p.grounded {
         gravity := GRAVITY;
@@ -110,6 +118,8 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
         p.rolling = false;  // a wall stops a roll (Pawn.OnCollideX)
     }
     landing := refresh_grounded(p);
+    // Landing with jump held dives into a burrow, ahead of anything else a landing does.
+    if landing & .LANDED && normal && input.jump_down && can_burrow(p) && try_start_burrow(p, previous_velocity) return events | .BURROWED;
     if landing & .LANDED && normal && !p.rolling && try_start_roll(p, input, previous_velocity) landing |= .ROLLED;
     return events | landing;
 }
@@ -117,7 +127,7 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
 move_input :: (input: Pawn_Input) -> s32 { return ifx abs(input.move_x) < MOVE_INPUT_DEADZONE then 0 else sign(input.move_x); }
 
 horizontal_movement :: (p: *Pawn, move_x: s32, movement: float, dt: float) {
-    max_speed := ifx p.ducking then CRAWL_SPEED else ifx p.grounded then MAX_GROUND_SPEED else MAX_AIR_SPEED;
+    max_speed := ifx p.ducking then CRAWL_SPEED else ifx p.grounded then MAX_GROUND_SPEED else max(MAX_AIR_SPEED, p.carry_speed);
     if p.grounded && movement != 0 max_speed *= abs(movement);
     p.velocity.x += movement * (ifx p.grounded then GROUND_ACCEL else AIR_ACCEL) * dt;
     if abs(p.velocity.x) > max_speed p.velocity.x = approach(p.velocity.x, sign(p.velocity.x) * max_speed, 2000 * dt);

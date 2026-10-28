@@ -18,6 +18,8 @@ FMOD_Studio_System_SetParameterByName :: (system: *void, name: *u8, value: float
 FMOD_Studio_System_SetListenerAttributes :: (system: *void, listener: s32, attributes: *FMOD_3D_Attributes, attenuation_position: *FMOD_Vector) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventDescription_CreateInstance :: (description: *void, instance: **void) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Start :: (instance: *void) -> s32 #foreign fmodstudio;
+FMOD_STUDIO_STOP_ALLOWFADEOUT :: 0;
+FMOD_Studio_EventInstance_Stop :: (instance: *void, mode: s32) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Release :: (instance: *void) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_Set3DAttributes :: (instance: *void, attributes: *FMOD_3D_Attributes) -> s32 #foreign fmodstudio;
 FMOD_Studio_EventInstance_SetVolume :: (instance: *void, volume: float) -> s32 #foreign fmodstudio;

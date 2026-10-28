@@ -5,10 +5,19 @@
 draw_hud :: () {
     for player: context.actors.players {
         y := VIEW.y - 14;
-        // Burrow stamina (always full until burrowing is ported).
-        BURROW_SECONDS :: 1.133;
+        // Burrow stamina: its width is the capacity; it drains while burrowing, pulsing toward
+        // white, and stays dim after a burrow until it re-arms.
         PIXELS_PER_BURROW_SECOND :: 35.0;
-        rect(.{.{0, y + 11}, .{BURROW_SECONDS * PIXELS_PER_BURROW_SECOND, 2}}, fade(.{99, 155, 255, 255}, 200.0 / 255));
+        width := player.burrow.duration * PIXELS_PER_BURROW_SECOND;
+        if width <= 0 width = BURROW_DURATION * PIXELS_PER_BURROW_SECOND;
+        bar_opacity = approach(bar_opacity, ifx player.burrow.hud_spent then 0.5 else 1.0, BURROW_BAR_OPACITY_RATE * delta);
+        bar := Color.{99, 155, 255, 200};
+        if player.state == .BURROW {
+            wave := 0.5 - 0.5 * cos(cast(float) now() * TAU / 0.13);
+            bar = lerp(bar, lerp(bar, WHITE, 0.3), wave);
+        }
+        rect(.{.{0, y + 11}, .{width, 2}}, fade(.{30, 30, 30, 30}, bar_opacity));
+        rect(.{.{0, y + 11}, .{width * player.burrow.hud_fill, 2}}, fade(bar, bar_opacity));
 
         health := cast(float) max(player.health, 0);
         if displayed_health < 0 || health > displayed_health displayed_health = health;
@@ -34,6 +43,8 @@ HEALTH_COUNT_RATE :: 60.0;          // points per second the readout falls towar
 HEALTH_LOW_PULSE_SECONDS :: 0.8;
 
 displayed_health := -1.0;
+bar_opacity := 1.0;
+BURROW_BAR_OPACITY_RATE :: 8.0;
 
 lerp :: (a: Color, b: Color, t: float) -> Color {
     mix :: (x: u8, y: u8) -> u8 #expand { return xx (x + (cast(float) y - x) * t); }

@@ -2,7 +2,8 @@
 // palette. Myth steers him with ReachPilot over a route field (GameAI/); until that's ported,
 // he walks toward the player, waits at a drop into nothing, and jumps when a wall's in the way
 // or the player is above him. Falling out anyway takes him out of play for a few seconds, then
-// he turns up where he came in (Bud.BeginFallRespawn).
+// he turns up where he came in (Bud.BeginFallRespawn). Near the player when they burrow, he
+// rides along out of sight and pops out just after them, the same way (TryEnterPlayerBurrow).
 
 Bud :: struct @GameActor {
     #as using pawn: Pawn;
@@ -10,16 +11,32 @@ Bud :: struct @GameActor {
     blocked_time: float;
     entry: Point2;          // where he came into the room
     respawn_timer: float;   // out of play while > 0
+    riding: bool;           // in the player's burrow
+    pop_delay: float;       // > 0: about to pop out of it
+    pop_at: Point2;
+    pop_velocity: Vector2;
+    pop_squish: Vector2;
+    pop_facing: s32;
 }
 
 BUD_FOLLOW_DISTANCE :: 20;
 BUD_FALL_RESPAWN_DELAY :: 3.0;
+BUD_BURROW_RIDE_RADIUS :: 14;
+BUD_BURROW_POP_DELAY :: 0.25;
 
 update :: (b: *Bud) {
     if b.respawn_timer > 0 {
         b.respawn_timer -= delta;
         if b.respawn_timer <= 0 { b.position = b.entry; b.velocity, b.remainder = .{}, .{}; }
         return;
+    }
+    if b.riding { for player: context.actors.players b.position = player.position; return; }
+    if b.pop_delay > 0 {
+        b.pop_delay -= delta;
+        if b.pop_delay > 0 return;
+        b.position, b.velocity, b.squish, b.facing = b.pop_at, b.pop_velocity, b.pop_squish, b.pop_facing;
+        b.remainder = .{};
+        b.jump_timer, b.jump_cut_immune = JUMP_TIME * 0.9, true;
     }
     input: Pawn_Input;
     for player: context.actors.players {
@@ -38,7 +55,23 @@ update :: (b: *Bud) {
     update_rig(*b.rig, b, delta);
 }
 
-draw :: (b: *Bud) { if b.respawn_timer <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
+draw :: (b: *Bud) { if b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
+
+// Bud.TryEnterPlayerBurrow: close enough and on his feet, he goes under with the player.
+bud_rides_burrow :: (b: *Bud, player: *Pawn) -> bool {
+    if b.respawn_timer > 0 || b.riding || b.pop_delay > 0 || length(to_vector(b.position - player.position)) > BUD_BURROW_RIDE_RADIUS return false;
+    b.riding = true;
+    b.velocity = .{};
+    return true;
+}
+
+// Bud.BeginPlayerBurrowPop: out where the player came out, launched the same way, a moment later.
+bud_pop_from_burrow :: (b: *Bud, player: *Pawn) {
+    if !b.riding return;
+    b.riding = false;
+    b.pop_delay = BUD_BURROW_POP_DELAY;
+    b.pop_at, b.pop_velocity, b.pop_squish, b.pop_facing = player.position, player.velocity, player.squish, player.facing;
+}
 
 // Any floor under room pixel x, from y down to the bottom of the room.
 ground_below :: (x: s32, y: s32) -> bool { return overlaps_solid(.{x, y, 1, room.size.y * TILE_SIZE - y}); }
