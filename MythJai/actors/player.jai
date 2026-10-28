@@ -260,6 +260,10 @@ hurt :: (p: *Player, by: *Actor) {
     p.hit_cooldown = INVINCIBLE_DURATION;
     hit_stun(0.1);
     shake(0.1);
+    // The glitch stretches away from what hit you (HurtGlitchAxis).
+    away := to_vector(p.position - by.position);
+    if dot(away, away) <= 0.001 away = ifx dot(p.velocity, p.velocity) > 0.001 then p.velocity else Vector2.{xx -p.facing, 0};
+    pulse_dither_glitch(away);
     play(p, "hurt");
     dir := sign(xx (p.position.x - by.position.x));
     if !dir dir = -p.facing;

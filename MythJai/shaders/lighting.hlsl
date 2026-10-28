@@ -10,7 +10,7 @@
 // Lights are shadowed by the occluders (shadows.jai), softened like LightMasks' point_visibility,
 // and actors cast short soft shadows behind them (sprite_visibility).
 // Background tiles darken under the foreground that overhangs them (ambient_occlusion).
-// Not ported yet: emissive, spore fog, the player's dither glitch.
+// Not ported yet: emissive, spore fog.
 
 cbuffer VertexUniforms : register(b0, space1)
 {
@@ -30,6 +30,8 @@ cbuffer FragmentUniforms : register(b0, space3)
     float4 Counts;      // x = light count, y = shadow bias, z = 1 to show the background's light instead, w = zoom
     float4 NormalLight; // x = floor, y = gain
     float4 SpriteShadow; // x = strength, y = shortest, z = longest
+    float4 Glitch;      // the dither glitch: xy = where (the player), z = its radius, w = seconds
+    float4 GlitchAxis;  // xy = the way it stretches, z = how strong (0..1)
     float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity, a shadow source radius
 };
 
@@ -348,7 +350,19 @@ float ambient_occlusion(float2 uv)
     return saturate(sum / weights);
 }
 
-// LightingComposite's dither_light_intensity without the player's dither glitch.
+float ellipse_distance(float2 position, float2 origin, float2 axis, float long_radius, float short_radius)
+{
+    axis = normalize(axis);
+    float2 perpendicular = float2(-axis.y, axis.x);
+    float2 delta = position - origin;
+    float along = dot(delta, axis) / max(long_radius, 1.0);
+    float across = dot(delta, perpendicular) / max(short_radius, 1.0);
+    return sqrt(along * along + across * across);
+}
+
+// LightingComposite's dither_light_intensity. A hurt pulses the glitch: around the player, in
+// an ellipse stretched along the blow that grows with it, the patterns shift and scramble in
+// blocks that flicker nine times a second.
 float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, float dither_mask)
 {
     float intensity = max(max(light.r, light.g), light.b);
@@ -356,8 +370,19 @@ float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, 
     {
         float family = tile_field_family(tile_field);
         float variant = floor(tile_field.r * 255.0 + 0.5);
-        float threshold = threshold_for_pattern(glitch_dither_position(world, tile_field), pattern_for_family(family, variant));
+        float amount = GlitchAxis.z * GlitchAxis.z * (3.0 - 2.0 * GlitchAxis.z);
+        float long_radius = lerp(24.0, Glitch.z * 1.45, amount);
+        float ellipse = ellipse_distance(world, Glitch.xy, GlitchAxis.xy, long_radius, long_radius * 0.38);
+        float local_glitch = amount * smoothstep(1.0, 0.25, ellipse) * 0.82 + amount * smoothstep(0.60, 1.0, amount) * 0.18;
+        float dirty_frame = floor(Glitch.w * 9.0);
+        float2 dirty_block = floor(world / 16.0);
+        float dirty = hash_threshold(dirty_block.x * 17.0 + dirty_block.y * 31.0 + dirty_frame * 13.0 + variant * 0.23);
+        float glitch_hash = hash_threshold(variant * 19.19 + dirty_block.x * 7.13 + dirty_block.y * 3.71 + dirty_frame * 5.17);
+        float2 glitch_offset = float2(dirty - 0.5, glitch_hash - 0.5) * local_glitch * 9.0;
+        float pattern = local_glitch > 0.65 ? floor(glitch_hash * 11.0) : pattern_for_family(family, variant);
+        float threshold = threshold_for_pattern(glitch_dither_position(world + glitch_offset, tile_field), pattern);
         threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
+        threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
         float lit = saturate(intensity) < threshold ? 0.0 : 1.0;
         light.rgb *= lerp(1.0, lit / intensity, saturate(Dither.x * dither_mask));
     }

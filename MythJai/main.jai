@@ -18,6 +18,9 @@ crt: Shader;                // Myth's own Assets/Shaders/Crt.hlsl
 no_tile_field: Texture;
 camera: Vector2;            // top-left of the view, in room pixels
 zoom := 1.0;                // view pixels per room pixel: 2 while Zoom is held, eased (Game.UpdateCamera)
+glitch: float;              // the dither glitch (0..1) a hurt pulses, and the way it stretches
+glitch_target: float;
+glitch_axis := Vector2.{1, 0};
 pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
 delta: float;               // seconds this frame
@@ -95,6 +98,9 @@ frame :: () -> bool {
         update_particles(delta);
         update_story();
     }
+    // Game.Update's dither glitch: quick to rise to a pulse, slow to settle.
+    glitch = approach(glitch, glitch_target, delta * ifx glitch_target > glitch then 15.0 else 1.35);
+    if glitch_target > 0 && glitch >= glitch_target glitch_target = 0;
     ZOOM_RATE :: 12.0;
     zoom_target := ifx control_zoom_down() then 2.0 else 1.0;
     zoom += (zoom_target - zoom) * (1 - exp(-delta * ZOOM_RATE));
@@ -104,7 +110,7 @@ frame :: () -> bool {
     render();
     frame_count += 1;
     if shot_path && frame_count == shot_frame {
-        if demo for context.actors.players log("shot at demo %: player % at % health % zoom %", demo_time, it.state, it.position, it.health, zoom);
+        if demo for context.actors.players log("shot at demo %: player % at % health % zoom % glitch %", demo_time, it.state, it.position, it.health, zoom, glitch);
         if !save_png(lit, shot_path) log_error("can't write %", shot_path);
         return true;
     }
@@ -196,7 +202,7 @@ render :: () {
 
 MAX_LIGHTS :: 16;
 Lighting_Uniforms :: struct {
-    view, ambient, noise, noise_scale, response, dither, counts, normal_light, sprite_shadow: Vector4;
+    view, ambient, noise, noise_scale, response, dither, counts, normal_light, sprite_shadow, glitch, glitch_axis: Vector4;
     lights: [MAX_LIGHTS * 2] Vector4;
 }
 
@@ -214,6 +220,7 @@ NORMAL_LIGHT_FLOOR :: 0.12;
 NORMAL_LIGHT_GAIN :: 2.15;
 SHADOW_BIAS :: 0.5;
 SHADOW_SOURCE_RADIUS :: 2.3;
+DITHER_GLITCH_RADIUS :: 150.0;
 SPRITE_SHADOW_STRENGTH :: 0.5;
 SPRITE_SHADOW_MIN_LENGTH :: 4.0;
 SPRITE_SHADOW_MAX_LENGTH :: 28.0;
@@ -233,6 +240,8 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u.dither = .{DITHER_STRENGTH, DITHER_SCALE, 0, 0};
     u.normal_light = .{NORMAL_LIGHT_FLOOR, NORMAL_LIGHT_GAIN, 0, 0};
     u.sprite_shadow = .{SPRITE_SHADOW_STRENGTH, SPRITE_SHADOW_MIN_LENGTH, SPRITE_SHADOW_MAX_LENGTH, 0};
+    for context.actors.players { u.glitch = .{xx it.position.x, xx it.position.y, DITHER_GLITCH_RADIUS, xx now()}; break; }
+    u.glitch_axis = .{glitch_axis.x, glitch_axis.y, glitch, 0};
     count := 0;
     positions: [MAX_LIGHTS] Vector2;
     for context.actors.lights {
@@ -264,6 +273,11 @@ start_position :: () -> Point2 {
 }
 
 // The view centered on the player.
+pulse_dither_glitch :: (axis: Vector2, amount := 1.0) {
+    if dot(axis, axis) > 0.001 glitch_axis = unit_vector(axis);
+    glitch_target = amount;
+}
+
 camera_target :: () -> Vector2 {
     for context.actors.players return to_vector(it.position) - Vector2.{0, STANDING_HEIGHT / 2} - VIEW / zoom * 0.5;
     return camera;
