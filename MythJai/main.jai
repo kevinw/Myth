@@ -10,6 +10,7 @@ pack: Pack;
 scene: Texture;             // the background (backdrop, back tiles), unlit, at the view's resolution
 front: Texture;             // the foreground (tiles, actors) over it, unlit
 tile_field: Texture;        // which dither pattern lights each pixel (tiles.jai's draw_tile_field)
+actor_mask: Texture;        // where the player and enemies cover, barely dithered (Myth's ActorDitherAmount)
 normals: Texture;           // its normals: rgb a direction, a how much it bends the light
 lit: Texture;               // the world lit, before the CRT pass scales it to the window
 lighting: Shader;
@@ -52,6 +53,7 @@ frame :: () -> bool {
         found, at := array_find(args, "shot");
         if found && at + 1 < args.count shot_path = copy_string(args[at + 1]);
         if found && at + 2 < args.count shot_frame = string_to_int(args[at + 2]);
+        render_offscreen = shot_path != "";  // a capture runs whether or not the window can show
         camera = clamp_camera(camera_target());
         load_story();
         started = true;
@@ -73,6 +75,7 @@ frame :: () -> bool {
 
     ticks := SDL_GetTicksNS();
     delta = ifx last_ticks then min(cast(float) (ticks - last_ticks) / 1_000_000_000, 1.0 / 20) else 1.0 / 60;
+    if shot_path delta = 1.0 / 60;  // captures step evenly, so a frame number is a moment
     last_ticks = ticks;
 
     if now() > next_sprite_check {
@@ -102,11 +105,12 @@ render :: () {
     if !scene.gpu scene = make_target(xx VIEW.x, xx VIEW.y);
     if !front.gpu front = make_target(xx VIEW.x, xx VIEW.y);
     if !tile_field.gpu tile_field = make_target(xx VIEW.x, xx VIEW.y);
+    if !actor_mask.gpu actor_mask = make_target(xx VIEW.x, xx VIEW.y);
     if !normals.gpu normals = make_target(xx VIEW.x, xx VIEW.y);
     if !lit.gpu lit = make_target(xx VIEW.x, xx VIEW.y);
     if !crt.pipelines[0] crt = load_shader("Crt", samplers = 2, uniforms = 1);
     if !no_tile_field.gpu { clear: Color; no_tile_field = make_texture(xx *clear, 1, 1); }
-    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 6, uniforms = 1);
+    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 7, uniforms = 1);
 
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
@@ -139,9 +143,17 @@ render :: () {
     draw_tile_field();
     pop_matrix();
 
+    begin_pass(actor_mask);
+    push_matrix(-view, 1);
+    silhouette = WHITE;
+    for context.actors.players draw(it);
+    for context.actors.blobs draw(it);
+    silhouette = .{};
+    pop_matrix();
+
     // Lit.
     uniforms := lighting_uniforms(view);
-    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field, shadow_depths]);
+    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field, shadow_depths, actor_mask]);
     image(scene, .{.{}, VIEW}, .{});
 
     // Unlit on top: what glows.

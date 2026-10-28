@@ -163,13 +163,18 @@ image :: (texture: Texture, source: Rect, pos: Vector2, color := WHITE, wash := 
     quad(.{pos, source.size}, source.pos / texture.size, (source.pos + source.size) / texture.size, color, mode, texture.gpu);
 }
 
+// While its alpha is set, everything draws as a flat shape in this color: images washed
+// through their alpha, filled shapes recolored. For masks of what something covers.
+silhouette: Color;
+
 // Filled shapes in the current color fill mode (the white texture, ignored).
 triangle :: (a: Vector2, b: Vector2, c: Vector2, color: Color) {
     if vertex_count + 3 > vertices.count return;
     batch_for(white.gpu);
     m := matrices[matrix_top];
     mode := Color.{0, 0, 255, 0};
-    for p: Vector2.[a, b, c] { vertices[vertex_count] = .{p * m.scale + m.translate, .{}, color, mode}; vertex_count += 1; }
+    fill := ifx silhouette.a then silhouette else color;
+    for p: Vector2.[a, b, c] { vertices[vertex_count] = .{p * m.scale + m.translate, .{}, fill, mode}; vertex_count += 1; }
     peek_pointer(batches).count += 3;
 }
 
@@ -209,13 +214,20 @@ push_matrix :: (translate: Vector2, scale: float) { push_matrix(translate, Vecto
 pop_matrix :: () { matrix_top -= 1; }
 
 // Draws everything since the last present. With no begin_pass, it all went to the window, cleared to `clear`.
+// When set, present doesn't wait for the window: if it can't take a frame (hidden, display
+// asleep) the passes into targets still render and only the window's are skipped. For
+// headless captures, which then pace themselves.
+render_offscreen := false;
+
 present :: (clear := Color.{}) {
     defer { vertex_count = 0; batches.count = 0; passes.count = 0; }
     if !passes.count || passes[0].first_batch > 0 array_insert_at(*passes, .{clear = clear}, 0);
     cmd := SDL_AcquireGPUCommandBuffer(device);
     swapchain: *SDL_GPUTexture;
     w, h: u32;
-    if !SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, *swapchain, *w, *h) || !swapchain {
+    acquired := ifx render_offscreen then SDL_AcquireGPUSwapchainTexture(cmd, window, *swapchain, *w, *h)
+                else SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, *swapchain, *w, *h);
+    if !acquired || !swapchain && !render_offscreen {
         SDL_SubmitGPUCommandBuffer(cmd);
         return;
     }
@@ -233,6 +245,7 @@ present :: (clear := Color.{}) {
     for p, index: passes {
         last_batch := ifx index + 1 < passes.count then passes[index + 1].first_batch else batches.count;
         texture := ifx p.target.gpu then p.target.gpu else swapchain;
+        if !texture continue;
         size := ifx p.target.gpu then p.target.size else Vector2.{xx w, xx h};
         clear := p.clear;
         target := SDL_GPUColorTargetInfo.{texture = texture, clear_color = .{clear.r * k, clear.g * k, clear.b * k, clear.a * k}, load_op = ifx p.keep then .LOAD else .CLEAR, store_op = .STORE};
@@ -342,13 +355,15 @@ batch_for :: (texture: *SDL_GPUTexture) {
 quad :: (r: Rect, uv0: Vector2, uv1: Vector2, color: Color, mode: Color, texture: *SDL_GPUTexture) {
     if vertex_count + 6 > vertices.count return;
     batch_for(texture);
+    fill, kind := color, mode;
+    if silhouette.a { fill = silhouette; if kind.r kind = .{0, 255, 0, 0}; }
     m := matrices[matrix_top];
     p0 := r.pos * m.scale + m.translate;
     p1 := (r.pos + r.size) * m.scale + m.translate;
-    a := Vertex.{p0, uv0, color, mode};
-    b := Vertex.{.{p1.x, p0.y}, .{uv1.x, uv0.y}, color, mode};
-    c := Vertex.{p1, uv1, color, mode};
-    d := Vertex.{.{p0.x, p1.y}, .{uv0.x, uv1.y}, color, mode};
+    a := Vertex.{p0, uv0, fill, kind};
+    b := Vertex.{.{p1.x, p0.y}, .{uv1.x, uv0.y}, fill, kind};
+    c := Vertex.{p1, uv1, fill, kind};
+    d := Vertex.{.{p0.x, p1.y}, .{uv0.x, uv1.y}, fill, kind};
     for Vertex.[a, b, c, a, c, d] { vertices[vertex_count] = it; vertex_count += 1; }
     peek_pointer(batches).count += 6;
 }

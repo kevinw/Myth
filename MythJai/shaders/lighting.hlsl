@@ -43,6 +43,9 @@ SamplerState TileFieldSampler : register(s4, space2);
 Texture2D ShadowDepth : register(t5, space2);  // row per light: r = how far each of its rays gets
 SamplerState ShadowSampler : register(s5, space2);
 #define SHADOW_SAMPLES 512
+Texture2D ActorMask : register(t6, space2);  // a = the player or an enemy covers it
+SamplerState ActorMaskSampler : register(s6, space2);
+#define ACTOR_DITHER 0.2
 
 struct VsInput
 {
@@ -269,7 +272,9 @@ float3 light_shoulder(float3 light)
 float shadow_sample(int light, int index, float distance)
 {
     index = (index % SHADOW_SAMPLES + SHADOW_SAMPLES) % SHADOW_SAMPLES;
-    return distance > ShadowDepth.Load(int3(index, light, 0)).r + Counts.y ? 0.0 : 1.0;
+    // Sampled at the texel's centre (not Load, which shadercross gives a texture slot of its own).
+    float2 texel = (float2(index, light) + 0.5) / float2(SHADOW_SAMPLES, MAX_LIGHTS);
+    return distance > ShadowDepth.SampleLevel(ShadowSampler, texel, 0).r + Counts.y ? 0.0 : 1.0;
 }
 
 // Five rays around the pixel's, spread wider with distance and the light's size.
@@ -344,7 +349,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     light.rgb = light_shoulder(light.rgb);
 
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, uv);
-    float4 back = light_scene(Texture.Sample(Sampler, uv), back_light, world, tile_field, normal_data.b);
-    float4 front = light_scene(FrontTexture.Sample(FrontSampler, uv), light, world, tile_field, normal_data.b);
+    float dither_mask = lerp(normal_data.b, ACTOR_DITHER, ActorMask.Sample(ActorMaskSampler, uv).a);
+    float4 back = light_scene(Texture.Sample(Sampler, uv), back_light, world, tile_field, dither_mask);
+    float4 front = light_scene(FrontTexture.Sample(FrontSampler, uv), light, world, tile_field, dither_mask);
     return saturate(front + back * (1.0 - front.a)) * input.Color;
 }
