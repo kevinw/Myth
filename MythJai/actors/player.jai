@@ -229,6 +229,7 @@ swing :: (p: *Player) {
         center := Vector2.{box.x + box.w * 0.5, box.y + box.h * 0.5};
         p.velocity += unit_vector(to_vector(p.position) - center) * HIT_KNOCKBACK;
     }
+    for context.actors.buds bud_struck(it, box, p.position.x);
     if hit_something && p.attack == .DOWN {
         p.velocity.y = -POGO_SPEED;
         p.burrow.needs_grounding, p.burrow.timer = false, 0;

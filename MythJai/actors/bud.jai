@@ -4,6 +4,7 @@
 // or the player is above him. Falling out anyway takes him out of play for a few seconds, then
 // he turns up where he came in (Bud.BeginFallRespawn). Near the player when they burrow, he
 // rides along out of sight and pops out just after them, the same way (TryEnterPlayerBurrow).
+// Caught by the player's swing, he rounds on them and hops back out of reach (StartBackDash).
 
 Bud :: struct @GameActor {
     #as using pawn: Pawn;
@@ -17,12 +18,18 @@ Bud :: struct @GameActor {
     pop_velocity: Vector2;
     pop_squish: Vector2;
     pop_facing: s32;
+    back_dash_timer: float;
+    back_dash_cooldown: float;
 }
 
 BUD_FOLLOW_DISTANCE :: 20;
 BUD_FALL_RESPAWN_DELAY :: 3.0;
 BUD_BURROW_RIDE_RADIUS :: 14;
 BUD_BURROW_POP_DELAY :: 0.25;
+BUD_BACK_DASH_SPEED :: 120.0;
+BUD_BACK_DASH_DURATION :: 0.22;
+BUD_BACK_DASH_FRICTION :: 260.0;
+BUD_BACK_DASH_COOLDOWN :: 0.6;
 
 update :: (b: *Bud) {
     if b.respawn_timer > 0 {
@@ -39,7 +46,17 @@ update :: (b: *Bud) {
         b.remainder = .{};
         b.jump_timer, b.jump_cut_immune = JUMP_TIME * 0.9, true;
     }
+    b.back_dash_cooldown = approach(b.back_dash_cooldown, 0, delta);
     input: Pawn_Input;
+    if b.back_dash_timer > 0 {
+        b.back_dash_timer = approach(b.back_dash_timer, 0, delta);
+        b.velocity.x = approach(b.velocity.x, 0, BUD_BACK_DASH_FRICTION * delta);
+        pawn_update(b, input, delta, normal = false);
+        if b.back_dash_timer <= 0 play(b, "idle");
+        play_rig(*b.rig, b.animation, b.velocity, delta);
+        update_rig(*b.rig, b, delta);
+        return;
+    }
     for player: context.actors.players {
         dx := player.position.x - b.position.x;
         if abs(dx) > BUD_FOLLOW_DISTANCE input.move_x = xx sign(xx dx);
@@ -57,6 +74,20 @@ update :: (b: *Bud) {
 }
 
 draw :: (b: *Bud) { if b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
+
+// Bud.HitByHitbox: a swing that catches him turns him toward whoever swung and hops him back.
+bud_struck :: (b: *Bud, swing: RectInt, attacker_x: s32) {
+    if b.respawn_timer > 0 || b.riding || b.pop_delay > 0 || b.back_dash_timer > 0 || b.back_dash_cooldown > 0 return;
+    if !overlaps(swing, hitbox_rect(b)) return;
+    toward := sign(cast(float) (attacker_x - b.position.x));
+    if toward b.facing = toward;
+    b.back_dash_timer, b.back_dash_cooldown = BUD_BACK_DASH_DURATION, BUD_BACK_DASH_COOLDOWN;
+    b.velocity.x = -b.facing * BUD_BACK_DASH_SPEED;
+    b.jump_timer = 0;
+    b.squish = .{0.75, 1.3};
+    play(b, "back_dash", looping = false);
+    sound("hurt", b.position);
+}
 
 // Bud.TryEnterPlayerBurrow: close enough and on his feet, he goes under with the player.
 bud_rides_burrow :: (b: *Bud, player: *Pawn) -> bool {
