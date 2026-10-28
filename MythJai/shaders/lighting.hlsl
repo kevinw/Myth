@@ -9,7 +9,8 @@
 // Lights bend by the tiles' baked normals (LightMasks' normal_response).
 // Lights are shadowed by the occluders (shadows.jai), softened like LightMasks' point_visibility,
 // and actors cast short soft shadows behind them (sprite_visibility).
-// Not ported yet: AO, emissive, spore fog, the player's dither glitch.
+// Background tiles darken under the foreground that overhangs them (ambient_occlusion).
+// Not ported yet: emissive, spore fog, the player's dither glitch.
 
 cbuffer VertexUniforms : register(b0, space1)
 {
@@ -45,9 +46,13 @@ SamplerState TileFieldSampler : register(s4, space2);
 Texture2D ShadowDepth : register(t5, space2);  // row per light: r = how far each of its rays gets
 SamplerState ShadowSampler : register(s5, space2);
 #define SHADOW_SAMPLES 512
-Texture2D ActorMask : register(t6, space2);  // r = an actor that casts a sprite shadow, a = the player or an enemy
+Texture2D ActorMask : register(t6, space2);  // r = an actor that casts a sprite shadow, g = a background tile, b = the player or an enemy
 SamplerState ActorMaskSampler : register(s6, space2);
 #define ACTOR_DITHER 0.2
+// Manager.Visuals' ambient occlusion: blur, offset, and the light it never drops below.
+#define AO_BLUR 8.0
+#define AO_OFFSET float2(0.0, -3.0)
+#define AO_MIN_VISIBILITY 0.35
 
 struct VsInput
 {
@@ -320,6 +325,29 @@ float sprite_visibility(float2 light, float2 world, float distance, float radius
     return 1.0;
 }
 
+// How much foreground hangs over a pixel: its coverage blurred like Blur.hlsl's two passes (one
+// 2D kernel here, every other pixel), looked up a little above.
+float ambient_occlusion(float2 uv)
+{
+    float2 texel = 1.0 / View.xy;
+    float2 center = uv + AO_OFFSET * texel;
+    float sigma = AO_BLUR * 0.5;
+    float sum = 0.0;
+    float weights = 0.0;
+    for (int y = -4; y <= 4; y++)
+    {
+        for (int x = -4; x <= 4; x++)
+        {
+            float2 offset = float2(x, y) * AO_BLUR / 4.0;
+            float weight = exp(-dot(offset, offset) / (2.0 * sigma * sigma));
+            float2 at = clamp(center + offset * texel, texel * 0.5, 1.0 - texel * 0.5);
+            sum += FrontTexture.SampleLevel(FrontSampler, at, 0).a * weight;
+            weights += weight;
+        }
+    }
+    return saturate(sum / weights);
+}
+
 // LightingComposite's dither_light_intensity without the player's dither glitch.
 float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, float dither_mask)
 {
@@ -369,6 +397,9 @@ float4 fragment_main(VsOutput input) : SV_Target0
         return float4(back_light.rgb, 1.0);
 
     back_light.rgb *= Response.x;
+    float4 actor_mask = ActorMask.Sample(ActorMaskSampler, uv);
+    if (actor_mask.g > 0.0)
+        back_light.rgb *= lerp(1.0, AO_MIN_VISIBILITY, ambient_occlusion(uv) * actor_mask.g);
     if (Noise.x > 0.0)
     {
         float noise = NoiseTexture.Sample(NoiseSampler, world * NoiseScale.xy - Noise.zw).r;
@@ -378,7 +409,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     light.rgb = light_shoulder(light.rgb);
 
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, uv);
-    float dither_mask = lerp(normal_data.b, ACTOR_DITHER, ActorMask.Sample(ActorMaskSampler, uv).a);
+    float dither_mask = lerp(normal_data.b, ACTOR_DITHER, actor_mask.b);
     float4 back = light_scene(Texture.Sample(Sampler, uv), back_light, world, tile_field, dither_mask);
     float4 front = light_scene(FrontTexture.Sample(FrontSampler, uv), light, world, tile_field, dither_mask);
     return saturate(front + back * (1.0 - front.a)) * input.Color;

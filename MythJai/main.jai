@@ -10,7 +10,7 @@ pack: Pack;
 scene: Texture;             // the background (backdrop, back tiles), unlit, at the view's resolution
 front: Texture;             // the foreground (tiles, actors) over it, unlit
 tile_field: Texture;        // which dither pattern lights each pixel (tiles.jai's draw_tile_field)
-actor_mask: Texture;        // r: actors that cast sprite shadows; a: the player and enemies, barely dithered (Myth's ActorDitherAmount)
+actor_mask: Texture;        // r: actors that cast sprite shadows; g: background tiles; b: the player and enemies, barely dithered (Myth's ActorDitherAmount)
 normals: Texture;           // its normals: rgb a direction, a how much it bends the light
 lit: Texture;               // the world lit, before the CRT pass scales it to the window
 lighting: Shader;
@@ -144,12 +144,15 @@ render :: () {
     pop_matrix();
 
     // r: what casts sprite shadows (not the player or Bud: their glow would shadow itself, and
-    // Myth leaves light emitters out); a: what's barely dithered (not Bud).
+    // Myth leaves light emitters out); g: background tiles, where ambient occlusion lands;
+    // b: what's barely dithered (not Bud).
     begin_pass(actor_mask);
     push_matrix(-view, 1);
-    silhouette = .{0, 0, 0, 255};
+    silhouette = .{0, 255, 0, 255};
+    draw_tiles(tile_draws.background);
+    silhouette = .{0, 0, 255, 255};
     for context.actors.players draw(it);
-    silhouette = WHITE;
+    silhouette = .{255, 0, 255, 255};
     for context.actors.blobs draw(it);
     silhouette = .{};
     pop_matrix();
