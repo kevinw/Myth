@@ -7,7 +7,9 @@ ROOM :: "Rooms/Myth/super_simple.json";
 started: bool;
 room: Room;
 pack: Pack;
-scene: Texture;             // the world, unlit, at the view's resolution
+scene: Texture;             // the background (backdrop, back tiles), unlit, at the view's resolution
+front: Texture;             // the foreground (tiles, actors) over it, unlit
+tile_field: Texture;        // which dither pattern lights each pixel (tiles.jai's draw_tile_field)
 normals: Texture;           // its normals: rgb a direction, a how much it bends the light
 lit: Texture;               // the world lit, before the CRT pass scales it to the window
 lighting: Shader;
@@ -21,6 +23,9 @@ last_ticks: u64;
 hit_stun_timer: float;      // the world freezes briefly on a hit
 shake_timer: float;
 next_sprite_check: float64;
+shot_path: string;          // `myth shot <path>`: save the lit view there after SHOT_FRAME frames and quit
+frame_count: int;
+SHOT_FRAME :: 90;
 
 main :: () { while !frame() {} }
 
@@ -40,7 +45,10 @@ frame :: () -> bool {
         context.actors = *all_actors;
         for room.actors.items if !spawn(context.actors, it) log_error("no actor type %", as_string(get(it, "Type")));
         spawn_bud(spawn_player(start_position()));
-        demo = array_find(get_command_line_arguments(), "demo");
+        args := get_command_line_arguments();
+        demo = array_find(args, "demo");
+        found, at := array_find(args, "shot");
+        if found && at + 1 < args.count shot_path = copy_string(args[at + 1]);
         camera = clamp_camera(camera_target());
         started = true;
     }
@@ -77,16 +85,23 @@ frame :: () -> bool {
     camera = clamp_camera(camera_target());
     update_sound(camera + VIEW * 0.5);
     render();
+    frame_count += 1;
+    if shot_path && frame_count == SHOT_FRAME {
+        if !save_png(lit, shot_path) log_error("can't write %", shot_path);
+        return true;
+    }
     return false;
 }
 
 render :: () {
     if !scene.gpu scene = make_target(xx VIEW.x, xx VIEW.y);
+    if !front.gpu front = make_target(xx VIEW.x, xx VIEW.y);
+    if !tile_field.gpu tile_field = make_target(xx VIEW.x, xx VIEW.y);
     if !normals.gpu normals = make_target(xx VIEW.x, xx VIEW.y);
     if !lit.gpu lit = make_target(xx VIEW.x, xx VIEW.y);
     if !crt.pipelines[0] crt = load_shader("Crt", samplers = 2, uniforms = 1);
     if !no_tile_field.gpu { clear: Color; no_tile_field = make_texture(xx *clear, 1, 1); }
-    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 3, uniforms = 1);
+    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 5, uniforms = 1);
 
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
@@ -96,10 +111,13 @@ render :: () {
     if shake_timer > 0 view += Vector2.{random_get_within_range(-1, 1), random_get_within_range(-1, 1)} * 2;
     view = .{floor(view.x), floor(view.y)};
 
-    // The world, unlit.
+    // The world, unlit: the background, and the foreground over a transparent clear.
     begin_pass(scene, clear = room.backdrop);
     push_matrix(-view, 1);
     draw_tiles(tile_draws.background);
+    pop_matrix();
+    begin_pass(front);
+    push_matrix(-view, 1);
     draw_tiles(tile_draws.foreground);
     draw_all(context.actors);
     pop_matrix();
@@ -111,9 +129,14 @@ render :: () {
     draw_tiles(tile_draws.foreground, normals = true);
     pop_matrix();
 
+    begin_pass(tile_field);
+    push_matrix(-view, 1);
+    draw_tile_field();
+    pop_matrix();
+
     // Lit.
     uniforms := lighting_uniforms(view);
-    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals]);
+    begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field]);
     image(scene, .{.{}, VIEW}, .{});
 
     // Unlit on top: what glows.
@@ -150,6 +173,7 @@ RIM_STRENGTH :: 0.18;
 SHOULDER_KNEE :: 0.9;
 SHOULDER_CEILING :: 1.3;
 DITHER_STRENGTH :: 0.155;
+DITHER_SCALE :: 1.0;
 NORMAL_LIGHT_FLOOR :: 0.12;
 NORMAL_LIGHT_GAIN :: 2.15;
 
@@ -165,7 +189,7 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
         u.noise_scale = .{1 / noise_size.x, 1 / noise_size.y, 0, 0};
     }
     u.response = .{BACKGROUND_EXPOSURE, RIM_STRENGTH, SHOULDER_KNEE, SHOULDER_CEILING};
-    u.dither = .{DITHER_STRENGTH, 0, 0, 0};
+    u.dither = .{DITHER_STRENGTH, DITHER_SCALE, 0, 0};
     u.normal_light = .{NORMAL_LIGHT_FLOOR, NORMAL_LIGHT_GAIN, 0, 0};
     count := 0;
     for context.actors.lights {

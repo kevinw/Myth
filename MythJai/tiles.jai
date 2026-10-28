@@ -4,9 +4,11 @@
 //  - a kit (DualGrid) draws on the dual grid, one tile per cell corner: the shape comes from
 //    which of the four cells around the corner are solid, the variant from a hash of the world
 //    tile, and where two kits meet each draws only its own quadrants.
+// Also Myth's tile field, which picks the lighting dither per tile: every cell gets a variant
+// from a hash of its world tile, and the foreground tiles stamp their own over it, family and all.
 // Not ported yet: slopes, occluders (for shadows), fill patterns spanning tiles.
 
-Tile_Draw :: struct { tile: Subtex; normal: Subtex; pos: Vector2; clip: RectInt; }
+Tile_Draw :: struct { tile: Subtex; normal: Subtex; pos: Vector2; clip: RectInt; field: Color; }
 
 tile_draws: struct {
     background: [..] Tile_Draw;
@@ -27,7 +29,29 @@ draw_tiles :: (draws: [] Tile_Draw, normals := false) {
     }
 }
 
+draw_tile_field :: () {
+    for y: 0..room.size.y-1 for x: 0..room.size.x-1
+        rect(.{.{xx (x * TILE_SIZE), xx (y * TILE_SIZE)}, .{xx TILE_SIZE, xx TILE_SIZE}}, tile_field_color(#char "0", room.position + Point2.{xx x, xx y}));
+    for tile_draws.foreground if it.tile.source.w draw_subtex(*pack, it.tile, it.pos, it.clip, it.field, wash = true);
+}
+
 #scope_file
+
+// Game.TileFieldColor: r = variant, g = dither family << 5 (the low bits are the anchor, 0 for rooms).
+tile_field_color :: (c: u8, world: Point2) -> Color {
+    hash: u32 = 2166136261;
+    hash = (hash ^ cast,no_check(u32) world.x) * 16777619;
+    hash = (hash ^ cast,no_check(u32) world.y) * 16777619;
+    hash = (hash ^ c) * 16777619;
+    family: u8 = 4;
+    if c == {
+        case #char "0"; family = 0;
+        case #char "1"; #through; case #char "2"; #through; case #char "x"; family = 1;
+        case #char "G"; #through; case #char "S"; #through; case #char "X"; #through; case #char "g"; family = 2;
+        case #char "w"; family = 3;
+    }
+    return .{xx (hash & 255), family << 5, 0, 255};
+}
 
 // DualGrid.MaskToTile: corner mask (bit per quadrant) -> tile in the kit's 4x4 layout.
 MASK_TO_TILE :: Point2.[
@@ -59,7 +83,8 @@ build_layer :: (layer: [] u8, draws: *[..] Tile_Draw, foreground: bool) {
         rng := cast(u64) (x + y * room.size.x);
         pos := Vector2.{xx (x * TILE_SIZE), xx (y * TILE_SIZE)};
         index := splitmix(*rng) % cast(u32) t.tiles.count;
-        array_add(draws, .{t.tiles[index], ifx index < t.normal_tiles.count then t.normal_tiles[index] else .{}, pos, .{}});
+        field := tile_field_color(c, room.position + Point2.{xx x, xx y});
+        array_add(draws, .{t.tiles[index], ifx index < t.normal_tiles.count then t.normal_tiles[index] else .{}, pos, .{}, field});
     }
 
     for c: 1..127 if kits[c] for vy: 0..room.size.y for vx: 0..room.size.x {
@@ -78,8 +103,9 @@ build_layer :: (layer: [] u8, draws: *[..] Tile_Draw, foreground: bool) {
         if !ok continue;
         normal := variant_tile(kits[c].normal_tiles, kits[c].normal_variants, kits[c].rows, MASK_TO_TILE[join], seed);
         pos := Vector2.{(vx - 0.5) * TILE_SIZE, (vy - 0.5) * TILE_SIZE};
-        if material == ALL array_add(draws, .{tile, normal, pos, .{}});
-        else for QUADRANTS if material & it.bit array_add(draws, .{tile, normal, pos, it.clip});
+        field := tile_field_color(xx c, world);
+        if material == ALL array_add(draws, .{tile, normal, pos, .{}, field});
+        else for QUADRANTS if material & it.bit array_add(draws, .{tile, normal, pos, it.clip, field});
     }
 }
 

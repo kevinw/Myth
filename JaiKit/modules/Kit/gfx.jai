@@ -123,6 +123,23 @@ make_texture :: (pixels: *u8, w: s32, h: s32) -> Texture {
 
 release_texture :: (t: Texture) { SDL_ReleaseGPUTexture(device, t.gpu); }
 
+// Reads a target back (waiting on the GPU) and writes it as a PNG. For dev screenshots.
+save_png :: (t: Texture, path: string) -> bool {
+    w, h := cast(u32) t.size.x, cast(u32) t.size.y;
+    transfer := SDL_CreateGPUTransferBuffer(device, *(SDL_GPUTransferBufferCreateInfo.{usage = .DOWNLOAD, size = w * h * 4}));
+    defer SDL_ReleaseGPUTransferBuffer(device, transfer);
+    cmd := SDL_AcquireGPUCommandBuffer(device);
+    copy := SDL_BeginGPUCopyPass(cmd);
+    SDL_DownloadFromGPUTexture(copy, *(SDL_GPUTextureRegion.{texture = t.gpu, w = w, h = h, d = 1}), *(SDL_GPUTextureTransferInfo.{transfer_buffer = transfer}));
+    SDL_EndGPUCopyPass(copy);
+    fence := SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    SDL_WaitForGPUFences(device, true, *fence, 1);
+    SDL_ReleaseGPUFence(device, fence);
+    pixels := SDL_MapGPUTransferBuffer(device, transfer, false);
+    defer SDL_UnmapGPUTransferBuffer(device, transfer);
+    return stbi_write_png(temp_c_string(path), xx w, xx h, 4, pixels, xx (w * 4)) != 0;
+}
+
 screen_size :: () -> Vector2 {
     w, h: s32;
     SDL_GetWindowSizeInPixels(window, *w, *h);
@@ -134,8 +151,10 @@ rect :: (r: Rect, color: Color) {
 }
 
 // `source` in texels; drawn 1:1 at `pos` (top-left).
-image :: (texture: Texture, source: Rect, pos: Vector2, color := WHITE) {
-    quad(.{pos, source.size}, source.pos / texture.size, (source.pos + source.size) / texture.size, color, .{255, 0, 0, 0}, texture.gpu);
+// `wash` paints `color` through the texture's alpha, ignoring its colors.
+image :: (texture: Texture, source: Rect, pos: Vector2, color := WHITE, wash := false) {
+    mode := ifx wash then Color.{0, 255, 0, 0} else .{255, 0, 0, 0};
+    quad(.{pos, source.size}, source.pos / texture.size, (source.pos + source.size) / texture.size, color, mode, texture.gpu);
 }
 
 // Filled shapes in the current color fill mode (the white texture, ignored).
@@ -221,7 +240,7 @@ present :: (clear := Color.{}) {
         if shader.uniforms SDL_PushGPUFragmentUniformData(cmd, 0, p.uniforms.data, xx p.uniform_count);
         for b: p.first_batch..last_batch-1 {
             it := batches[b];
-            bindings: [4] SDL_GPUTextureSamplerBinding;
+            bindings: [8] SDL_GPUTextureSamplerBinding;
             bindings[0] = .{it.texture, sampler};
             for 1..shader.samplers-1 bindings[it] = .{ifx p.extra[it - 1].gpu then p.extra[it - 1].gpu else white.gpu, repeat_sampler};
             SDL_BindGPUFragmentSamplers(pass, 0, bindings.data, shader.samplers);
@@ -245,7 +264,7 @@ Pass :: struct {
     shader: *Shader;
     uniforms: [1024] u8;
     uniform_count: int;
-    extra: [3] Texture;
+    extra: [7] Texture;
     first_batch: int;
 }
 Matrix :: struct { translate: Vector2; scale := Vector2.{1, 1}; }
@@ -334,3 +353,4 @@ quad :: (r: Rect, uv0: Vector2, uv1: Vector2, color: Color, mode: Color, texture
 #import "String";
 #import "System";
 #import "SDL3";
+#import "stb_image_write";

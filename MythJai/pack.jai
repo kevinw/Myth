@@ -92,14 +92,14 @@ find_tileset :: (pack: *Pack, name: string) -> *Packed_Tileset {
 
 // Draws `t` with its untrimmed top-left at `pos`, showing only the part inside `clip`
 // (untrimmed-image space) when one is given.
-draw_subtex :: (pack: *Pack, t: Subtex, pos: Vector2, clip := RectInt.{}) {
+draw_subtex :: (pack: *Pack, t: Subtex, pos: Vector2, clip := RectInt.{}, color := WHITE, wash := false) {
     // Where the source pixels sit within the untrimmed image.
     x0, y0 := -t.frame.x, -t.frame.y;
     x1, y1 := x0 + t.source.w, y0 + t.source.h;
     if clip.w { x0, y0, x1, y1 = max(x0, clip.x), max(y0, clip.y), min(x1, clip.x + clip.w), min(y1, clip.y + clip.h); }
     if x1 <= x0 || y1 <= y0 return;
     source := Rect.{.{xx (t.source.x + x0 + t.frame.x), xx (t.source.y + y0 + t.frame.y)}, .{xx (x1 - x0), xx (y1 - y0)}};
-    image(pack.atlas, source, pos + Vector2.{xx x0, xx y0});
+    image(pack.atlas, source, pos + Vector2.{xx x0, xx y0}, color, wash);
 }
 
 #scope_file
