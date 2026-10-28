@@ -76,7 +76,7 @@ update :: (p: *Player) {
     rig_animation := p.animation;
     if (p.animation == "run" || p.animation == "run_start") && dash_running(p) && p.state == .NORMAL
         rig_animation = ifx abs(p.velocity.x) > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
-    play_rig(*p.rig, rig_animation, restart = p.state == .ATTACK && p.state_time <= delta);
+    play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta);
     update_rig(*p.rig, p, delta);
     sounds(p, events);
     dust(p, events, falling);

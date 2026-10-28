@@ -22,6 +22,12 @@ Rig_Pose :: struct {
     depth: [MAX_JOINTS] float;          // meters toward the camera
     lean, lean_rate: float;             // radians, a spring
     previous_velocity_x: float;
+    requested: s32 = -1;                // the take asked for, which a lead may be opening
+    lead: s32 = -1;
+    playback := 1.0;                    // the take's speed, times its own
+    run_lean_time: float;
+    was_running: bool;
+    extra_lean: float;                  // degrees, leaning into a run's start
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -60,7 +66,10 @@ take_for :: (animation: string) -> string {
       case "walk";                return "Walk_Loop";
       case "run"; #through;
       case "run_start";           return "PlayerRun";
-      case "duck";                return "Crouch_Idle_Loop";
+      case "duck"; #through;
+      case "burrow";              return "Crouch_Idle_Loop";
+      case "back_dash";           return "Roll";
+      case "sword";               return "Sword_Regular_A";
       case "crawl";               return "PlayerCrawl";
       case "roll";                return "PlayerRoll";
       case "jog";                 return "Jog_Fwd_Loop";
@@ -72,21 +81,50 @@ take_for :: (animation: string) -> string {
     return "PlayerIdle";
 }
 
-// Plays `animation`'s take, fading from what was playing. `restart` replays it if it's already playing.
-play_rig :: (pose: *Rig_Pose, animation: string, restart := false) {
+// Plays `animation`'s take, fading from what was playing, as Pawn.UpdateRig directs it: a change of
+// clip can open with a lead-in take (a jump's start, a landing, a run's stop...) played through
+// once first; walks and runs play as fast as the body moves; a run starts with a lean into it.
+// `restart` replays the take if it's already playing.
+play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, restart := false) {
+    RUN_LEAN_IN :: 39.0;         // degrees
+    RUN_LEAN_PEAK :: 0.19;       // seconds in
+    GAIT_RATE :: 2.2;
+    GAIT_MIN_RATE :: 0.5;
+    SPRINT_RATE :: 0.7;
+    ROLL_MIN_RATE :: 0.5;
     if !rig_ready() return;
-    take := find_take(take_for(animation));
-    if take < 0 || take == pose.take && !restart return;
-    if pose.take >= 0 && take != pose.take { pose.previous, pose.previous_time, pose.blend = pose.take, pose.time, 0; }
-    pose.take = take;
-    pose.time = rig.takes[take].start;
+    main := find_take(take_for(animation));
+    if main < 0 return;
+    if main != pose.requested {
+        pose.lead = lead_for(pose.requested, main, velocity);
+        pose.requested = main;
+    }
+    if pose.lead >= 0 && pose.take == pose.lead && take_finished(pose) pose.lead = -1;
+    shown := ifx pose.lead >= 0 then pose.lead else main;
+    if shown != pose.take || restart {
+        if pose.take >= 0 && shown != pose.take { pose.previous, pose.previous_time, pose.blend = pose.take, pose.time, 0; }
+        pose.take = shown;
+        pose.time = rig.takes[shown].start;
+    }
+
+    name := rig.takes[shown].name;
+    running := name == "PlayerRun" || name == "Jog_Fwd_Loop" || name == "Sprint_Loop";
+    gait := running || name == "Walk_Loop" || name == "PlayerCrawl" || name == "Crouch_Fwd_Loop";
+    speed := abs(velocity.x) / MAX_GROUND_SPEED;
+    pose.playback = ifx gait then max(GAIT_MIN_RATE, speed * GAIT_RATE * ifx name == "Sprint_Loop" then SPRINT_RATE else 1.0)
+                    else ifx name == "PlayerRoll" then max(ROLL_MIN_RATE, speed) else 1.0;
+    if running && !pose.was_running pose.run_lean_time = 0;
+    pose.was_running = running;
+    pose.run_lean_time += dt;
+    t := pose.run_lean_time / RUN_LEAN_PEAK;
+    pose.extra_lean = ifx running then RUN_LEAN_IN * t * exp(1 - t) else 0.0;
 }
 
 // Advances the takes; poses and projects a new frame at the rig's frame rate, turned to face
 // the actor's way, leaning with its motion and squashed with it.
 update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
     if !rig_ready() || pose.take < 0 return;
-    pose.time = advance_take(pose.take, pose.time, dt);
+    pose.time = advance_take(pose.take, pose.time, dt * pose.playback);
     if pose.previous >= 0 pose.previous_time = advance_take(pose.previous, pose.previous_time, dt);
     pose.blend = min(1.0, pose.blend + dt / RIG.BLEND_TIME);
     pose.step += dt;
@@ -136,7 +174,8 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
     pose.lean_rate *= exp(-VELOCITY_LEAN_DAMPING * visual_delta);
     pose.lean += pose.lean_rate * visual_delta;
     pivot := pose.projected[rig.pelvis];
-    c, s := cos(pose.lean), sin(pose.lean);
+    angle := (rig.takes[pose.take].lean + pose.extra_lean) * PI / 180 * a.facing + pose.lean;  // ApplyUpperBodyLean
+    c, s := cos(angle), sin(angle);
     for 0..rig.joints.count-1 if rig.upper_body[it] > 0 {
         v := pose.projected[it] - pivot;
         leaned := pivot + Vector2.{v.x * c - v.y * s, v.x * s + v.y * c};
@@ -389,7 +428,7 @@ multiply :: (a: Color, b: Color) -> Color {
     return .{xx (cast(u32) a.r * b.r / 255), xx (cast(u32) a.g * b.g / 255), xx (cast(u32) a.b * b.b / 255), xx (cast(u32) a.a * b.a / 255)};
 }
 
-Rig_Take :: struct { name: string; clip: s32; start, end: float; loop: bool; speed: float; }
+Rig_Take :: struct { name: string; clip: s32; start, end: float; loop: bool; speed: float; lean: float; }
 
 rig: struct {
     handle: *void;
@@ -448,13 +487,34 @@ rig_ready :: () -> bool {
         t := takes.items[it_index];
         clip := find_clip(as_string(get(t, "Clip")));
         if clip < 0 continue;
-        array_add(*rig.takes, .{copy_string(it), clip, as_float(get(t, "Start")), as_float(get(t, "End"), NO_END), as_bool(get(t, "Loop"), true), as_float(get(t, "Speed"), 1)});
+        array_add(*rig.takes, .{copy_string(it), clip, as_float(get(t, "Start")), as_float(get(t, "End"), NO_END), as_bool(get(t, "Loop"), true), as_float(get(t, "Speed"), 1), as_float(get(t, "UpperBodyLeanDegrees"))});
     }
-    for rig.clips array_add(*rig.takes, .{it.name, xx it_index, 0, NO_END, true, 1});
+    for rig.clips array_add(*rig.takes, .{it.name, xx it_index, 0, NO_END, true, 1, 0});
 
     rig.handle = handle;
     rig.failed = false;
     return true;
+}
+
+// Pawn.RigLeadFor: the take that opens a change from one clip to another, if any.
+lead_for :: (from: s32, to: s32, velocity: Vector2) -> s32 {
+    RUN_STOP_MIN_SPEED :: 0.6;  // × MAX_GROUND_SPEED; slower stops just settle into the idle
+    if from < 0 return -1;
+    f, t := rig.takes[from].name, rig.takes[to].name;
+    lead: string;
+    if t == "PlayerAir" && f != "PlayerAir" && velocity.y < 0 lead = "PlayerJumpStart";
+    else if (f == "PlayerAir" || f == "PlayerDive") && t == "PlayerIdle" lead = "PlayerJumpLand";
+    else if (f == "PlayerRun" || f == "Jog_Fwd_Loop" || f == "Sprint_Loop") && t == "PlayerIdle" && abs(velocity.x) > MAX_GROUND_SPEED * RUN_STOP_MIN_SPEED lead = "PlayerRunStop";
+    else if f == "PlayerCrawl" && t == "Crouch_Idle_Loop" lead = "PlayerCrawlToCrouch";
+    else if f == "Crouch_Idle_Loop" && t == "PlayerCrawl" lead = "PlayerCrouchToCrawl";
+    else if f == "Crouch_Idle_Loop" && t == "PlayerIdle" lead = "PlayerCrouchToStand";
+    else if t == "PlayerRoll" && f != "PlayerRoll" lead = "PlayerRollStart";
+    return ifx lead then find_take(lead) else -1;
+}
+
+take_finished :: (pose: *Rig_Pose) -> bool {
+    t := rig.takes[pose.take];
+    return !t.loop && pose.time >= min(t.end, rig.clips[t.clip].duration) - 0.0001;
 }
 
 find_clip :: (name: string) -> s32 { for rig.clips if equal_nocase(it.name, name) return xx it_index; return -1; }

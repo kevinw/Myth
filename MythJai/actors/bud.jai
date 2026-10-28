@@ -52,7 +52,7 @@ update :: (b: *Bud) {
     events := pawn_update(b, input, delta);
     b.blocked_time = ifx events & .HIT_WALL then b.blocked_time + delta else 0;
     if b.position.y > room.size.y * TILE_SIZE + 12 b.respawn_timer = BUD_FALL_RESPAWN_DELAY;
-    play_rig(*b.rig, b.animation);
+    play_rig(*b.rig, b.animation, b.velocity, delta);
     update_rig(*b.rig, b, delta);
 }
 
