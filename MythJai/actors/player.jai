@@ -6,6 +6,9 @@ Player :: struct @GameActor {
     state: enum u8 { NORMAL; ATTACK; HURT; DEAD; BURROW; };
     state_time: float;
     attack: enum u8 { SIDE; DOWN; UP; DUCK; };
+    attack_hit_target: bool;    // this swing has touched something to hit
+    attack_blocked: bool;       // ...or a wall stopped it
+    attack_swipe: Handle(Pop);
     footstep_frame: s32 = -1;
     last_safe_ground: Point2;   // where a cliff fall puts you back
     rig: Rig_Pose;
@@ -176,10 +179,11 @@ start_attack :: (p: *Player, input: Pawn_Input) {
     // The swipe, centred on what the swing hits and led a little by your motion (Player.AttackState).
     box := attack_box(p);
     at := Point2.{box.x + box.w / 2, box.y + box.h / 2} + Point2.{xx (p.velocity.x * 14 * delta), xx (p.velocity.y * 9 * delta)};
+    p.attack_hit_target, p.attack_blocked, p.attack_swipe = false, false, .{};
     if p.attack == {
-      case .DOWN; spawn_pop(at - Point2.{0, 8}, "strike_down_sm", p.facing);
-      case .UP;   spawn_pop(at + Point2.{0, 12}, "strike_down_sm", p.facing, flip_y = true);
-      case .SIDE; spawn_pop(at - Point2.{17, 0}, "strike_right_sm", p.facing);
+      case .DOWN; p.attack_swipe = spawn_pop(at - Point2.{0, 8}, "strike_down_sm", p.facing);
+      case .UP;   p.attack_swipe = spawn_pop(at + Point2.{0, 12}, "strike_down_sm", p.facing, flip_y = true);
+      case .SIDE; p.attack_swipe = spawn_pop(at - Point2.{17, 0}, "strike_right_sm", p.facing);
       case .DUCK; plasma_strike(p);
     }
 }
@@ -207,16 +211,49 @@ attack_box :: (p: *Player) -> RectInt {
     return box;
 }
 
-// Hits whatever the swing's box touches this frame.
+// Hits whatever the swing's box touches this frame (Player.AttackThisFrame). A down swing that
+// lands bounces you up off it and re-arms the burrow; one buried in a wall clangs to a stop.
 swing :: (p: *Player) {
+    POGO_SPEED :: 125.0;
+    BLOCK_OVERLAP :: 0.5;
+    if p.attack_blocked return;
     box := attack_box(p);
-    for context.actors.blobs if it.hit_cooldown <= 0 && overlaps(box, hitbox_rect(it)) {
+    hit_something := false;
+    for context.actors.blobs if overlaps(box, hitbox_rect(it)) {
+        p.attack_hit_target = true;
+        if it.hit_cooldown > 0 continue;
         it.hit_cooldown = 0.5;
+        hit_something = true;
         sound("player/sword_hit", p.position, "hit_destination", "flesh");
         hit(it, p);
         center := Vector2.{box.x + box.w * 0.5, box.y + box.h * 0.5};
         p.velocity += unit_vector(to_vector(p.position) - center) * HIT_KNOCKBACK;
     }
+    if hit_something && p.attack == .DOWN {
+        p.velocity.y = -POGO_SPEED;
+        p.burrow.needs_grounding, p.burrow.timer = false, 0;
+    }
+    if !p.attack_hit_target && (p.attack == .DUCK || p.state_time >= attack_windup()) && solid_fraction(box) >= BLOCK_OVERLAP {
+        p.attack_blocked = true;
+        swipe := get(*context.actors.pops, p.attack_swipe);
+        if swipe free(*context.actors.pops, swipe);
+        sound("player/sword_block", p.position);
+    }
+}
+
+// How long the swing winds up before it can clang: the attack animation's first frame.
+attack_windup :: () -> float {
+    sprite := get_sprite("player");
+    if !sprite return 0;
+    return sprite.durations[find_tag(sprite, "attack").first] / 1000.0;
+}
+
+// The share of a rect's pixels inside solid tiles (Game.GetRoomCollisionOverlapRatio).
+solid_fraction :: (r: RectInt) -> float {
+    if r.w <= 0 || r.h <= 0 return 0;
+    solid := 0;
+    for y: r.y..r.y+r.h-1 for x: r.x..r.x+r.w-1 if overlaps_solid(.{x, y, 1, 1}) solid += 1;
+    return cast(float) solid / (r.w * r.h);
 }
 
 hurt :: (p: *Player, by: *Actor) {

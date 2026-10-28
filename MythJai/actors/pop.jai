@@ -17,7 +17,8 @@ draw :: (p: *Pop) {
     if sprite draw_sprite(sprite, find_tag(sprite, "pop"), p.animation_time, to_vector(p.position), .{xx p.facing, ifx p.flip_y then -1.0 else 1.0}, looping = false);
 }
 
-spawn_pop :: (at: Point2, sprite_name := "pop", facing: s32 = 1, flip_y := false) {
-    p := add(*context.actors.pops);
+spawn_pop :: (at: Point2, sprite_name := "pop", facing: s32 = 1, flip_y := false) -> Handle(Pop) {
+    p, handle := add(*context.actors.pops);
     p.position, p.sprite_name, p.facing, p.flip_y = at, sprite_name, facing, flip_y;
+    return handle;
 }

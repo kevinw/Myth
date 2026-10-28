@@ -11,8 +11,8 @@ emit :: (effect_name: string, at: Vector2, count: int, direction: float, speed_s
     if !e return;
     cone := ifx spread >= 0 then spread else ifx e.line then 0.0 else e.spread_degrees * PI / 180;
     for 1..count {
-        angle := direction + (random_get_zero_to_one() - 0.5) * cone;
-        speed := lerp(e.speed_min, e.speed_max, random_get_zero_to_one()) * speed_scale;
+        angle := direction + (rand01() - 0.5) * cone;
+        speed := lerp(e.speed_min, e.speed_max, rand01()) * speed_scale;
         add_particle(e, at, Vector2.{cos(angle), sin(angle)} * speed);
     }
 }
@@ -27,9 +27,9 @@ emit_line :: (effect_name: string, origin: Vector2, direction: Vector2, length :
     reach := ifx length >= 0 then length else e.emitter_radius;
     width := ifx e.line then e.spread_degrees else e.emitter_radius;
     for 1..e.burst_count {
-        at := origin + along * (random_get_zero_to_one() * reach) + across * ((random_get_zero_to_one() - 0.5) * width);
-        angle := random_get_zero_to_one() * TAU;
-        speed := lerp(e.speed_min, e.speed_max, random_get_zero_to_one());
+        at := origin + along * (rand01() * reach) + across * ((rand01() - 0.5) * width);
+        angle := rand01() * TAU;
+        speed := lerp(e.speed_min, e.speed_max, rand01());
         add_particle(e, at, Vector2.{cos(angle), sin(angle)} * speed + base_velocity);
     }
 }
@@ -114,7 +114,7 @@ effect_count: int;
 add_particle :: (e: *Particle_Effect, at: Vector2, velocity: Vector2) {
     p := *particles[next_particle];
     next_particle = (next_particle + 1) % MAX_PARTICLES;
-    p.* = .{at, velocity, 0, lerp(e.life_min, e.life_max, random_get_zero_to_one()), random_get_zero_to_one() * 1000, xx (e - effects.data), false};
+    p.* = .{at, velocity, 0, lerp(e.life_min, e.life_max, rand01()), rand01() * 1000, xx (e - effects.data), false};
 }
 
 find_effect :: (name: string) -> *Particle_Effect {
@@ -195,8 +195,16 @@ curl :: (p: Vector2) -> Vector2 {
 
 frac :: (x: float) -> float { return x - floor(x); }
 
+// Their own random numbers, so effects don't shift the game's (the blob's hops, the demo).
+rng_state: u32 = 0x9e3779b9;
+rand01 :: () -> float {
+    x := rng_state;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    rng_state = x;
+    return cast(float) (x >> 8) / 16777216.0;
+}
+
 #import "Basic";
 #import "File";
 #import "Math";
-#import "Random";
 #import "Kit";
