@@ -1,5 +1,5 @@
-// Burrowing (Pawn.Burrow, Game.SurfaceCollision): land with jump held and you sink into the
-// ground and travel as a point along the boundary between solid and air, round corners and up
+// Burrowing (Pawn.Burrow, Game.SurfaceCollision): land with jump held (or, sliding down a wall
+// with it held, double-tap up or down: Pawn.WallDive) and you sink into the ground and travel as a point along the boundary between solid and air, round corners and up
 // walls, for as long as jump stays held and the burrow lasts. Movement latches when you press
 // along the surface and holds through corners; pressing back brakes, then reverses. The clock
 // runs out in three intervals, each flashing the rainbow glow line that traces the surface around
@@ -37,6 +37,10 @@ Burrow :: struct {
     glow_count: s32;
     passenger: bool;            // Bud rides along
     sound: *void;               // the burrow loop
+    dive_held: s32;             // wall dive: the vertical direction held last frame,
+    dive_last_tap: s32;         // the previous tap's,
+    dive_tap_timer: float;      // time left for the second tap,
+    dive_gripping: bool;        // and the first tap holding you to the wall
 }
 
 BURROW_DURATION :: 1.133;
@@ -45,10 +49,10 @@ BURROW_HITBOX :: RectInt.{-1, -1, 2, 2};
 
 can_burrow :: (p: *Pawn) -> bool { return p.burrows && !p.burrow.needs_grounding && p.burrow.timer >= 0 && !p.rolling; }
 
-// Pawn.TryStartBurrow: onto the surface under you, heading the way you were moving.
-try_start_burrow :: (p: *Pawn, previous_velocity: Vector2) -> bool {
+// Pawn.TryStartBurrow: onto the surface `toward` you, heading the way you were moving.
+try_start_burrow :: (p: *Pawn, previous_velocity: Vector2, toward_surface := Vector2.{0, 1}) -> bool {
     b := *p.burrow;
-    at, toward := p.position, Vector2.{0, 1};
+    at, toward := p.position, toward_surface;
     if !snap_to_surface(*at, *toward, ATTACH_PROBE) return false;
     p.position = at;
     p.velocity = .{};
@@ -76,6 +80,37 @@ try_start_burrow :: (p: *Pawn, previous_velocity: Vector2) -> bool {
     if b.sound FMOD_Studio_EventInstance_Start(b.sound);
     sound("player/burrow_start", p.position);
     update_glow(p, burrowing = true);
+    return true;
+}
+
+// Pawn.TryWallDive: against a wall in the air with jump held, a tap up or down grips it and a
+// second tap that way dives in, burrowing that way at full speed. `wall_jump` is away from the wall.
+try_wall_dive :: (p: *Pawn, input: Pawn_Input, wall_jump: s32, dt: float) -> bool {
+    WALL_DIVE_TAP_WINDOW :: 0.28;
+    WALL_DIVE_GRAB_FALL_SPEED :: 12.0;
+    WALL_DIVE_GRAB_RATE :: 900.0;
+    b := *p.burrow;
+    held := input.move_y;
+    tapped := ifx held != 0 && held != b.dive_held then held else 0;
+    b.dive_held = held;
+    b.dive_tap_timer = max(0.0, b.dive_tap_timer - dt);
+    wall := -wall_jump;
+    can_dive := !p.grounded && wall != 0 && input.jump_down && can_burrow(p);
+    b.dive_gripping = b.dive_gripping && can_dive && b.dive_tap_timer > 0;
+    if b.dive_gripping p.velocity.y = approach(p.velocity.y, WALL_DIVE_GRAB_FALL_SPEED, WALL_DIVE_GRAB_RATE * dt);
+    if !tapped return false;
+    second := b.dive_tap_timer > 0 && b.dive_last_tap == tapped;
+    if second b.dive_last_tap, b.dive_tap_timer = 0, 0;
+    else b.dive_last_tap, b.dive_tap_timer = tapped, WALL_DIVE_TAP_WINDOW;
+    if !can_dive return false;
+    if !second {
+        if !b.dive_gripping { b.dive_gripping = true; p.squish = .{1.15, 0.85}; }
+        return false;
+    }
+    b.dive_gripping = false;
+    if !try_start_burrow(p, .{}, .{xx wall, 0}) return false;
+    if b.heading.y != tapped { b.heading = .{-b.heading.x, -b.heading.y}; b.solid_left = !b.solid_left; }
+    b.speed = BURROW_MAX_SPEED;
     return true;
 }
 

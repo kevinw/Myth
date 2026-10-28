@@ -87,6 +87,7 @@ pawn_update :: (p: *Pawn, input: Pawn_Input, dt: float, normal := true) -> Pawn_
     p.jump_buffer_timer = approach(p.jump_buffer_timer, 0, dt);
 
     wall := wall_jump_direction(p, input.move_x);
+    if normal && !p.rolling && p.burrows && try_wall_dive(p, input, wall, dt) return events | .BURROWED;
     if normal && p.rolling events |= roll_state(p, input, dt);
     else if normal events |= normal_state(p, input, wall, dt);
     p.hitbox = ifx p.ducking then RectInt.{-4, -STANDING_HEIGHT / 2, 8, STANDING_HEIGHT / 2} else RectInt.{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
