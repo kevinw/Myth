@@ -10,7 +10,7 @@ pack: Pack;
 scene: Texture;             // the background (backdrop, back tiles), unlit, at the view's resolution
 front: Texture;             // the foreground (tiles, actors) over it, unlit
 tile_field: Texture;        // which dither pattern lights each pixel (tiles.jai's draw_tile_field)
-actor_mask: Texture;        // where the player and enemies cover, barely dithered (Myth's ActorDitherAmount)
+actor_mask: Texture;        // r: actors that cast sprite shadows; a: the player and enemies, barely dithered (Myth's ActorDitherAmount)
 normals: Texture;           // its normals: rgb a direction, a how much it bends the light
 lit: Texture;               // the world lit, before the CRT pass scales it to the window
 lighting: Shader;
@@ -143,10 +143,13 @@ render :: () {
     draw_tile_field();
     pop_matrix();
 
+    // r: what casts sprite shadows (not the player or Bud: their glow would shadow itself, and
+    // Myth leaves light emitters out); a: what's barely dithered (not Bud).
     begin_pass(actor_mask);
     push_matrix(-view, 1);
-    silhouette = WHITE;
+    silhouette = .{0, 0, 0, 255};
     for context.actors.players draw(it);
+    silhouette = WHITE;
     for context.actors.blobs draw(it);
     silhouette = .{};
     pop_matrix();
@@ -178,7 +181,7 @@ render :: () {
 
 MAX_LIGHTS :: 16;
 Lighting_Uniforms :: struct {
-    view, ambient, noise, noise_scale, response, dither, counts, normal_light: Vector4;
+    view, ambient, noise, noise_scale, response, dither, counts, normal_light, sprite_shadow: Vector4;
     lights: [MAX_LIGHTS * 2] Vector4;
 }
 
@@ -196,6 +199,9 @@ NORMAL_LIGHT_FLOOR :: 0.12;
 NORMAL_LIGHT_GAIN :: 2.15;
 SHADOW_BIAS :: 0.5;
 SHADOW_SOURCE_RADIUS :: 2.3;
+SPRITE_SHADOW_STRENGTH :: 0.5;
+SPRITE_SHADOW_MIN_LENGTH :: 4.0;
+SPRITE_SHADOW_MAX_LENGTH :: 28.0;
 
 lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u: Lighting_Uniforms;
@@ -211,6 +217,7 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
     u.response = .{BACKGROUND_EXPOSURE, RIM_STRENGTH, SHOULDER_KNEE, SHOULDER_CEILING};
     u.dither = .{DITHER_STRENGTH, DITHER_SCALE, 0, 0};
     u.normal_light = .{NORMAL_LIGHT_FLOOR, NORMAL_LIGHT_GAIN, 0, 0};
+    u.sprite_shadow = .{SPRITE_SHADOW_STRENGTH, SPRITE_SHADOW_MIN_LENGTH, SPRITE_SHADOW_MAX_LENGTH, 0};
     count := 0;
     positions: [MAX_LIGHTS] Vector2;
     for context.actors.lights {

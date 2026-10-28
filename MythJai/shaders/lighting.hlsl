@@ -7,8 +7,9 @@
 // the background gets exposure and noise, and the foreground's rim is added even where it's
 // transparent, so a faint glow of the light hangs over the backdrop.
 // Lights bend by the tiles' baked normals (LightMasks' normal_response).
-// Lights are shadowed by the occluders (shadows.jai), softened like LightMasks' point_visibility.
-// Not ported yet: sprite shadows, AO, emissive, spore fog, the player's dither glitch.
+// Lights are shadowed by the occluders (shadows.jai), softened like LightMasks' point_visibility,
+// and actors cast short soft shadows behind them (sprite_visibility).
+// Not ported yet: AO, emissive, spore fog, the player's dither glitch.
 
 cbuffer VertexUniforms : register(b0, space1)
 {
@@ -27,6 +28,7 @@ cbuffer FragmentUniforms : register(b0, space3)
     float4 Dither;      // x = strength, y = pattern scale
     float4 Counts;      // x = light count, y = shadow bias, z = 1 to show the background's light instead
     float4 NormalLight; // x = floor, y = gain
+    float4 SpriteShadow; // x = strength, y = shortest, z = longest
     float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity, a shadow source radius
 };
 
@@ -43,7 +45,7 @@ SamplerState TileFieldSampler : register(s4, space2);
 Texture2D ShadowDepth : register(t5, space2);  // row per light: r = how far each of its rays gets
 SamplerState ShadowSampler : register(s5, space2);
 #define SHADOW_SAMPLES 512
-Texture2D ActorMask : register(t6, space2);  // a = the player or an enemy covers it
+Texture2D ActorMask : register(t6, space2);  // r = an actor that casts a sprite shadow, a = the player or an enemy
 SamplerState ActorMaskSampler : register(s6, space2);
 #define ACTOR_DITHER 0.2
 
@@ -292,6 +294,32 @@ float shadow_visibility(int light, float2 delta, float distance, float radius, f
     return visibility;
 }
 
+// LightShadowDepth's sprite exit and point_sample_visibility's fade, marched per pixel: past the
+// first actor between it and the light, the light dims and recovers over a length that grows the
+// nearer the actor stands to the light.
+float sprite_visibility(float2 light, float2 world, float distance, float radius)
+{
+    float2 direction = (world - light) / max(distance, 0.0001);
+    bool inside = false;
+    for (float t = 0.5; t < distance; t += 0.5)
+    {
+        float2 uv = (light + direction * t - View.zw) / View.xy;
+        bool occluded = all(uv >= 0.0) && all(uv < 1.0) && ActorMask.SampleLevel(ActorMaskSampler, uv, 0).r > 0.1;
+        if (!inside)
+        {
+            inside = occluded;
+            continue;
+        }
+        if (!occluded)
+        {
+            float reach = saturate(1.0 - t / radius);
+            float length = lerp(SpriteShadow.y, SpriteShadow.z, reach);
+            return 1.0 - SpriteShadow.x * saturate(1.0 - (distance - t) / length);
+        }
+    }
+    return 1.0;
+}
+
 // LightingComposite's dither_light_intensity without the player's dither glitch.
 float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, float dither_mask)
 {
@@ -332,7 +360,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
         float response = lerp(1.0, NormalLight.x + saturate(dot(normal, normalize(to_light))) * NormalLight.y, normal_data.a);
         float4 contribution = float4(Lights[i * 2 + 1].rgb * attenuation * attenuation * response, attenuation);
         light += contribution;
-        back_light += contribution * shadow_visibility(i, world - position.xy, distance, position.z, Lights[i * 2 + 1].a);
+        back_light += contribution * shadow_visibility(i, world - position.xy, distance, position.z, Lights[i * 2 + 1].a)
+            * sprite_visibility(position.xy, world, distance, position.z);
     }
     light.a = saturate(light.a);
     back_light.a = saturate(back_light.a);
