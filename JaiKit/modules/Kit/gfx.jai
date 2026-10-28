@@ -178,6 +178,20 @@ triangle :: (a: Vector2, b: Vector2, c: Vector2, color: Color) {
     peek_pointer(batches).count += 3;
 }
 
+// A triangle shaded across its corners' colors.
+triangle :: (a: Vector2, b: Vector2, c: Vector2, color_a: Color, color_b: Color, color_c: Color) {
+    if vertex_count + 3 > vertices.count return;
+    batch_for(white.gpu);
+    m := matrices[matrix_top];
+    mode := Color.{0, 0, 255, 0};
+    colors := Color.[color_a, color_b, color_c];
+    for p: Vector2.[a, b, c] {
+        vertices[vertex_count] = .{p * m.scale + m.translate, .{}, ifx silhouette.a then silhouette else colors[it_index], mode};
+        vertex_count += 1;
+    }
+    peek_pointer(batches).count += 3;
+}
+
 polygon :: (a: Vector2, b: Vector2, c: Vector2, d: Vector2, color: Color) {
     triangle(a, b, c, color);
     triangle(a, c, d, color);

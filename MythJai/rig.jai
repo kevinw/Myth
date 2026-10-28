@@ -200,16 +200,7 @@ rig_head :: (pose: *Rig_Pose) -> Vector2, radius: float {
 draw_rig :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
     pieces_of_costume := costume_for(look.costume);
     if !rig_ready() || !pose.posed return;
-    Piece :: struct { bone: s32; depth: float; from, to: Vector2; from_width, to_width: float; }
-    pieces: [BONES.count] Piece;
-    for BONES {
-        from, to := rig.bone_joints[it_index][0], rig.bone_joints[it_index][1];
-        width := RIG.PIXELS_PER_METER * it.size;
-        parent := rig.bone_parents[it_index];
-        from_width := ifx parent >= 0 then RIG.PIXELS_PER_METER * BONES[parent].size else width;  // joint continuity
-        pieces[it_index] = .{xx it_index, (pose.depth[from] + pose.depth[to]) * 0.5, at + pose.projected[from], at + pose.projected[to], from_width, width};
-    }
-    quick_sort(pieces, (a: Piece, b: Piece) -> s64 { return ifx a.depth < b.depth then -1 else ifx a.depth > b.depth then 1 else 0; });
+    pieces := rig_pieces(pose, at);
     head := at + pose.projected[rig.head];
     head_radius := RIG.HEAD_SIZE * RIG.PIXELS_PER_METER;
     pelvis_depth := pose.depth[rig.pelvis];
@@ -245,6 +236,37 @@ draw_rig :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
     }
     while next_face < face_count { draw_face(faces[next_face], faces[next_face].color); next_face += 1; }
     if !head_drawn circle(head, head_radius, 14, look.near);
+}
+
+// The rig's normals, for the lighting (BoneBody.DrawItemNormals): each bone a rounded tube, its
+// sides turning away, a ball at each joint; the head, costume and trousers face the viewer.
+draw_rig_normals :: (pose: *Rig_Pose, at: Vector2, look: Rig_Look) {
+    ROUNDNESS :: 0.9;
+    FLAT :: Color.{128, 128, 255, 255};
+    pieces_of_costume := costume_for(look.costume);
+    if !rig_ready() || !pose.posed return;
+    pieces := rig_pieces(pose, at);
+    faces: [9] Garment_Face;
+    face_count := 0;
+    for pieces_of_costume if it.kind == .TROUSERS { face_count = trouser_faces(pose, at, it, *faces); break; }
+    next_face := 0;
+    head_drawn := false;
+    for pieces {
+        while next_face < face_count && faces[next_face].depth <= it.depth { draw_face(faces[next_face], FLAT, grow = 1); next_face += 1; }
+        if !head_drawn && pose.depth[rig.head] <= it.depth { circle(at + pose.projected[rig.head], RIG.HEAD_SIZE * RIG.PIXELS_PER_METER + 1.4, 14, FLAT); head_drawn = true; }
+        a, b, c, d := bone_corners(it.from, it.to, it.from_width + 2, it.to_width + 2);  // a, d: the left side
+        across := unit_vector(a - b);
+        side, center, other := normal_color(across * ROUNDNESS), normal_color(.{}), normal_color(-across * ROUNDNESS);
+        triangle(a, it.from, it.to, side, center, center);
+        triangle(a, it.to, d, side, center, side);
+        triangle(it.from, b, c, center, other, other);
+        triangle(it.from, c, it.to, center, other, center);
+        if rig.bone_parents[it.bone] >= 0 sphere_normals(it.from, joint_radius(it.from_width) + 1, ROUNDNESS);
+        sphere_normals(it.to, joint_radius(it.to_width) + 1, ROUNDNESS);
+        draw_costume(it, pieces_of_costume, FLAT, silhouette = true);
+    }
+    while next_face < face_count { draw_face(faces[next_face], FLAT, grow = 1); next_face += 1; }
+    if !head_drawn circle(at + pose.projected[rig.head], RIG.HEAD_SIZE * RIG.PIXELS_PER_METER + 1.4, 14, FLAT);
 }
 
 #scope_file
@@ -359,6 +381,41 @@ load_costume :: (name: string, costume: *[..] Costume_Piece) {
         piece.flare = as_float(get(it, "Flare"), 0.3);
         piece.color = rgb(as_string(get(it, "Color"), "ffffff"), default = WHITE);
         array_add(costume, piece);
+    }
+}
+
+Piece :: struct { bone: s32; depth: float; from, to: Vector2; from_width, to_width: float; }
+
+// The bones as drawn pieces, far to near.
+rig_pieces :: (pose: *Rig_Pose, at: Vector2) -> [BONES.count] Piece {
+    pieces: [BONES.count] Piece;
+    for BONES {
+        from, to := rig.bone_joints[it_index][0], rig.bone_joints[it_index][1];
+        width := RIG.PIXELS_PER_METER * it.size;
+        parent := rig.bone_parents[it_index];
+        from_width := ifx parent >= 0 then RIG.PIXELS_PER_METER * BONES[parent].size else width;  // joint continuity
+        pieces[it_index] = .{xx it_index, (pose.depth[from] + pose.depth[to]) * 0.5, at + pose.projected[from], at + pose.projected[to], from_width, width};
+    }
+    quick_sort(pieces, (a: Piece, b: Piece) -> s64 { return ifx a.depth < b.depth then -1 else ifx a.depth > b.depth then 1 else 0; });
+    return pieces;
+}
+
+// RigDraw.NormalColor: a sideways lean, the rest of the unit normal facing the viewer, as a color.
+normal_color :: (lateral: Vector2) -> Color {
+    l := lateral;
+    if length(l) > 0.999 l = unit_vector(l) * 0.999;
+    n := Vector3.{l.x, l.y, sqrt(max(0.0, 1 - dot(l, l)))};
+    return .{xx ((n.x * 0.5 + 0.5) * 255), xx ((n.y * 0.5 + 0.5) * 255), xx ((n.z * 0.5 + 0.5) * 255), 255};
+}
+
+sphere_normals :: (center: Vector2, radius: float, roundness: float) {
+    steps := joint_steps(radius);
+    previous := Vector2.{1, 0};
+    for 1..steps {
+        angle := it * TAU / steps;
+        next := Vector2.{cos(angle), sin(angle)};
+        triangle(center, center + previous * radius, center + next * radius, normal_color(.{}), normal_color(previous * roundness), normal_color(next * roundness));
+        previous = next;
     }
 }
 

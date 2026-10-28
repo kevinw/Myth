@@ -96,6 +96,11 @@ update :: (p: *Player) {
     if p.hit_cooldown <= 0 && p.state != .DEAD && p.state != .BURROW for context.actors.blobs if overlaps(hitbox_rect(p), hitbox_rect(it)) { hurt(p, it); break; }
 }
 
+draw_normals :: (p: *Player) {
+    if burrow_hides(p, p.state == .BURROW) || p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;
+    draw_rig_normals(*p.rig, to_vector(p.position), PLAYER_LOOK);
+}
+
 draw :: (p: *Player) {
     if burrow_hides(p, p.state == .BURROW) return;
     if p.hit_cooldown > 0 && p.state != .DEAD && cast(int) (now() * 20) % 2 return;  // i-frame blink

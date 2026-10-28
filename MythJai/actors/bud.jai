@@ -74,6 +74,7 @@ update :: (b: *Bud) {
 }
 
 draw :: (b: *Bud) { if b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
+draw_normals :: (b: *Bud) { if b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 draw_rig_normals(*b.rig, to_vector(b.position), BUD_LOOK); }
 
 // Bud.HitByHitbox: a swing that catches him turns him toward whoever swung and hops him back.
 bud_struck :: (b: *Bud, swing: RectInt, attacker_x: s32) {

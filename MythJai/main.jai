@@ -147,11 +147,13 @@ render :: () {
     draw_all(context.actors);
     pop_matrix();
 
-    // The tiles' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
+    // The tiles' and rigs' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
     begin_pass(normals, clear = .{128, 128, 255, 0});
     push_matrix(-view * zoom, zoom);
     draw_tiles(tile_draws.background, normals = true);
     draw_tiles(tile_draws.foreground, normals = true);
+    for context.actors.players draw_normals(it);
+    for context.actors.buds draw_normals(it);
     pop_matrix();
 
     begin_pass(tile_field);
