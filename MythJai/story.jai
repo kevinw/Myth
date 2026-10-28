@@ -64,14 +64,14 @@ draw_speech :: (view: Vector2) {
     said := string.{s.length, s.text.data};
     size := Vector2.{s.width + SPEECH_PADDING.x * 2, s.line_count * s.line_height + SPEECH_PADDING.y * 2};
     // Up and to the left of where it was said, slid back onto the screen.
-    anchor := s.at - view;
+    anchor := (s.at - view) * zoom;
     box := Rect.{.{clamp_to_view(anchor.x - size.x + SPEECH_PADDING.x, size.x, VIEW.x), clamp_to_view(anchor.y - size.y + SPEECH_PADDING.y, size.y, VIEW.y)}, size};
 
     for context.actors.buds if s.voice_level > 0 {
         bounds := hitbox_rect(it);
-        speaker_center := Vector2.{bounds.x + bounds.w * 0.5, bounds.y + bounds.h * 0.5} - view;
+        speaker_center := (Vector2.{bounds.x + bounds.w * 0.5, bounds.y + bounds.h * 0.5} - view) * zoom;
         words := clamp_point(speaker_center, box.pos + SPEECH_PADDING, box.pos + box.size - SPEECH_PADDING);
-        speaker := clamp_point(words + view, Vector2.{xx bounds.x, xx bounds.y}, Vector2.{xx (bounds.x + bounds.w), xx (bounds.y + bounds.h)}) - view;
+        speaker := (clamp_point(words / zoom + view, Vector2.{xx bounds.x, xx bounds.y}, Vector2.{xx (bounds.x + bounds.w), xx (bounds.y + bounds.h)}) - view) * zoom;
         gap := words - speaker;
         if length(gap) <= LEADER_SPEAKER_GAP + LEADER_TEXT_GAP break;
         direction := unit_vector(gap);

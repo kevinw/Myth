@@ -245,6 +245,7 @@ DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
     .{9.2, SDLK_LEFT, true}, .{9.3, SDLK_LSHIFT, true},     // sprint left,
     .{9.8, SDLK_SPACE, true}, .{10.0, SDLK_SPACE, false},   // jumping at speed
     .{10.4, SDLK_LSHIFT, false}, .{10.5, SDLK_LEFT, false},
+    .{10.8, SDLK_X, true}, .{12.0, SDLK_X, false},          // a look up close
 ];
 
 // Pushes the key events due by now.

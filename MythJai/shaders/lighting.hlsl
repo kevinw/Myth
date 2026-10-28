@@ -21,13 +21,13 @@ cbuffer VertexUniforms : register(b0, space1)
 
 cbuffer FragmentUniforms : register(b0, space3)
 {
-    float4 View;        // xy = view size in art pixels, zw = camera (world pixel at the view's top-left)
+    float4 View;        // xy = view size in pixels, zw = camera (world pixel at the view's top-left)
     float4 Ambient;     // rgb = ambient light, a = its strength
     float4 Noise;       // x = strength, y = pivot, zw = drift offset in noise uv
     float4 NoiseScale;  // xy = noise uv per world pixel
     float4 Response;    // x = background exposure, y = rim strength, z = shoulder knee, w = shoulder ceiling
     float4 Dither;      // x = strength, y = pattern scale
-    float4 Counts;      // x = light count, y = shadow bias, z = 1 to show the background's light instead
+    float4 Counts;      // x = light count, y = shadow bias, z = 1 to show the background's light instead, w = zoom
     float4 NormalLight; // x = floor, y = gain
     float4 SpriteShadow; // x = strength, y = shortest, z = longest
     float4 Lights[MAX_LIGHTS * 2];  // [2i] = xy position, z radius, w height; [2i+1] = rgb color * intensity, a shadow source radius
@@ -308,7 +308,7 @@ float sprite_visibility(float2 light, float2 world, float distance, float radius
     bool inside = false;
     for (float t = 0.5; t < distance; t += 0.5)
     {
-        float2 uv = (light + direction * t - View.zw) / View.xy;
+        float2 uv = (light + direction * t - View.zw) * Counts.w / View.xy;
         bool occluded = all(uv >= 0.0) && all(uv < 1.0) && ActorMask.SampleLevel(ActorMaskSampler, uv, 0).r > 0.1;
         if (!inside)
         {
@@ -368,9 +368,11 @@ float4 light_scene(float4 scene, float4 light, float2 world, float4 tile_field, 
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
-    // Every input is sampled at the art pixel's centre, so the light can't vary inside one.
-    float2 art_pixel = min(floor(input.TexCoord * View.xy), View.xy - 1.0);
-    float2 uv = (art_pixel + 0.5) / View.xy;
+    // Every input is sampled at the art pixel's (world pixel's) centre, so the light can't vary
+    // inside one even when zoomed, where one covers several view pixels.
+    float zoom = Counts.w;
+    float2 art_pixel = min(floor(input.TexCoord * View.xy / zoom), ceil(View.xy / zoom) - 1.0);
+    float2 uv = (art_pixel + 0.5) * zoom / View.xy;
     float2 world = View.zw + art_pixel + 0.5;
 
     float4 normal_data = NormalTexture.Sample(NormalSampler, uv);

@@ -17,6 +17,7 @@ lighting: Shader;
 crt: Shader;                // Myth's own Assets/Shaders/Crt.hlsl
 no_tile_field: Texture;
 camera: Vector2;            // top-left of the view, in room pixels
+zoom := 1.0;                // view pixels per room pixel: 2 while Zoom is held, eased (Game.UpdateCamera)
 pressed: [..] SDL_Keycode;  // this frame
 held: [..] SDL_Keycode;
 delta: float;               // seconds this frame
@@ -93,11 +94,16 @@ frame :: () -> bool {
         update_all(context.actors);
         update_story();
     }
+    ZOOM_RATE :: 12.0;
+    zoom_target := ifx control_zoom_down() then 2.0 else 1.0;
+    zoom += (zoom_target - zoom) * (1 - exp(-delta * ZOOM_RATE));
+    if abs(zoom - zoom_target) < 0.005 zoom = zoom_target;
     camera = clamp_camera(camera_target());
     update_sound(camera + VIEW * 0.5);
     render();
     frame_count += 1;
     if shot_path && frame_count == shot_frame {
+        if demo for context.actors.players log("shot at demo %: player % at % health % zoom %", demo_time, it.state, it.position, it.health, zoom);
         if !save_png(lit, shot_path) log_error("can't write %", shot_path);
         return true;
     }
@@ -125,24 +131,24 @@ render :: () {
 
     // The world, unlit: the background, and the foreground over a transparent clear.
     begin_pass(scene, clear = room.backdrop);
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     draw_tiles(tile_draws.background);
     pop_matrix();
     begin_pass(front);
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     draw_tiles(tile_draws.foreground);
     draw_all(context.actors);
     pop_matrix();
 
     // The tiles' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
     begin_pass(normals, clear = .{128, 128, 255, 0});
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     draw_tiles(tile_draws.background, normals = true);
     draw_tiles(tile_draws.foreground, normals = true);
     pop_matrix();
 
     begin_pass(tile_field);
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     draw_tile_field();
     pop_matrix();
 
@@ -150,7 +156,7 @@ render :: () {
     // Myth leaves light emitters out); g: background tiles, where ambient occlusion lands;
     // b: what's barely dithered (not Bud).
     begin_pass(actor_mask);
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     silhouette = .{0, 255, 0, 255};
     draw_tiles(tile_draws.background);
     silhouette = .{0, 0, 255, 255};
@@ -167,7 +173,7 @@ render :: () {
 
     // Unlit on top: what glows.
     begin_pass(lit, keep = true);
-    push_matrix(-view, 1);
+    push_matrix(-view * zoom, zoom);
     for context.actors.lights draw_emissive(it);
     for context.actors.players draw_burrow_glow(it, it.state == .BURROW);
     pop_matrix();
@@ -239,7 +245,7 @@ lighting_uniforms :: (view: Vector2) -> Lighting_Uniforms {
         count += 1;
     }
     update_shadow_depths(array_view(positions, 0, count));
-    u.counts = .{xx count, SHADOW_BIAS, xx show_light_mask, 0};
+    u.counts = .{xx count, SHADOW_BIAS, xx show_light_mask, zoom};
     return u;
 }
 
@@ -257,13 +263,13 @@ start_position :: () -> Point2 {
 
 // The view centered on the player.
 camera_target :: () -> Vector2 {
-    for context.actors.players return to_vector(it.position) - Vector2.{0, STANDING_HEIGHT / 2} - VIEW * 0.5;
+    for context.actors.players return to_vector(it.position) - Vector2.{0, STANDING_HEIGHT / 2} - VIEW / zoom * 0.5;
     return camera;
 }
 
 // Keeps the view inside the room, or centers it when the room is smaller.
 clamp_camera :: (target: Vector2) -> Vector2 {
-    limit := to_vector(room.size * TILE_SIZE) - VIEW;
+    limit := to_vector(room.size * TILE_SIZE) - VIEW / zoom;
     return .{
         ifx limit.x > 0 then clamp(target.x, 0, limit.x) else limit.x * 0.5,
         ifx limit.y > 0 then clamp(target.y, 0, limit.y) else limit.y * 0.5,

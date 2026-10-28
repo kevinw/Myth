@@ -1,6 +1,6 @@
 // The player's controls, bound as Myth binds them (Controls.cs): arrows or WASD to move, Space to
-// jump, E to attack, Shift or F to dash; on a gamepad the left stick or d-pad, South, West and the
-// right trigger. A stick reaches full speed at three quarters of its travel (ShapeMoveX).
+// jump, E to attack, Shift or F to dash, X held to zoom in; on a gamepad the left stick or d-pad,
+// South, West, the right trigger and a click of the left stick. A stick reaches full speed at three quarters of its travel (ShapeMoveX).
 
 control_move_x :: () -> float {
     keys := cast(float) (cast(s32) (key_down(SDLK_RIGHT) || key_down(SDLK_D)) - cast(s32) (key_down(SDLK_LEFT) || key_down(SDLK_A)));
@@ -26,6 +26,7 @@ control_jump_down :: () -> bool { return key_down(SDLK_SPACE) || button_down(.SO
 control_attack_pressed :: () -> bool { return key_pressed(SDLK_E) || button_pressed(.WEST); }
 control_dash_pressed :: () -> bool { return key_pressed(SDLK_LSHIFT) || key_pressed(SDLK_F) || trigger_pressed; }
 control_dash_down :: () -> bool { return key_down(SDLK_LSHIFT) || key_down(SDLK_F) || trigger_down; }
+control_zoom_down :: () -> bool { return key_down(SDLK_X) || gamepad && button_down(.LEFT_STICK); }
 
 // Each frame, after the events: what the trigger did since the last.
 update_controls :: () {
