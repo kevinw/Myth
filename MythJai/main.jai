@@ -49,8 +49,7 @@ frame :: () -> bool {
         if !ok { log_error("can't load the visual pack"); return true; }
         build_tile_draws();
         context.actors = *all_actors;
-        for room.actors.items if !spawn(context.actors, it) log_error("no actor type %", as_string(get(it, "Type")));
-        spawn_bud(spawn_player(start_position()));
+        populate_room();
         args := get_command_line_arguments();
         demo = array_find(args, "demo");
         show_light_mask = array_find(args, "lightmask");
@@ -95,6 +94,7 @@ frame :: () -> bool {
     } else {
         if demo { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
         update_all(context.actors);
+        if respawn_requested respawn_after_death();
         update_particles(delta);
         update_story();
     }
@@ -276,6 +276,28 @@ start_position :: () -> Point2 {
 pulse_dither_glitch :: (axis: Vector2, amount := 1.0) {
     if dot(axis, axis) > 0.001 glitch_axis = unit_vector(axis);
     glitch_target = amount;
+}
+
+// The room's actors as its json has them, the player at its start (rolling in, as player.json
+// starts it) and Bud beside them.
+populate_room :: () {
+    for room.actors.items if !spawn(context.actors, it) log_error("no actor type %", as_string(get(it, "Type")));
+    spawn_bud(spawn_player(start_position()));
+}
+
+// Game.RespawnPlayerAtLastSafeGrounded after a death: the room reloads, everything back in its
+// place, the player at its start, whole again and on their feet.
+respawn_requested: bool;
+respawn_after_death :: () {
+    respawn_requested = false;
+    clear_all(context.actors);
+    populate_room();
+    for context.actors.players {
+        it.rolling, it.ducking = false, false;
+        it.hitbox = .{-4, -STANDING_HEIGHT, 8, STANDING_HEIGHT};
+        it.hit_cooldown = INVINCIBLE_DURATION;
+        play(it, "idle");
+    }
 }
 
 camera_target :: () -> Vector2 {

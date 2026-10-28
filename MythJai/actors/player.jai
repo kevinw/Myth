@@ -68,7 +68,7 @@ update :: (p: *Player) {
         if p.state_time >= HURT_DURATION { p.state = .NORMAL; p.state_time = 0; }
       case .DEAD;
         events = pawn_update(p, .{}, delta, normal = false);
-        if p.state_time >= DEATH_DURATION respawn(p);
+        if p.state_time >= DEATH_DURATION respawn_requested = true;
     }
     update_burrow_always(p, delta);
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
@@ -271,7 +271,7 @@ hurt :: (p: *Player, by: *Actor) {
     p.health -= HIT_DAMAGE;
     p.state = ifx p.health > 0 then .HURT else .DEAD;
     p.state_time = 0;
-    if p.state == .DEAD shake(0.4);
+    if p.state == .DEAD die(p);
     sound(ifx p.state == .DEAD then "death" else "hurt", p.position);
     bark(.PLAYER_HURT);
 }
@@ -285,13 +285,15 @@ fall_off_cliff :: (p: *Player) {
     if p.state != .DEAD p.velocity = .{};  // no knockback off the ledge again
 }
 
-respawn :: (p: *Player) {
-    p.position = start_position();
-    p.velocity = .{};
-    p.health = MAX_HEALTH;
-    p.state = .NORMAL;
-    p.hit_cooldown = INVINCIBLE_DURATION;
-    play(p, "idle");
+// Player.HurtState at zero health: the world goes, all but you and your glow (Player.HurtState).
+die :: (p: *Player) {
+    shake(0.4);
+    for context.actors.buds free(*context.actors.buds, it);
+    for context.actors.blobs free(*context.actors.blobs, it);
+    for context.actors.pops free(*context.actors.pops, it);
+    for context.actors.player_starts free(*context.actors.player_starts, it);
+    glow := get(*context.actors.lights, p.light);
+    for context.actors.lights if it != glow free(*context.actors.lights, it);
 }
 
 #scope_export
