@@ -63,7 +63,11 @@ update :: (p: *Player) {
     sounds(p, events);
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
-    if fell_out(p) && p.state != .DEAD fall_off_cliff(p);
+    // Player.CheckRoomBounds: well below the room is a cliff fall; at the other edges, where Myth
+    // would move on to the next room, the player is held.
+    size := room.size * TILE_SIZE;
+    if p.position.y > size.y + 12 { if p.state != .DEAD fall_off_cliff(p); }
+    else p.position = .{clamp(p.position.x, 0, size.x), max(p.position.y, 0)};
 
     light := get(*context.actors.lights, p.light);
     if light light.position = p.position + Point2.{0, -6};

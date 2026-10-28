@@ -101,15 +101,14 @@ overlaps_solid :: (a: *Actor, offset := Point2.{}) -> bool {
     return overlaps_solid(.{a.position.x + offset.x + a.hitbox.x, a.position.y + offset.y + a.hitbox.y, a.hitbox.w, a.hitbox.h});
 }
 
-// Any solid tile under the rect (room pixels). Below the room is open: falling out is a
-// cliff fall. Its other sides count as solid for now; Myth moves to the next room there.
+// Any solid tile under the rect (room pixels). Off the room is open, like Room.IsSolidTile:
+// below it is a cliff fall, and the player is held at its other edges (keep_in_room).
 overlaps_solid :: (r: RectInt) -> bool {
     if r.w <= 0 || r.h <= 0 return false;
     first := Point2.{tile_of(r.x), tile_of(r.y)};
     last := Point2.{tile_of(r.x + r.w - 1), tile_of(r.y + r.h - 1)};
     for y: first.y..last.y for x: first.x..last.x {
-        if y >= room.size.y continue;
-        if x < 0 || y < 0 || x >= room.size.x return true;
+        if x < 0 || y < 0 || x >= room.size.x || y >= room.size.y continue;
         if room.tiles[y * room.size.x + x] != #char "0" return true;
     }
     return false;
