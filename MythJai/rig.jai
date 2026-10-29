@@ -5,8 +5,8 @@
 // The costume (Assets/Sources/Costumes) wraps bands, studs and spikes onto bones by tag, and
 // trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
 // The pose leans into speed and acceleration (UpdateVelocityLean) and squashes with the actor.
-// Turning round eases through the front (UpdateTurn).
-// Not ported yet: foot IK, clip-driven turns and the other pose modifiers, secondary motion, ragdoll,
+// Turning round eases through the front (UpdateTurn); the head and hands trail on springs.
+// Not ported yet: foot IK, clip-driven turns and the other pose modifiers, ragdoll,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -32,6 +32,7 @@ Rig_Pose :: struct {
     yaw: float;                         // radians the figure is turned: 0 facing left, PI right
     turn_from, turn_to, turn_time: float;
     turning_to: s32;                    // the facing it's turning toward, 0 before the first pose
+    motion: [3] struct { position, velocity: Vector2; ready: bool; };  // head, left hand, right hand, on springs
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -48,6 +49,7 @@ RIG :: struct {
     FRONT_LIMB_DEPTH :: 0.05;
     VELOCITY_LEAN :: 0.6;
     SQUISH_RESPONSE :: 0.6;
+    SECONDARY_MOTION :: 0.19;
 };
 
 // What tells one rigged actor from another: its palette and costume (Assets/Actors/<name>.json).
@@ -199,10 +201,36 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
     // Squash and stretch about the feet (ApplySquish).
     squish := Vector2.{1, 1} + (a.squish - Vector2.{1, 1}) * RIG.SQUISH_RESPONSE;
     ground := Vector2.{pivot.x, 0};
-    for 0..rig.joints.count-1 {
-        p := ground + (pose.projected[it] - ground) * squish;
-        pose.projected[it] = .{floor(p.x + 0.5), floor(p.y + 0.5)};  // pixel snap
+    for 0..rig.joints.count-1 pose.projected[it] = ground + (pose.projected[it] - ground) * squish;
+
+    // The head and hands trail on springs a little (UpdateSecondaryMotion).
+    at := to_vector(a.position);
+    head := secondary(*pose.motion[0], at + pose.projected[rig.head], 105, 16, 2.5, visual_delta) * RIG.SECONDARY_MOTION;
+    pose.projected[rig.neck] += head * 0.25;
+    pose.projected[rig.head] += head;
+    for hand: 0..1 {
+        offset := secondary(*pose.motion[hand + 1], at + pose.projected[rig.hands[hand]], 65, 10, 4.5, visual_delta) * RIG.SECONDARY_MOTION;
+        for 0..rig.joints.count-1 if rig.in_hand[hand][it] pose.projected[it] += offset;
     }
+
+    for 0..rig.joints.count-1 pose.projected[it] = .{floor(pose.projected[it].x + 0.5), floor(pose.projected[it].y + 0.5)};  // pixel snap
+}
+
+// UpdateSecondaryPoint: a point springing after `target` (world pixels), no further off it than
+// `max_offset`; returns how far off it is. A jump too far just snaps it there.
+secondary :: (point: *type_of(Rig_Pose.motion[0]), target: Vector2, spring: float, damping: float, max_offset: float, visual_delta: float) -> Vector2 {
+    TELEPORT :: 24.0;
+    if !point.ready || length(point.position - target) > TELEPORT { point.position, point.velocity, point.ready = target, .{}, true; return .{}; }
+    dt := min(visual_delta, 1.0 / 30);
+    point.velocity += (target - point.position) * spring * dt;
+    point.velocity *= exp(-damping * dt);
+    point.position += point.velocity * dt;
+    offset := point.position - target;
+    if length(offset) <= max_offset return offset;
+    direction := unit_vector(offset);
+    point.position = target + direction * max_offset;
+    point.velocity -= direction * max(0.0, dot(point.velocity, direction));
+    return direction * max_offset;
 }
 
 // Where the head is, from the actor's position.
@@ -512,6 +540,8 @@ rig: struct {
     pelvis, neck, head: s32;
     legs: [2][5] s32;  // left, right: hip, knee, ankle, toe, tip (Leg)
     upper_body: [MAX_JOINTS] float;  // how much each joint leans with the upper body
+    hands: [2] s32;
+    in_hand: [2][MAX_JOINTS] bool;   // a hand and its fingers
 };
 positions: [MAX_JOINTS] Vector3;
 rotations: [MAX_JOINTS] Vector4;
@@ -550,6 +580,12 @@ rig_ready :: () -> bool {
         rig.upper_body[it] = ifx j == spine_01 then 1.0 else 0.0;
     }
     rig.upper_body[spine_01], rig.upper_body[spine_02] = 0.25, 0.6;
+    rig.hands = .[joint("hand_l"), joint("hand_r")];
+    for hand: 0..1 for 0..joint_count-1 {
+        j: s32 = xx it;
+        while j >= 0 && j != rig.hands[hand] j = myth_ozz_rig_joint_parent(handle, j);
+        rig.in_hand[hand][it] = j >= 0;
+    }
 
     // Saved takes, then every raw clip as a take of its own.
     text, read := read_entire_file(tprint("%/Rigs/ual2.takes.json", ASSETS), log_errors = false);
