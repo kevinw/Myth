@@ -22,7 +22,7 @@ Bud :: struct @GameActor {
     back_dash_cooldown: float;
 }
 
-BUD_FOLLOW_DISTANCE :: 20;
+BUD_FOLLOW_GAP :: 11;
 BUD_FALL_RESPAWN_DELAY :: 3.0;
 BUD_BURROW_RIDE_RADIUS :: 14;
 BUD_BURROW_POP_DELAY :: 0.25;
@@ -58,13 +58,21 @@ update :: (b: *Bud) {
         return;
     }
     for player: context.actors.players {
+        // His goal is the player's body widened by a gap either side (Game's budRoute); outside
+        // it he walks to its near edge, easing in as he gets there (ReachPilot.Arrive).
+        ARRIVE_GAIN :: 8.0;
+        ARRIVE_MIN_SPEED :: 10.0;
         dx := player.position.x - b.position.x;
-        if abs(dx) > BUD_FOLLOW_DISTANCE input.move_x = xx sign(xx dx);
-        else if !input.move_x && dx b.facing = sign(xx dx);
+        reach := player.hitbox.w / 2 + BUD_FOLLOW_GAP;
+        if abs(dx) > reach {
+            to_edge := dx - sign(cast(float) dx) * reach;
+            speed := clamp(abs(to_edge) * ARRIVE_GAIN, ARRIVE_MIN_SPEED, MAX_GROUND_SPEED);
+            input.move_x = sign(cast(float) to_edge) * min(1.0, speed / MAX_GROUND_SPEED);
+        } else if dx b.facing = sign(cast(float) dx);
         wants_up := player.position.y < b.position.y - 12 && abs(dx) < 48;
         input.jump_pressed = b.grounded && (b.blocked_time > 0.1 || wants_up);
         input.jump_down = !b.grounded && b.velocity.y < 0;
-        if b.grounded && input.move_x && !ground_below(b.position.x + cast(s32) sign(input.move_x) * (b.hitbox.w / 2 + 2), b.position.y) input.move_x = 0;
+        if b.grounded && input.move_x != 0 && !ground_below(b.position.x + cast(s32) sign(input.move_x) * (b.hitbox.w / 2 + 2), b.position.y) input.move_x = 0;
     }
     events := pawn_update(b, input, delta);
     b.blocked_time = ifx events & .HIT_WALL then b.blocked_time + delta else 0;
