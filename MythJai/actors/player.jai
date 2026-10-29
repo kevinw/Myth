@@ -367,7 +367,9 @@ DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
     .{9.8, SDLK_SPACE, true}, .{10.0, SDLK_SPACE, false},   // jumping at speed
     .{10.4, SDLK_LSHIFT, false}, .{10.5, SDLK_LEFT, false},
     .{10.8, SDLK_X, true}, .{12.0, SDLK_X, false},          // a look up close
-    .{12.4, SDLK_ESCAPE, true}, .{12.45, SDLK_ESCAPE, false}, // and the map (which pauses the demo too)
+    .{12.2, SDLK_SPACE, true}, .{12.5, SDLK_SPACE, false},  // a jump,
+    .{12.45, SDLK_DOWN, true}, .{12.5, SDLK_E, true}, .{12.55, SDLK_E, false}, .{12.8, SDLK_DOWN, false},  // swiping down
+    .{13.4, SDLK_ESCAPE, true}, .{13.45, SDLK_ESCAPE, false}, // and the map (which pauses the demo too)
 ];
 
 // Pushes the key events due by now.

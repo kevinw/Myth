@@ -10,7 +10,7 @@
 // down (UpdateRagdoll).
 // A dive aims the arms along it (ApplyPoseRoll).
 // Swinging in the air, the legs keep the air pose and up and down swipes roll the torso.
-// Not ported yet: the other pose modifiers (the swing arm's arc, pike), hit impulses (enemies'),
+// Not ported yet: the rope climb's leg pike, hit impulses (enemies'),
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -40,6 +40,9 @@ Rig_Pose :: struct {
     air_swing: bool;                    // attacking in the air: the legs keep the air pose,
     attack_pitch: float;                // and a down (1) or up (-1) swipe rolls the torso
     leg_weight, leg_time, attack_reach: float;
+    arm_arc_from: float;                // the swing arm's angle when the take began
+    arm_arc_set: bool;
+    arm_reach_offset: float;
     fidget_take: s32 = -1;              // standing about, now and then a fidget plays (RigFidget)
     fidget_timer := 5.0;
     fidget_last: s32 = -1;
@@ -153,6 +156,7 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
         if pose.take >= 0 && shown != pose.take { pose.previous, pose.previous_time, pose.blend = pose.take, pose.time, 0; }
         pose.take = shown;
         pose.time = rig.takes[shown].start;
+        pose.arm_arc_set = false;
     }
 
     name := rig.takes[shown].name;
@@ -291,6 +295,31 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
         for 0..rig.joints.count-1 if rig.upper_body[it] > 0 {
             v := pose.projected[it] - pelvis;
             pose.projected[it] += (pelvis + Vector2.{v.x * tc - v.y * ts, v.x * ts + v.y * tc} - pose.projected[it]) * rig.upper_body[it];
+        }
+    }
+
+    // The swing arm's arc grows with the swipe, up and ahead or flipped for a down one (ApplyArmReach).
+    ARM_ARC_SCALE :: 1.6;
+    ARM_REACH_RELEASE :: 15.0;
+    ATTACK_UP_ARM_DEGREES :: 60.0;
+    ATTACK_DOWN_ARM_DEGREES :: 90.0;
+    {
+        shoulder := pose.projected[rig.right_upper_arm];
+        arm := pose.projected[rig.palms[1]] - shoulder;
+        angle := atan2(arm.y, arm.x * a.facing);
+        if !pose.arm_arc_set { pose.arm_arc_from, pose.arm_arc_set = angle, true; }
+        weight := ifx pose.air_swing then abs(pose.attack_reach) else 0.0;
+        roll := -(ifx pose.attack_reach > 0 then ATTACK_DOWN_ARM_DEGREES else ATTACK_UP_ARM_DEGREES) * PI / 180;
+        d := angle - pose.arm_arc_from;
+        swing := pose.arm_arc_from + roll + ARM_ARC_SCALE * (d - TAU * floor((d + PI) / TAU));
+        pose.arm_reach_offset = ifx weight > 0 then a.facing * weight * ((ifx pose.attack_reach > 0 then -swing else swing) - angle)
+                                else pose.arm_reach_offset * exp(-ARM_REACH_RELEASE * visual_delta);
+        if abs(pose.arm_reach_offset) > 0.0001 {
+            rc, rs := cos(pose.arm_reach_offset), sin(pose.arm_reach_offset);
+            for 0..rig.joints.count-1 if rig.right_arm[it] {
+                v := pose.projected[it] - shoulder;
+                pose.projected[it] = shoulder + Vector2.{v.x * rc - v.y * rs, v.x * rs + v.y * rc};
+            }
         }
     }
 
@@ -751,6 +780,8 @@ rig: struct {
     upper_body: [MAX_JOINTS] float;  // how much each joint leans with the upper body
     hands: [2] s32;
     palms: [2] s32;
+    right_upper_arm: s32;
+    right_arm: [MAX_JOINTS] bool;    // the right clavicle and everything out from it
     in_hand: [2][MAX_JOINTS] bool;   // a hand and its fingers
     on_ragdoll: [MAX_JOINTS] bool;   // the joints the bones join
     lower_body: [MAX_JOINTS] float;  // how much each joint goes with the legs
@@ -802,6 +833,13 @@ rig_ready :: () -> bool {
     rig.lower_body[spine_01], rig.lower_body[spine_02] = 0.75, 0.4;
     rig.hands = .[joint("hand_l"), joint("hand_r")];
     rig.palms = .[joint("middle_01_l"), joint("middle_01_r")];
+    rig.right_upper_arm = joint("upperarm_r");
+    clavicle_r := joint("clavicle_r");
+    for 0..joint_count-1 {
+        j: s32 = xx it;
+        while j >= 0 && j != clavicle_r j = myth_ozz_rig_joint_parent(handle, j);
+        rig.right_arm[it] = j >= 0;
+    }
     for BONES { rig.on_ragdoll[rig.bone_joints[it_index][0]] = true; rig.on_ragdoll[rig.bone_joints[it_index][1]] = true; }
     for 0..joint_count-1 {
         carrier: s32 = xx it;
