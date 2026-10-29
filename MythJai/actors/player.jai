@@ -10,6 +10,9 @@ Player :: struct @GameActor {
     attack_blocked: bool;       // ...or a wall stopped it
     attack_swipe: Handle(Pop);
     rig_dive_grace: float;      // jump let go this recently still counts toward a dive
+    rig_dive_angle: float;
+    rig_dive_weight: float;
+    rig_dive_clip: bool;
     footstep_frame: s32 = -1;
     last_safe_ground: Point2;   // where a cliff fall puts you back
     rig: Rig_Pose;
@@ -86,8 +89,24 @@ update :: (p: *Player) {
     if p.animation == "crawl" && (move_input(input) == 0 || speed > CRAWL_SPEED * RIG_CRAWL_SPEED_SLACK) rig_animation = "duck";
     if (p.animation == "run" || p.animation == "run_start") && dash_running(p) && p.state == .NORMAL
         rig_animation = ifx speed > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
-    if p.state == .NORMAL && !p.grounded && take_for(p.animation) == "PlayerAir" && p.velocity.y >= 0 && p.rig_dive_grace > 0 && can_burrow(p)
-        rig_animation = "dive";
+    // The dive eases in, its angle tracking the fall, and lets go once it's mostly out (Pawn.UpdateRig).
+    RIG_DIVE_FULL_ANGLE_SPEED :: 130.0;
+    RIG_DIVE_ANGLE_RESPONSE :: 14.0;
+    RIG_DIVE_IN_RESPONSE :: 10.0;
+    RIG_DIVE_LAND_RESPONSE :: 40.0;
+    RIG_DIVE_CLIP_OUT :: 0.3;
+    airborne := p.state == .NORMAL && !p.grounded && take_for(p.animation) == "PlayerAir";
+    diving := airborne && p.velocity.y >= 0 && p.rig_dive_grace > 0 && can_burrow(p);
+    if diving {
+        angle := clamp(p.velocity.y / RIG_DIVE_FULL_ANGLE_SPEED, -1, 1) * PI / 2;
+        p.rig_dive_angle = ifx p.rig_dive_weight < 0.01 then angle else p.rig_dive_angle + (angle - p.rig_dive_angle) * (1 - exp(-RIG_DIVE_ANGLE_RESPONSE * delta));
+    }
+    response := ifx p.grounded then RIG_DIVE_LAND_RESPONSE else RIG_DIVE_IN_RESPONSE;
+    p.rig_dive_weight += ((ifx diving then 1.0 else 0.0) - p.rig_dive_weight) * (1 - exp(-response * delta));
+    p.rig_dive_clip = airborne && (diving || p.rig_dive_clip && p.rig_dive_weight > RIG_DIVE_CLIP_OUT);
+    if p.rig_dive_clip rig_animation = "dive";
+    p.rig.arm_aim = .{p.facing * cos(p.rig_dive_angle), sin(p.rig_dive_angle)};
+    p.rig.arm_aim_weight = p.rig_dive_weight;
     play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta, facing = p.facing);
     update_rig(*p.rig, p, delta, p.grounded);
     sounds(p, events);

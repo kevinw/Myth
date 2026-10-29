@@ -8,7 +8,8 @@
 // Turning round eases through the front (UpdateTurn); the head and hands trail on springs.
 // Grounded, the feet find the floor (UpdateFoot); the body rides springs that a landing knocks
 // down (UpdateRagdoll).
-// Not ported yet: the other pose modifiers (look, aim, reach, pike), hit impulses (enemies'),
+// A dive aims the arms along it (ApplyPoseRoll).
+// Not ported yet: the other pose modifiers (look, reach, pike), hit impulses (enemies'),
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -32,6 +33,8 @@ Rig_Pose :: struct {
     was_running: bool;
     extra_lean: float;                  // degrees, leaning into a run's start
     skid_facing: s32;                   // the facing a skid started from
+    arm_aim: Vector2;                   // the figure rolls so its arms point this way on screen,
+    arm_aim_weight: float;              // this much (ApplyPoseRoll)
     yaw: float;                         // radians the figure is turned: 0 facing left, PI right
     turn_from, turn_to, turn_time: float;
     turning_to: s32;                    // the facing it's turning toward, 0 before the first pose
@@ -232,6 +235,19 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     squish := Vector2.{1, 1} + (a.squish - Vector2.{1, 1}) * RIG.SQUISH_RESPONSE;
     ground := Vector2.{pivot.x, 0};
     for 0..rig.joints.count-1 pose.projected[it] = ground + (pose.projected[it] - ground) * squish;
+
+    // Rolled about the torso so the arms point along the aim (ApplyPoseRoll).
+    if pose.arm_aim_weight > 0 {
+        palms := (pose.projected[rig.palms[0]] + pose.projected[rig.palms[1]]) * 0.5 - pose.projected[rig.neck];
+        roll := atan2(pose.arm_aim.y, pose.arm_aim.x) - atan2(palms.y, palms.x);
+        roll = (roll - TAU * floor((roll + PI) / TAU)) * pose.arm_aim_weight;
+        center := (pose.projected[rig.pelvis] + pose.projected[rig.neck]) * 0.5;
+        rc, rs := cos(roll), sin(roll);
+        for 0..rig.joints.count-1 {
+            v := pose.projected[it] - center;
+            pose.projected[it] = center + Vector2.{v.x * rc - v.y * rs, v.x * rs + v.y * rc};
+        }
+    }
 
     // The head and hands trail on springs a little (UpdateSecondaryMotion).
     at := to_vector(a.position);
@@ -676,6 +692,7 @@ rig: struct {
     legs: [2][5] s32;  // left, right: hip, knee, ankle, toe, tip (Leg)
     upper_body: [MAX_JOINTS] float;  // how much each joint leans with the upper body
     hands: [2] s32;
+    palms: [2] s32;
     in_hand: [2][MAX_JOINTS] bool;   // a hand and its fingers
     on_ragdoll: [MAX_JOINTS] bool;   // the joints the bones join
     ragdoll_carrier: [MAX_JOINTS] s32;  // the nearest of those a joint rides with, -1 if it's one
@@ -718,6 +735,7 @@ rig_ready :: () -> bool {
     }
     rig.upper_body[spine_01], rig.upper_body[spine_02] = 0.25, 0.6;
     rig.hands = .[joint("hand_l"), joint("hand_r")];
+    rig.palms = .[joint("middle_01_l"), joint("middle_01_r")];
     for BONES { rig.on_ragdoll[rig.bone_joints[it_index][0]] = true; rig.on_ragdoll[rig.bone_joints[it_index][1]] = true; }
     for 0..joint_count-1 {
         carrier: s32 = xx it;
