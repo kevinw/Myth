@@ -124,9 +124,9 @@ render :: () {
     if !actor_mask.gpu actor_mask = make_target(xx VIEW.x, xx VIEW.y);
     if !normals.gpu normals = make_target(xx VIEW.x, xx VIEW.y);
     if !lit.gpu lit = make_target(xx VIEW.x, xx VIEW.y);
-    if !crt.pipelines[0] crt = load_shader("Crt", samplers = 2, uniforms = 1);
+    if !crt.pipelines[0].pipeline crt = load_shader("Crt", samplers = 2, uniforms = 1);
     if !no_tile_field.gpu { clear: Color; no_tile_field = make_texture(xx *clear, 1, 1); }
-    if !lighting.pipelines[0] lighting = load_shader("lighting", samplers = 7, uniforms = 1);
+    if !lighting.pipelines[0].pipeline lighting = load_shader("lighting", samplers = 7, uniforms = 1);
 
     size := screen_size();
     scale := max(1.0, floor(min(size.x / VIEW.x, size.y / VIEW.y)));
@@ -180,6 +180,8 @@ render :: () {
     uniforms := lighting_uniforms(view);
     begin_pass(lit, clear = rgb(0), shader = *lighting, uniforms = .{size_of(type_of(uniforms)), xx *uniforms}, extra = .[pack.lighting_noise, normals, front, tile_field, shadow_depths, actor_mask]);
     image(scene, .{.{}, VIEW}, .{});
+
+    apply_pixel_sort(lit, view, delta);
 
     // Unlit on top: what glows.
     begin_pass(lit, keep = true);
@@ -368,6 +370,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "burrow.jai";
 #load "controls.jai";
 #load "particles.jai";
+#load "pixel_sort.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";

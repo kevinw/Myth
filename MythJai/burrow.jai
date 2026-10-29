@@ -7,8 +7,9 @@
 // jump, carrying the glide; climbing a wall pops you into a wall slide. Bud, close by, rides along
 // as a white dot and pops out after you. The HUD's bar drains with it and refills on landing.
 // Sparks fly out of the surface as you go, and burst as you leave.
-// Not ported: burrow lines, doors and switches, seams, room crossings, quantum tunnels, the
-// ground churn, the rig sinking in.
+// The ground churns behind you (pixel_sort.jai).
+// Not ported: burrow lines, doors and switches, seams, room crossings, quantum tunnels, the rig
+// sinking in.
 
 Burrow :: struct {
     heading: Point2;            // travel direction along the surface
@@ -173,8 +174,10 @@ burrow_state :: (p: *Pawn, input: Pawn_Input, dt: float) -> bool {
     spread := MIN_SPREAD + (1 - MIN_SPREAD) * (1 - cast(float) b.interval / (INTERVALS - 1));
     b.spread = approach(b.spread, spread, SPREAD_EASE_RATE * dt);
 
-    // Sparks thrown out of the surface, more the faster you go (EmitBurrowSparks).
+    // Sparks thrown out of the surface, more the faster you go (EmitBurrowSparks), and the
+    // ground churned behind you.
     speed01 := b.speed / BURROW_MAX_SPEED;
+    churn_record(p.position, b.toward, speed01);
     if speed01 > 0.05 {
         b.sparks += SPARK_RATE * speed01 * dt;
         count := cast(int) b.sparks;

@@ -33,7 +33,11 @@ sign :: (v: float) -> s32 { return cast(s32) (v > 0) - cast(s32) (v < 0); }
 // Premultiplied, like everything we draw.
 fade :: (c: Color, alpha: float) -> Color { return .{xx (c.r * alpha), xx (c.g * alpha), xx (c.b * alpha), xx (c.a * alpha)}; }
 
-Texture :: struct { gpu: *SDL_GPUTexture; size: Vector2; }
+Texture :: struct { gpu: *SDL_GPUTexture; size: Vector2; format := SDL_GPUTextureFormat.R8G8B8A8_UNORM; }
+
+// How a pass's draws land on its target: over it with premultiplied alpha, keeping the larger of
+// each channel, or simply replacing it.
+Blend :: enum u8 { PREMULTIPLIED; MAX; REPLACE; }
 
 gfx_init :: (w: *SDL_Window) -> bool {
     window = w;
@@ -66,32 +70,44 @@ Shader :: struct {
     name: string;
     samplers: u32;
     uniforms: u32;
-    pipelines: [2] *SDL_GPUGraphicsPipeline;  // for the window, for render targets
+    pipelines: [8] struct { format: SDL_GPUTextureFormat; blend: Blend; pipeline: *SDL_GPUGraphicsPipeline; };  // made as passes need them
 }
 
 load_shader :: (name: string, samplers: u32 = 1, uniforms: u32 = 0) -> Shader, bool {
     shader := Shader.{name = copy_string(name), samplers = samplers, uniforms = uniforms};
-    for format: 0..1 {
-        shader.pipelines[format] = make_pipeline(name, samplers, uniforms, ifx format then .R8G8B8A8_UNORM else SDL_GetGPUSwapchainTextureFormat(device, window));
-        if !shader.pipelines[format] { log_error("can't load shader %", name); return shader, false; }
-    }
-    return shader, true;
+    // The usual two up front, so a shader that won't load says so now.
+    ok := pipeline_for(*shader, SDL_GetGPUSwapchainTextureFormat(device, window), .PREMULTIPLIED) && pipeline_for(*shader, .R8G8B8A8_UNORM, .PREMULTIPLIED);
+    if !ok log_error("can't load shader %", name);
+    return shader, ok;
 }
 
-// A texture to draw into, then draw with.
-make_target :: (w: s32, h: s32) -> Texture {
+pipeline_for :: (shader: *Shader, format: SDL_GPUTextureFormat, blend: Blend) -> *SDL_GPUGraphicsPipeline {
+    for * shader.pipelines {
+        if it.pipeline && it.format == format && it.blend == blend return it.pipeline;
+        if !it.pipeline {
+            it.* = .{format, blend, make_pipeline(shader.name, shader.samplers, shader.uniforms, format, blend)};
+            return it.pipeline;
+        }
+    }
+    log_error("shader % needs too many pipelines", shader.name);
+    return null;
+}
+
+// A texture to draw into, then draw with: RGBA8, or another color format (R16G16B16A16_FLOAT).
+make_target :: (w: s32, h: s32, format := SDL_GPUTextureFormat.R8G8B8A8_UNORM) -> Texture {
     texture := SDL_CreateGPUTexture(device, *(SDL_GPUTextureCreateInfo.{
-        type = ._2D, format = .R8G8B8A8_UNORM, usage = .SAMPLER | .COLOR_TARGET, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
+        type = ._2D, format = format, usage = .SAMPLER | .COLOR_TARGET, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
     }));
-    return .{texture, .{xx w, xx h}};
+    return .{texture, .{xx w, xx h}, format};
 }
 
 // Starts a pass: what follows draws into `target` (the window when it has no texture),
 // cleared to `clear` unless `keep`, through `shader` (the batcher when null) with `uniforms`
 // and `extra` textures in its samplers after the first.
-begin_pass :: (target := Texture.{}, clear := Color.{}, keep := false, shader: *Shader = null, uniforms: [] u8 = .[], extra: [] Texture = .[]) {
+begin_pass :: (target := Texture.{}, clear := Color.{}, keep := false, shader: *Shader = null, uniforms: [] u8 = .[], extra: [] Texture = .[], blend := Blend.PREMULTIPLIED) {
     p: Pass;
     p.target = target;
+    p.blend = blend;
     p.clear = clear;
     p.keep = keep;
     p.shader = shader;
@@ -107,7 +123,7 @@ make_texture :: (pixels: *u8, w: s32, h: s32, format := SDL_GPUTextureFormat.R8G
     texture := SDL_CreateGPUTexture(device, *(SDL_GPUTextureCreateInfo.{
         type = ._2D, format = format, usage = .SAMPLER, width = xx w, height = xx h, layer_count_or_depth = 1, num_levels = 1,
     }));
-    result := Texture.{texture, .{xx w, xx h}};
+    result := Texture.{texture, .{xx w, xx h}, format};
     update_texture(result, pixels);
     return result;
 }
@@ -265,7 +281,10 @@ present :: (clear := Color.{}) {
         target := SDL_GPUColorTargetInfo.{texture = texture, clear_color = .{clear.r * k, clear.g * k, clear.b * k, clear.a * k}, load_op = ifx p.keep then .LOAD else .CLEAR, store_op = .STORE};
         pass := SDL_BeginGPURenderPass(cmd, *target, 1, null);
         shader := ifx p.shader then p.shader else *batcher;
-        SDL_BindGPUGraphicsPipeline(pass, shader.pipelines[cast(int) (p.target.gpu != null)]);
+        format := ifx p.target.gpu then p.target.format else SDL_GetGPUSwapchainTextureFormat(device, window);
+        pipeline := pipeline_for(shader, format, p.blend);
+        if !pipeline { SDL_EndGPURenderPass(pass); continue; }
+        SDL_BindGPUGraphicsPipeline(pass, pipeline);
         SDL_BindGPUVertexBuffers(pass, 0, *(SDL_GPUBufferBinding.{buffer = vertex_buffer}), 1);
         // Pixels to clip space, column-major.
         ortho := float.[2 / size.x, 0, 0, 0,  0, -2 / size.y, 0, 0,  0, 0, 1, 0,  -1, 1, 0, 1];
@@ -294,6 +313,7 @@ Pass :: struct {
     target: Texture;
     clear: Color;
     keep: bool;
+    blend: Blend;
     shader: *Shader;
     uniforms: [1024] u8;
     uniform_count: int;
@@ -329,7 +349,7 @@ load_stage :: (name: string, stage: SDL_GPUShaderStage, samplers: u32, uniforms:
     }));
 }
 
-make_pipeline :: (name: string, samplers: u32, uniforms: u32, format: SDL_GPUTextureFormat) -> *SDL_GPUGraphicsPipeline {
+make_pipeline :: (name: string, samplers: u32, uniforms: u32, format: SDL_GPUTextureFormat, blend: Blend) -> *SDL_GPUGraphicsPipeline {
     vs := load_stage("batcher", .VERTEX, samplers = 0, uniforms = 1);
     fs := load_stage(name, .FRAGMENT, samplers, uniforms);
     defer { if vs SDL_ReleaseGPUShader(device, vs); if fs SDL_ReleaseGPUShader(device, fs); }
@@ -342,15 +362,21 @@ make_pipeline :: (name: string, samplers: u32, uniforms: u32, format: SDL_GPUTex
         .{2, 0, .UBYTE4_NORM, #run field_offset("color")},
         .{3, 0, .UBYTE4_NORM, #run field_offset("mode")},
     ];
-    // Premultiplied alpha, like Foster.
+    // Premultiplied alpha, like Foster, unless the pass wants otherwise.
     target := SDL_GPUColorTargetDescription.{
         format = format,
         blend_state = .{
             src_color_blendfactor = .ONE, dst_color_blendfactor = .ONE_MINUS_SRC_ALPHA, color_blend_op = .ADD,
             src_alpha_blendfactor = .ONE, dst_alpha_blendfactor = .ONE_MINUS_SRC_ALPHA, alpha_blend_op = .ADD,
-            enable_blend = true,
+            enable_blend = blend != .REPLACE,
         },
     };
+    if blend == .MAX {
+        target.blend_state.dst_color_blendfactor = .ONE;
+        target.blend_state.color_blend_op = .MAX;
+        target.blend_state.dst_alpha_blendfactor = .ONE;
+        target.blend_state.alpha_blend_op = .MAX;
+    }
     info: SDL_GPUGraphicsPipelineCreateInfo;
     info.vertex_shader = vs;
     info.fragment_shader = fs;
