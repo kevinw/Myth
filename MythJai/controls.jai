@@ -26,6 +26,11 @@ control_jump_down :: () -> bool { return key_down(SDLK_SPACE) || button_down(.SO
 control_attack_pressed :: () -> bool { return key_pressed(SDLK_E) || button_pressed(.WEST); }
 control_dash_pressed :: () -> bool { return key_pressed(SDLK_LSHIFT) || key_pressed(SDLK_F) || trigger_pressed; }
 control_dash_down :: () -> bool { return key_down(SDLK_LSHIFT) || key_down(SDLK_F) || trigger_down; }
+// Escape, or Start or Back on a gamepad: the map.
+control_map_pressed :: () -> bool { return key_pressed(SDLK_ESCAPE) || button_pressed(.START) || button_pressed(.BACK); }
+// Any face button, which also puts the map away.
+control_face_pressed :: () -> bool { return button_pressed(.SOUTH) || button_pressed(.EAST) || button_pressed(.WEST) || button_pressed(.NORTH); }
+
 // The right stick, to look ahead.
 control_look :: () -> Vector2 {
     if !gamepad return .{};

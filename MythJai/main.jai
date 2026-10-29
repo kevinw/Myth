@@ -76,8 +76,8 @@ frame :: () -> bool {
         }
         if event.type == xx SDL_EventType.KEY_UP array_unordered_remove_by_value(*held, event.key.key);
     }
-    if array_find(pressed, SDLK_ESCAPE) return true;
     update_controls();
+    if control_map_pressed() || map_open && control_face_pressed() toggle_map();
 
     ticks := SDL_GetTicksNS();
     delta = ifx last_ticks then min(cast(float) (ticks - last_ticks) / 1_000_000_000, 1.0 / 20) else 1.0 / 60;
@@ -89,7 +89,9 @@ frame :: () -> bool {
         reload_changed_sprites();
     }
     shake_timer = approach(shake_timer, 0, delta);
-    if hit_stun_timer > 0 {
+    if map_open {
+        // Paused under the map.
+    } else if hit_stun_timer > 0 {
         hit_stun_timer -= delta;
     } else {
         if demo { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
@@ -191,6 +193,7 @@ render :: () {
     for context.actors.players draw_burrow_glow(it, it.state == .BURROW);
     pop_matrix();
     draw_speech(view);
+    draw_map();
 
     // Through Myth's CRT filter onto the window, with Myth's default settings (Manager.Visuals).
     output := VIEW * scale;
@@ -371,6 +374,7 @@ clamp_camera :: (target: Vector2) -> Vector2 {
 #load "controls.jai";
 #load "particles.jai";
 #load "pixel_sort.jai";
+#load "map.jai";
 #load "hud.jai";
 #load "sound.jai";
 #load "ozz.jai";
