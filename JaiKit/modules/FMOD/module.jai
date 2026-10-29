@@ -11,6 +11,10 @@ FMOD_3D_Attributes :: struct { position, velocity, forward, up: FMOD_Vector; }
 
 FMOD_Studio_System_Create :: (system: **void, header_version: u32) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_Initialize :: (system: *void, max_channels: s32, studio_flags: u32, flags: u32, extra_driver_data: *void) -> s32 #foreign fmodstudio;
+FMOD_OUTPUTTYPE_WAVWRITER_NRT :: 5;  // mixes to a .wav as fast as it's updated (the file goes in extra_driver_data)
+FMOD_Studio_System_GetCoreSystem :: (system: *void, core: **void) -> s32 #foreign fmodstudio;
+FMOD_System_SetOutput :: (core: *void, output: s32) -> s32 #foreign fmod;
+FMOD_System_SetDSPBufferSize :: (core: *void, buffer_length: u32, num_buffers: s32) -> s32 #foreign fmod;
 FMOD_Studio_System_Update :: (system: *void) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_LoadBankFile :: (system: *void, filename: *u8, flags: u32, bank: **void) -> s32 #foreign fmodstudio;
 FMOD_Studio_System_GetEvent :: (system: *void, path: *u8, description: **void) -> s32 #foreign fmodstudio;
@@ -29,3 +33,4 @@ FMOD_Studio_EventInstance_SetParameterByNameWithLabel :: (instance: *void, name:
 #scope_file
 
 fmodstudio :: #library "macos/libfmodstudio";
+fmod :: #library "macos/libfmod";

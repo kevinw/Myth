@@ -55,7 +55,18 @@ missing_events: [..] string;
 sound_ready :: () -> bool {
     if fmod_system || fmod_failed return !fmod_failed;
     system: *void;
-    fmod_failed = FMOD_Studio_System_Create(*system, FMOD_VERSION) != FMOD_OK || FMOD_Studio_System_Initialize(system, 1024, 0, 0, null) != FMOD_OK;
+    fmod_failed = FMOD_Studio_System_Create(*system, FMOD_VERSION) != FMOD_OK;
+    // `myth wav <path>`: mix to a file instead of the speakers, a frame's worth per update, to check what plays.
+    found, at := array_find(get_command_line_arguments(), "wav");
+    wav: *u8;
+    if !fmod_failed && found && at + 1 < get_command_line_arguments().count {
+        core: *void;
+        wav = temp_c_string(get_command_line_arguments()[at + 1]);
+        // A sixtieth of a second per mix at 48kHz, so the file keeps time with a capture's frames.
+        if FMOD_Studio_System_GetCoreSystem(system, *core) != FMOD_OK || FMOD_System_SetOutput(core, FMOD_OUTPUTTYPE_WAVWRITER_NRT) != FMOD_OK ||
+           FMOD_System_SetDSPBufferSize(core, 800, 4) != FMOD_OK log_error("can't write audio to %", to_string(wav));
+    }
+    fmod_failed = fmod_failed || FMOD_Studio_System_Initialize(system, 1024, 0, 0, wav) != FMOD_OK;
     if fmod_failed { log_error("FMOD didn't start; no sound"); return false; }
     for BANKS {
         bank: *void;
