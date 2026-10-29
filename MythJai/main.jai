@@ -105,7 +105,7 @@ frame :: () -> bool {
     zoom_target := ifx control_zoom_down() then 2.0 else 1.0;
     zoom += (zoom_target - zoom) * (1 - exp(-delta * ZOOM_RATE));
     if abs(zoom - zoom_target) < 0.005 zoom = zoom_target;
-    camera = clamp_camera(camera_target());
+    update_camera();
     update_sound(camera + VIEW * 0.5);
     render();
     frame_count += 1;
@@ -303,9 +303,51 @@ respawn_after_death :: () {
     }
 }
 
+// Where the view centres: the player's feet, pushed ahead by the right stick and, burrowing, the
+// way the burrow is climbing or diving (Game.UpdateCamera).
 camera_target :: () -> Vector2 {
-    for context.actors.players return to_vector(it.position) - Vector2.{0, STANDING_HEIGHT / 2} - VIEW / zoom * 0.5;
+    for context.actors.players return to_vector(it.position) + look_ahead + Vector2.{0, burrow_lead} - VIEW / zoom * 0.5;
     return camera;
+}
+
+look_ahead: Vector2;
+burrow_lead, burrow_lead_target: float;
+camera_error: Vector2;          // a jump in the clamped target, gliding away
+previous_target, previous_focus: Vector2;
+has_previous_target: bool;
+
+update_camera :: () {
+    LOOK_AHEAD_EDGE_INSET :: 0.15;
+    LOOK_AHEAD_EASE_RATE :: 8.0;
+    BURROW_LEAD_DISTANCE :: 40.0;
+    BURROW_LEAD_EASE_RATE :: 3.0;
+    BURROW_LEAD_RETURN_RATE :: 12.0;
+    EASE_RATE :: 7.0;
+    EASE_TRIGGER :: 2.0;
+    look_target := control_look() * (VIEW / zoom * (0.5 - LOOK_AHEAD_EDGE_INSET));
+    look_ahead += (look_target - look_ahead) * (1 - exp(-delta * LOOK_AHEAD_EASE_RATE));
+    lead, rate := 0.0, BURROW_LEAD_RETURN_RATE;
+    for context.actors.players if it.state == .BURROW {
+        lead = it.burrow.heading.y * it.burrow.speed / BURROW_MAX_SPEED * BURROW_LEAD_DISTANCE;
+        rate = BURROW_LEAD_EASE_RATE;
+    }
+    amount := 1 - exp(-delta * rate);
+    burrow_lead_target += (lead - burrow_lead_target) * amount;
+    burrow_lead += (burrow_lead_target - burrow_lead) * amount;
+
+    // A clamp that jumps the target further than the player moved glides there instead.
+    target := clamp_camera(camera_target());
+    focus := target;
+    for context.actors.players focus = to_vector(it.position) + look_ahead + Vector2.{0, burrow_lead};
+    if has_previous_target {
+        moved, followed := target - previous_target, focus - previous_focus;
+        if abs(moved.x) - abs(followed.x) > EASE_TRIGGER camera_error.x -= moved.x - followed.x;
+        if abs(moved.y) - abs(followed.y) > EASE_TRIGGER camera_error.y -= moved.y - followed.y;
+    }
+    camera_error *= exp(-delta * EASE_RATE);
+    if dot(camera_error, camera_error) < 0.25 camera_error = .{};
+    camera = clamp_camera(target + camera_error);
+    previous_target, previous_focus, has_previous_target = target, focus, true;
 }
 
 // Keeps the view inside the room, or centers it when the room is smaller.

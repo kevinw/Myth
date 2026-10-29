@@ -8,7 +8,7 @@
 // Turning round eases through the front (UpdateTurn).
 // Not ported yet: foot IK, clip-driven turns and the other pose modifiers, secondary motion, ragdoll,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
-// head (a circle stands in), hands' fingers, skin modes, normals.
+// head (a circle stands in), hands' fingers, skin modes.
 
 Rig_Pose :: struct {
     take: s32 = -1;

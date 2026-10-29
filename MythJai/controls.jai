@@ -26,6 +26,12 @@ control_jump_down :: () -> bool { return key_down(SDLK_SPACE) || button_down(.SO
 control_attack_pressed :: () -> bool { return key_pressed(SDLK_E) || button_pressed(.WEST); }
 control_dash_pressed :: () -> bool { return key_pressed(SDLK_LSHIFT) || key_pressed(SDLK_F) || trigger_pressed; }
 control_dash_down :: () -> bool { return key_down(SDLK_LSHIFT) || key_down(SDLK_F) || trigger_down; }
+// The right stick, to look ahead.
+control_look :: () -> Vector2 {
+    if !gamepad return .{};
+    return .{past_deadzone(axis(.RIGHTX), 0.25), past_deadzone(axis(.RIGHTY), 0.25)};
+}
+
 control_zoom_down :: () -> bool { return key_down(SDLK_X) || gamepad && button_down(.LEFT_STICK); }
 
 // Each frame, after the events: what the trigger did since the last.
