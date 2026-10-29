@@ -6,7 +6,8 @@
 // trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
 // The pose leans into speed and acceleration (UpdateVelocityLean) and squashes with the actor.
 // Turning round eases through the front (UpdateTurn); the head and hands trail on springs.
-// Not ported yet: foot IK, clip-driven turns and the other pose modifiers, ragdoll,
+// Grounded, the feet find the floor (UpdateFoot).
+// Not ported yet: clip-driven turns and the other pose modifiers, ragdoll,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -33,6 +34,8 @@ Rig_Pose :: struct {
     turn_from, turn_to, turn_time: float;
     turning_to: s32;                    // the facing it's turning toward, 0 before the first pose
     motion: [3] struct { position, velocity: Vector2; ready: bool; };  // head, left hand, right hand, on springs
+    gait: bool;                         // a walk, run or crawl is playing
+    foot_offset: [2] float;             // how far foot IK has moved each foot onto the ground
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -121,6 +124,7 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
                     else ifx name == "PlayerRoll" then max(ROLL_MIN_RATE, speed) else 1.0;
     if running && !pose.was_running pose.run_lean_time = 0;
     pose.was_running = running;
+    pose.gait = gait;
     pose.run_lean_time += dt;
     t := pose.run_lean_time / RUN_LEAN_PEAK;
     pose.extra_lean = ifx running then RUN_LEAN_IN * t * exp(1 - t) else 0.0;
@@ -128,7 +132,7 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
 
 // Advances the takes; poses and projects a new frame at the rig's frame rate, turned to face
 // the actor's way, leaning with its motion and squashed with it.
-update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
+update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     if !rig_ready() || pose.take < 0 return;
     pose.time = advance_take(pose.take, pose.time, dt * pose.playback);
     if pose.previous >= 0 pose.previous_time = advance_take(pose.previous, pose.previous_time, dt);
@@ -213,7 +217,55 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float) {
         for 0..rig.joints.count-1 if rig.in_hand[hand][it] pose.projected[it] += offset;
     }
 
+    for leg: 0..1 foot_ik(pose, leg, at, a.facing, grounded, visual_delta);
+
     for 0..rig.joints.count-1 pose.projected[it] = .{floor(pose.projected[it].x + 0.5), floor(pose.projected[it].y + 0.5)};  // pixel snap
+}
+
+// UpdateFoot: a grounded foot near the floor eases onto it (walking, the floor under the body is
+// what counts), its knee re-solved to reach; a planted foot lies flat, toes forward.
+foot_ik :: (pose: *Rig_Pose, leg: int, at: Vector2, facing: s32, grounded: bool, visual_delta: float) {
+    FOOT_SCALE :: #run min(1.0, RIG.PIXELS_PER_METER / 25);
+    PROBE_ABOVE :: 4.0 * FOOT_SCALE;
+    PROBE_DISTANCE :: 12.0 * FOOT_SCALE;
+    PLANT_DISTANCE :: 5.0 * FOOT_SCALE;
+    PLANTED_SLACK :: 0.5;
+    IK_SPEED :: 40.0 * FOOT_SCALE;
+    hip, knee, ankle, toe, tip := rig.legs[leg][0], rig.legs[leg][1], rig.legs[leg][2], rig.legs[leg][3], rig.legs[leg][4];
+    p := *pose.projected;
+    animated_toe := at + p.*[toe];
+    target, planted := 0.0, false;
+    if grounded {
+        probe := animated_toe - Vector2.{0, PROBE_ABOVE};
+        x, y := cast(s32) floor(probe.x + 0.5), cast(s32) floor(probe.y + 0.5);
+        for d: 0..cast(s32) ceil(PROBE_DISTANCE) if overlaps_solid(.{x - 1, y + d, 2, 1}) {
+            floor_y := cast(float) (y + d);
+            if pose.gait { target = floor_y - at.y; planted = animated_toe.y + target >= floor_y - PLANTED_SLACK; }
+            else if abs(animated_toe.y - floor_y) <= PLANT_DISTANCE { target = floor_y - animated_toe.y; planted = true; }
+            break;
+        }
+    }
+    pose.foot_offset[leg] = approach(pose.foot_offset[leg], target, IK_SPEED * visual_delta);
+    offset := pose.foot_offset[leg];
+    if abs(offset) > 0.001 {
+        old_toe := p.*[toe];
+        foot := old_toe - p.*[ankle];
+        // SolveLeg: the knee bends (forward of the facing) so the ankle reaches its target.
+        upper, lower := length(p.*[knee] - p.*[hip]), length(p.*[ankle] - p.*[knee]);
+        reach := old_toe + Vector2.{0, offset} - foot - p.*[hip];
+        distance := length(reach);
+        if distance > 0.001 && upper > 0.001 && lower > 0.001 {
+            direction := reach / distance;
+            distance = clamp(distance, abs(upper - lower) + 0.001, upper + lower - min(0.4, (upper + lower) * 0.04));
+            along := (upper * upper - lower * lower + distance * distance) / (2 * distance);
+            height := sqrt(max(0.0, upper * upper - along * along));
+            p.*[knee] = p.*[hip] + direction * along - Vector2.{-direction.y, direction.x} * (height * facing);
+            p.*[ankle] = p.*[hip] + direction * distance;
+        }
+        p.*[toe] = p.*[ankle] + foot;
+        p.*[tip] += p.*[toe] - old_toe;
+    }
+    if planted p.*[tip] = p.*[toe] + Vector2.{xx facing, 0} * length(p.*[tip] - p.*[toe]);
 }
 
 // UpdateSecondaryPoint: a point springing after `target` (world pixels), no further off it than

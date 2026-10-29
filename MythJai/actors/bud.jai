@@ -54,7 +54,7 @@ update :: (b: *Bud) {
         pawn_update(b, input, delta, normal = false);
         if b.back_dash_timer <= 0 play(b, "idle");
         play_rig(*b.rig, b.animation, b.velocity, delta);
-        update_rig(*b.rig, b, delta);
+        update_rig(*b.rig, b, delta, b.grounded);
         return;
     }
     for player: context.actors.players {
@@ -70,7 +70,7 @@ update :: (b: *Bud) {
     b.blocked_time = ifx events & .HIT_WALL then b.blocked_time + delta else 0;
     if b.position.y > room.size.y * TILE_SIZE + 12 b.respawn_timer = BUD_FALL_RESPAWN_DELAY;
     play_rig(*b.rig, b.animation, b.velocity, delta);
-    update_rig(*b.rig, b, delta);
+    update_rig(*b.rig, b, delta, b.grounded);
 }
 
 draw :: (b: *Bud) { if b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 draw_rig(*b.rig, to_vector(b.position), BUD_LOOK); }
