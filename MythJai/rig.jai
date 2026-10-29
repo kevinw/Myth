@@ -9,7 +9,8 @@
 // Grounded, the feet find the floor (UpdateFoot); the body rides springs that a landing knocks
 // down (UpdateRagdoll).
 // A dive aims the arms along it (ApplyPoseRoll).
-// Not ported yet: the other pose modifiers (look, reach, pike), hit impulses (enemies'),
+// Swinging in the air, the legs keep the air pose and up and down swipes roll the torso.
+// Not ported yet: the other pose modifiers (the swing arm's arc, pike), hit impulses (enemies'),
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -33,6 +34,12 @@ Rig_Pose :: struct {
     was_running: bool;
     extra_lean: float;                  // degrees, leaning into a run's start
     skid_facing: s32;                   // the facing a skid started from
+    skid_from_yaw, skid_to_yaw: float;  // a skid sweeps the yaw between these over its take,
+    skid_yaw_weight: float;             // and lets go after (UpdateRigSkidYaw)
+    skid_yaw: float;
+    air_swing: bool;                    // attacking in the air: the legs keep the air pose,
+    attack_pitch: float;                // and a down (1) or up (-1) swipe rolls the torso
+    leg_weight, leg_time, attack_reach: float;
     fidget_take: s32 = -1;              // standing about, now and then a fidget plays (RigFidget)
     fidget_timer := 5.0;
     fidget_last: s32 = -1;
@@ -134,7 +141,11 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
             (name == "PlayerIdle" || name == "Walk_Loop" || name == "PlayerRun" || name == "Jog_Fwd_Loop" || name == "Sprint_Loop");
         pose.lead = ifx skid_holds then pose.take else lead_for(pose.requested, main, velocity);
         pose.requested = main;
-        if name == "PlayerSkid" pose.skid_facing = facing;
+        if name == "PlayerSkid" {
+            // The skid turns from the way you were going to the stick (facing already shows the brake).
+            pose.skid_facing = facing;
+            pose.skid_from_yaw, pose.skid_to_yaw = ifx facing < 0 then 0.0 else PI, ifx facing < 0 then PI else 0.0;
+        }
     }
     if pose.lead >= 0 && pose.take == pose.lead && take_finished(pose) pose.lead = -1;
     shown := ifx pose.lead >= 0 then pose.lead else main;
@@ -173,9 +184,9 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     pose.posed = true;
 
     if !pose.instance pose.instance = myth_ozz_instance_create(rig.handle);
-    clips: [2] s32;
-    times, weights: [2] float;
-    flags: [2] u8;
+    clips: [3] s32;
+    times, weights: [3] float;
+    additive, masked: [3] u8;
     layers: s32;
     add_layer :: (take: s32, time: float, weight: float) #expand {
         if take < 0 || weight <= 0 return;
@@ -185,8 +196,27 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     add_layer(pose.previous, pose.previous_time, 1 - pose.blend);
     add_layer(pose.take, pose.time, pose.blend);
     if pose.blend >= 1 pose.previous = -1;
-    joint_weights: [MAX_JOINTS * 2] float;
-    if !myth_ozz_instance_sample(pose.instance, layers, clips.data, times.data, weights.data, flags.data, flags.data, joint_weights.data, positions.data, rotations.data) return;
+    // Swinging in the air, the legs keep the air pose: an override on the lower body (UpdateAnimationLayers).
+    joint_weights: [MAX_JOINTS * 3] float;
+    AIR_LEGS_RESPONSE :: 25.0;
+    ATTACK_PITCH_RESPONSE :: 20.0;
+    pose.leg_weight += ((ifx pose.air_swing then 1.0 else 0.0) - pose.leg_weight) * (1 - exp(-AIR_LEGS_RESPONSE * visual_delta));
+    if pose.leg_weight < 0.01 pose.leg_weight = 0;
+    pose.attack_reach += ((ifx pose.air_swing then pose.attack_pitch else 0.0) - pose.attack_reach) * (1 - exp(-ATTACK_PITCH_RESPONSE * visual_delta));
+    legs := find_take("PlayerAir");
+    if pose.leg_weight > 0 && legs >= 0 {
+        t := rig.takes[legs];
+        end := min(t.end, rig.clips[t.clip].duration);
+        pose.leg_time = t.start + fmod_cycling(max(0.0, pose.leg_time - t.start) + visual_delta * t.speed, max(0.0001, end - t.start));
+        for layer: 0..layers-1 {
+            masked[layer] = 1;
+            for 0..rig.joints.count-1 joint_weights[layer * rig.joints.count + it] = 1 - pose.leg_weight * rig.lower_body[it];
+        }
+        clips[layers], times[layers], weights[layers], masked[layers] = t.clip, pose.leg_time, pose.leg_weight, 1;
+        for 0..rig.joints.count-1 joint_weights[layers * rig.joints.count + it] = rig.lower_body[it];
+        layers += 1;
+    }
+    if !myth_ozz_instance_sample(pose.instance, layers, clips.data, times.data, weights.data, additive.data, masked.data, joint_weights.data, positions.data, rotations.data) return;
 
     // The head sits out along the neck (HeadPosition3D).
     along := positions[rig.head] - positions[rig.neck];
@@ -204,7 +234,19 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
         t := pose.turn_time / TURN_DURATION;
         pose.yaw = pose.turn_from + (pose.turn_to - pose.turn_from) * t * t * (3 - 2 * t);
     }
-    yaw_cos, yaw_sin := cos(pose.yaw), sin(pose.yaw);
+    SKID_YAW_RELEASE :: 0.15;
+    yaw := pose.yaw;
+    if rig.takes[pose.take].name == "PlayerSkid" {
+        t := rig.takes[pose.take];
+        progress := clamp((pose.time - t.start) / max(0.0001, min(t.end, rig.clips[t.clip].duration) - t.start), 0, 1);
+        pose.skid_yaw = pose.skid_from_yaw + (pose.skid_to_yaw - pose.skid_from_yaw) * progress * progress * (3 - 2 * progress);
+        pose.skid_yaw_weight = 1;
+    } else pose.skid_yaw_weight = approach(pose.skid_yaw_weight, 0, visual_delta / SKID_YAW_RELEASE);
+    if pose.skid_yaw_weight > 0 {
+        d := pose.skid_yaw - yaw;
+        yaw += (d - TAU * floor((d + PI) / TAU)) * pose.skid_yaw_weight;
+    }
+    yaw_cos, yaw_sin := cos(yaw), sin(yaw);
     for 0..rig.joints.count-1 {
         // Off the ragdoll (fingers) a joint rides with its nearest ancestor on it.
         carrier := rig.ragdoll_carrier[it];
@@ -239,6 +281,18 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     squish := Vector2.{1, 1} + (a.squish - Vector2.{1, 1}) * RIG.SQUISH_RESPONSE;
     ground := Vector2.{pivot.x, 0};
     for 0..rig.joints.count-1 pose.projected[it] = ground + (pose.projected[it] - ground) * squish;
+
+    // An up or down swipe in the air rolls the upper body into it (TorsoRoll).
+    ATTACK_TORSO_DEGREES :: 20.0;
+    torso := pose.attack_reach * a.facing * ATTACK_TORSO_DEGREES * PI / 180;
+    if abs(torso) > 0.0001 {
+        pelvis := pose.projected[rig.pelvis];
+        tc, ts := cos(torso), sin(torso);
+        for 0..rig.joints.count-1 if rig.upper_body[it] > 0 {
+            v := pose.projected[it] - pelvis;
+            pose.projected[it] += (pelvis + Vector2.{v.x * tc - v.y * ts, v.x * ts + v.y * tc} - pose.projected[it]) * rig.upper_body[it];
+        }
+    }
 
     // Rolled about the torso so the arms point along the aim (ApplyPoseRoll).
     if pose.arm_aim_weight > 0 {
@@ -699,6 +753,7 @@ rig: struct {
     palms: [2] s32;
     in_hand: [2][MAX_JOINTS] bool;   // a hand and its fingers
     on_ragdoll: [MAX_JOINTS] bool;   // the joints the bones join
+    lower_body: [MAX_JOINTS] float;  // how much each joint goes with the legs
     ragdoll_carrier: [MAX_JOINTS] s32;  // the nearest of those a joint rides with, -1 if it's one
 };
 positions: [MAX_JOINTS] Vector3;
@@ -738,6 +793,13 @@ rig_ready :: () -> bool {
         rig.upper_body[it] = ifx j == spine_01 then 1.0 else 0.0;
     }
     rig.upper_body[spine_01], rig.upper_body[spine_02] = 0.25, 0.6;
+    pelvis := joint("pelvis");
+    for 0..joint_count-1 {
+        j: s32 = xx it;
+        while j >= 0 && j != pelvis && j != spine_01 j = myth_ozz_rig_joint_parent(handle, j);
+        rig.lower_body[it] = ifx j == pelvis then 1.0 else 0.0;
+    }
+    rig.lower_body[spine_01], rig.lower_body[spine_02] = 0.75, 0.4;
     rig.hands = .[joint("hand_l"), joint("hand_r")];
     rig.palms = .[joint("middle_01_l"), joint("middle_01_r")];
     for BONES { rig.on_ragdoll[rig.bone_joints[it_index][0]] = true; rig.on_ragdoll[rig.bone_joints[it_index][1]] = true; }

@@ -105,6 +105,11 @@ update :: (p: *Player) {
     p.rig_dive_weight += ((ifx diving then 1.0 else 0.0) - p.rig_dive_weight) * (1 - exp(-response * delta));
     p.rig_dive_clip = airborne && (diving || p.rig_dive_clip && p.rig_dive_weight > RIG_DIVE_CLIP_OUT);
     if p.rig_dive_clip rig_animation = "dive";
+    // A swing in the air keeps the air legs and, up or down, rolls the torso into it (UpdateRigAirLegs).
+    was_air_swing := p.rig.air_swing;
+    p.rig.air_swing = p.state == .ATTACK && !p.grounded;
+    p.rig.attack_pitch = ifx p.attack == .DOWN then 1.0 else ifx p.attack == .UP then -1.0 else 0.0;
+    if p.rig.air_swing && !was_air_swing { p.rig.leg_weight = 1; if p.attack == .DOWN p.rig.attack_reach = 1; }
     p.rig.arm_aim = .{p.facing * cos(p.rig_dive_angle), sin(p.rig_dive_angle)};
     p.rig.arm_aim_weight = p.rig_dive_weight;
     play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta, facing = p.facing,
