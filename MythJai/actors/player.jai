@@ -9,6 +9,7 @@ Player :: struct @GameActor {
     attack_hit_target: bool;    // this swing has touched something to hit
     attack_blocked: bool;       // ...or a wall stopped it
     attack_swipe: Handle(Pop);
+    rig_dive_grace: float;      // jump let go this recently still counts toward a dive
     footstep_frame: s32 = -1;
     last_safe_ground: Point2;   // where a cliff fall puts you back
     rig: Rig_Pose;
@@ -72,10 +73,21 @@ update :: (p: *Player) {
     }
     update_burrow_always(p, delta);
     if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
-    // Sprinting gets the full run, and the sprint once it's really moving (Pawn.RigClipFor).
+    // What the rig plays, from the pawn's animation, as Pawn.UpdateRig picks it: a let-go walk
+    // idles; a crawl that's stopped, or still sliding out of a run, crouches; sprinting gets the
+    // full run, and the sprint once it's really moving; holding jump past the top of a jump with a
+    // burrow to be had, the body tips into a dive at the ground.
+    RIG_DIVE_RELEASE_GRACE :: 0.1;
+    RIG_CRAWL_SPEED_SLACK :: 1.15;
     rig_animation := p.animation;
+    p.rig_dive_grace = ifx input.jump_down then RIG_DIVE_RELEASE_GRACE else max(0.0, p.rig_dive_grace - delta);
+    speed := abs(p.velocity.x);
+    if p.animation == "walk" && move_input(input) == 0 rig_animation = "idle";
+    if p.animation == "crawl" && (move_input(input) == 0 || speed > CRAWL_SPEED * RIG_CRAWL_SPEED_SLACK) rig_animation = "duck";
     if (p.animation == "run" || p.animation == "run_start") && dash_running(p) && p.state == .NORMAL
-        rig_animation = ifx abs(p.velocity.x) > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
+        rig_animation = ifx speed > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
+    if p.state == .NORMAL && !p.grounded && take_for(p.animation) == "PlayerAir" && p.velocity.y >= 0 && p.rig_dive_grace > 0 && can_burrow(p)
+        rig_animation = "dive";
     play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta);
     update_rig(*p.rig, p, delta, p.grounded);
     sounds(p, events);
