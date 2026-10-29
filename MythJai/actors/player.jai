@@ -335,10 +335,47 @@ DEMO :: struct { at: float; key: SDL_Keycode; down: bool; }.[
 // Pushes the key events due by now.
 push_demo_keys :: (from: float, to: float) {
     for DEMO if it.at > from && it.at <= to {
+        if demo_pad { press_pad(it.key, it.down); continue; }
         event: SDL_Event;
         event.type = xx ifx it.down then SDL_EventType.KEY_DOWN else .KEY_UP;
         event.key.key = it.key;
         event.key.down = it.down;
         SDL_PushEvent(*event);
+    }
+}
+
+// `myth demo pad`: the demo through a virtual gamepad instead of the keyboard, the way a real
+// one's input arrives (arrows on the left stick, Space South, E West, Shift the right trigger,
+// X the stick's click, Escape Start), to show the gamepad drives the game the same.
+demo_pad: *SDL_Joystick;
+
+attach_demo_pad :: () {
+    // A capture runs without focus (the display may be asleep), and SDL drops pad input then.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    desc: SDL_VirtualJoystickDesc;
+    desc.version = size_of(SDL_VirtualJoystickDesc);
+    desc.type = xx SDL_JoystickType.GAMEPAD;
+    desc.naxes = xx SDL_GamepadAxis.COUNT;
+    desc.nbuttons = xx SDL_GamepadButton.COUNT;
+    desc.button_mask = 0xffff_ffff >> (32 - cast(u32) SDL_GamepadButton.COUNT);
+    desc.axis_mask = (1 << cast(u32) SDL_GamepadAxis.COUNT) - 1;
+    desc.name = "demo pad";
+    id := SDL_AttachVirtualJoystick(*desc);
+    demo_pad = SDL_OpenJoystick(id);
+    if !demo_pad log_error("no virtual pad: %", to_string(SDL_GetError()));
+}
+
+press_pad :: (key: SDL_Keycode, down: bool) {
+    FULL :: 32767;
+    if key == {
+      case SDLK_RIGHT;  SDL_SetJoystickVirtualAxis(demo_pad, xx SDL_GamepadAxis.LEFTX, xx ifx down then FULL else 0);
+      case SDLK_LEFT;   SDL_SetJoystickVirtualAxis(demo_pad, xx SDL_GamepadAxis.LEFTX, xx ifx down then -FULL else 0);
+      case SDLK_DOWN;   SDL_SetJoystickVirtualAxis(demo_pad, xx SDL_GamepadAxis.LEFTY, xx ifx down then FULL else 0);
+      case SDLK_UP;     SDL_SetJoystickVirtualAxis(demo_pad, xx SDL_GamepadAxis.LEFTY, xx ifx down then -FULL else 0);
+      case SDLK_LSHIFT; SDL_SetJoystickVirtualAxis(demo_pad, xx SDL_GamepadAxis.RIGHT_TRIGGER, xx ifx down then FULL else 0);
+      case SDLK_SPACE;  SDL_SetJoystickVirtualButton(demo_pad, xx SDL_GamepadButton.SOUTH, down);
+      case SDLK_E;      SDL_SetJoystickVirtualButton(demo_pad, xx SDL_GamepadButton.WEST, down);
+      case SDLK_X;      SDL_SetJoystickVirtualButton(demo_pad, xx SDL_GamepadButton.LEFT_STICK, down);
+      case SDLK_ESCAPE; SDL_SetJoystickVirtualButton(demo_pad, xx SDL_GamepadButton.START, down);
     }
 }

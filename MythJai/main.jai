@@ -52,6 +52,7 @@ frame :: () -> bool {
         populate_room();
         args := get_command_line_arguments();
         demo = array_find(args, "demo");
+        if demo && array_find(args, "pad") attach_demo_pad();
         show_light_mask = array_find(args, "lightmask");
         found, at := array_find(args, "shot");
         if found && at + 1 < args.count shot_path = copy_string(args[at + 1]);
