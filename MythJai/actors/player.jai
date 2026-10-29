@@ -107,7 +107,8 @@ update :: (p: *Player) {
     if p.rig_dive_clip rig_animation = "dive";
     p.rig.arm_aim = .{p.facing * cos(p.rig_dive_angle), sin(p.rig_dive_angle)};
     p.rig.arm_aim_weight = p.rig_dive_weight;
-    play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta, facing = p.facing);
+    play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta, facing = p.facing,
+        still = p.state == .NORMAL && !input.move_x && !input.move_y && !input.jump_down && !input.dash_down && !attack_pressed);
     update_rig(*p.rig, p, delta, p.grounded);
     sounds(p, events);
     dust(p, events, falling);

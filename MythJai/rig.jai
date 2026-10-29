@@ -33,6 +33,9 @@ Rig_Pose :: struct {
     was_running: bool;
     extra_lean: float;                  // degrees, leaning into a run's start
     skid_facing: s32;                   // the facing a skid started from
+    fidget_take: s32 = -1;              // standing about, now and then a fidget plays (RigFidget)
+    fidget_timer := 5.0;
+    fidget_last: s32 = -1;
     arm_aim: Vector2;                   // the figure rolls so its arms point this way on screen,
     arm_aim_weight: float;              // this much (ApplyPoseRoll)
     yaw: float;                         // radians the figure is turned: 0 facing left, PI right
@@ -113,7 +116,7 @@ take_for :: (animation: string) -> string {
 // clip can open with a lead-in take (a jump's start, a landing, a run's stop...) played through
 // once first; walks and runs play as fast as the body moves; a run starts with a lean into it.
 // `restart` replays the take if it's already playing.
-play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, restart := false, facing: s32 = 0) {
+play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, restart := false, facing: s32 = 0, still := false) {
     RUN_LEAN_IN :: 39.0;         // degrees
     RUN_LEAN_PEAK :: 0.19;       // seconds in
     GAIT_RATE :: 2.2;
@@ -123,6 +126,7 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
     if !rig_ready() return;
     main := find_take(take_for(animation));
     if main < 0 return;
+    main = fidget(pose, main, still, dt);
     if main != pose.requested {
         // Once the body has turned round, a skid plays out before the run resumes.
         name := rig.takes[main].name;
@@ -763,6 +767,41 @@ rig_ready :: () -> bool {
     rig.failed = false;
     return true;
 }
+
+// Pawn.RigFidget: standing still a while, one of a few fidgets plays through, never the same one
+// twice running, then another after a rest.
+fidget :: (pose: *Rig_Pose, main: s32, still: bool, dt: float) -> s32 {
+    FIDGETS :: string.["PlayerFidgetHolding", "PlayerFidgetOffensive", "PlayerFidgetWarrior", "PlayerFidgetDwarf", "PlayerFidgetHappy"];
+    FIRST_DELAY :: 5.0;
+    MIN_GAP :: 4.0;
+    MAX_GAP :: 9.0;
+    if rig.takes[main].name != "PlayerIdle" || !still {
+        pose.fidget_take, pose.fidget_timer = -1, FIRST_DELAY;
+        return main;
+    }
+    if pose.fidget_take >= 0 && pose.take == pose.fidget_take && take_finished(pose) {
+        pose.fidget_take = -1;
+        pose.fidget_timer = MIN_GAP + (MAX_GAP - MIN_GAP) * rig_random();
+    }
+    if pose.fidget_take < 0 {
+        pose.fidget_timer -= dt;
+        if pose.fidget_timer <= 0 {
+            pose.fidget_last = xx ifx pose.fidget_last < 0 then cast(int) (rig_random() * FIDGETS.count) % FIDGETS.count
+                               else (pose.fidget_last + 1 + cast(int) (rig_random() * (FIDGETS.count - 1))) % FIDGETS.count;
+            pose.fidget_take = find_take(FIDGETS[pose.fidget_last]);
+        }
+    }
+    return ifx pose.fidget_take >= 0 then pose.fidget_take else main;
+}
+
+// The rig's own random numbers, so fidgets don't shift the game's.
+rig_random :: () -> float {
+    x := rig_rng;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    rig_rng = x;
+    return cast(float) (x >> 8) / 16777216.0;
+}
+rig_rng: u32 = 0x2545f491;
 
 // Pawn.RigLeadFor: the take that opens a change from one clip to another, if any.
 lead_for :: (from: s32, to: s32, velocity: Vector2) -> s32 {

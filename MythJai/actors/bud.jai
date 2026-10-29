@@ -53,7 +53,7 @@ update :: (b: *Bud) {
         b.velocity.x = approach(b.velocity.x, 0, BUD_BACK_DASH_FRICTION * delta);
         pawn_update(b, input, delta, normal = false);
         if b.back_dash_timer <= 0 play(b, "idle");
-        play_rig(*b.rig, b.animation, b.velocity, delta, facing = b.facing);
+        play_rig(*b.rig, b.animation, b.velocity, delta, facing = b.facing, still = b.velocity.x == 0);
         update_rig(*b.rig, b, delta, b.grounded);
         return;
     }
@@ -77,7 +77,7 @@ update :: (b: *Bud) {
     events := pawn_update(b, input, delta);
     b.blocked_time = ifx events & .HIT_WALL then b.blocked_time + delta else 0;
     if b.position.y > room.size.y * TILE_SIZE + 12 b.respawn_timer = BUD_FALL_RESPAWN_DELAY;
-    play_rig(*b.rig, b.animation, b.velocity, delta, facing = b.facing);
+    play_rig(*b.rig, b.animation, b.velocity, delta, facing = b.facing, still = b.velocity.x == 0);
     update_rig(*b.rig, b, delta, b.grounded);
 }
 
