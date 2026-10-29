@@ -6,8 +6,9 @@
 // trousers over the legs (HumanoidRigVisual.Garment), depth-sorted in among the bones.
 // The pose leans into speed and acceleration (UpdateVelocityLean) and squashes with the actor.
 // Turning round eases through the front (UpdateTurn); the head and hands trail on springs.
-// Grounded, the feet find the floor (UpdateFoot).
-// Not ported yet: clip-driven turns and the other pose modifiers, ragdoll,
+// Grounded, the feet find the floor (UpdateFoot); the body rides springs that a landing knocks
+// down (UpdateRagdoll).
+// Not ported yet: clip-driven turns and the other pose modifiers, hit impulses,
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -36,6 +37,19 @@ Rig_Pose :: struct {
     motion: [3] struct { position, velocity: Vector2; ready: bool; };  // head, left hand, right hand, on springs
     gait: bool;                         // a walk, run or crawl is playing
     foot_offset: [2] float;             // how far foot IK has moved each foot onto the ground
+    // The body on springs over the animation (UpdateRagdoll), meters: it follows every move, but a
+    // landing knocks it down and it springs back up.
+    ragdoll, carried, ragdoll_velocity: [MAX_JOINTS] Vector3;
+    bone_lengths: [BONES.count] float;
+    ragdoll_ready: bool;
+    landing_speed: float;               // a landing to take on the next pose, pixels a second
+    freeze: float;                      // a hard landing holds the pose this long
+}
+
+// HumanoidRigVisual.Land: a landing this fast (pixels a second) knocks the body down a little.
+land_rig :: (pose: *Rig_Pose, speed: float) {
+    LANDING_MIN_SPEED :: 32.0;
+    if speed >= LANDING_MIN_SPEED pose.landing_speed = max(pose.landing_speed, speed);
 }
 
 // The settings the player's rig uses: Myth's HumanoidRigSettings defaults, with
@@ -135,6 +149,7 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
 // the actor's way, leaning with its motion and squashed with it.
 update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     if !rig_ready() || pose.take < 0 return;
+    if pose.freeze > 0 { pose.freeze = max(0.0, pose.freeze - dt); pose.step = 0; return; }
     pose.time = advance_take(pose.take, pose.time, dt * pose.playback);
     if pose.previous >= 0 pose.previous_time = advance_take(pose.previous, pose.previous_time, dt);
     pose.blend = min(1.0, pose.blend + dt / RIG.BLEND_TIME);
@@ -163,6 +178,8 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     // The head sits out along the neck (HeadPosition3D).
     along := positions[rig.head] - positions[rig.neck];
     if length(along) > 0.001 positions[rig.head] += unit_vector(along) * RIG.NECK_EXTENSION;
+    update_ragdoll(pose, visual_delta);
+
     // Facing left looks down -Z's projection; facing right turns half around (FacingYaw), and a
     // change of facing eases round through the front over the turn's duration (UpdateTurn).
     TURN_DURATION :: 0.05;
@@ -176,7 +193,9 @@ update_rig :: (pose: *Rig_Pose, a: *Actor, dt: float, grounded := false) {
     }
     yaw_cos, yaw_sin := cos(pose.yaw), sin(pose.yaw);
     for 0..rig.joints.count-1 {
-        p := positions[it];
+        // Off the ragdoll (fingers) a joint rides with its nearest ancestor on it.
+        carrier := rig.ragdoll_carrier[it];
+        p := ifx carrier < 0 then positions[it] else positions[it] + pose.ragdoll[carrier] - positions[carrier];
         turned := Vector3.{p.x * yaw_cos + p.z * yaw_sin, p.y, -p.x * yaw_sin + p.z * yaw_cos};
         pose.projected[it] = Vector2.{-turned.z, -p.y} * RIG.PIXELS_PER_METER;
         pose.depth[it] = turned.x;
@@ -267,6 +286,63 @@ foot_ik :: (pose: *Rig_Pose, leg: int, at: Vector2, facing: s32, grounded: bool,
         p.*[tip] += p.*[toe] - old_toe;
     }
     if planted p.*[tip] = p.*[toe] + Vector2.{xx facing, 0} * length(p.*[tip] - p.*[toe]);
+}
+
+update_ragdoll :: (pose: *Rig_Pose, visual_delta: float) {
+    SPRING :: 160.0;
+    DAMPING :: 11.0;
+    MAX_SPEED :: 10.0;
+    CONSTRAINT_ITERATIONS :: 4;
+    LANDING_INERTIA :: 1.0;
+    LANDING_COMPRESSION_TIME :: 0.0225;
+    LANDING_HOLD :: 0.06;            // humanoid.json
+    LANDING_HOLD_FULL_SPEED :: 8.0;  // meters a second of landing that earns all of it
+    count := rig.joints.count;
+    if !pose.ragdoll_ready {
+        for 0..count-1 pose.ragdoll[it], pose.carried[it], pose.ragdoll_velocity[it] = positions[it], positions[it], .{};
+        for BONES pose.bone_lengths[it_index] = length(positions[rig.bone_joints[it_index][1]] - positions[rig.bone_joints[it_index][0]]);
+        pose.ragdoll_ready = true;
+        pose.landing_speed = 0;
+        return;
+    }
+    if pose.landing_speed > 0 {
+        impact := pose.landing_speed / RIG.PIXELS_PER_METER;
+        for 0..count-1 if rig.on_ragdoll[it] {
+            height := clamp(positions[it].y / 1.55, 0, 1);
+            pose.ragdoll[it].y -= impact * LANDING_COMPRESSION_TIME * height;
+            pose.ragdoll_velocity[it].y -= impact * LANDING_INERTIA * height;
+        }
+        pose.freeze = max(pose.freeze, LANDING_HOLD * clamp(impact / LANDING_HOLD_FULL_SPEED, 0, 1));
+        pose.landing_speed = 0;
+    }
+    // Carried along by the animation, so only the knocks show.
+    for 0..count-1 if rig.on_ragdoll[it] pose.ragdoll[it] += positions[it] - pose.carried[it];
+    for 0..count-1 pose.carried[it] = positions[it];
+
+    remaining := visual_delta;
+    while remaining > 0 {
+        dt := min(remaining, 1.0 / 30);
+        remaining -= dt;
+        previous: [MAX_JOINTS] Vector3 = ---;
+        for 0..count-1 if rig.on_ragdoll[it] {
+            previous[it] = pose.ragdoll[it];
+            v := *pose.ragdoll_velocity[it];
+            v.* += (positions[it] - pose.ragdoll[it]) * SPRING * dt;
+            v.* *= exp(-DAMPING * dt);
+            if length(v.*) > MAX_SPEED v.* = unit_vector(v.*) * MAX_SPEED;
+            pose.ragdoll[it] += v.* * dt;
+        }
+        for 1..CONSTRAINT_ITERATIONS for BONES {
+            from, to := rig.bone_joints[it_index][0], rig.bone_joints[it_index][1];
+            delta := pose.ragdoll[to] - pose.ragdoll[from];
+            l := length(delta);
+            if l <= 0.0001 continue;
+            correction := delta * ((l - pose.bone_lengths[it_index]) / l * 0.5);
+            pose.ragdoll[from] += correction;
+            pose.ragdoll[to] -= correction;
+        }
+        for 0..count-1 if rig.on_ragdoll[it] pose.ragdoll_velocity[it] = (pose.ragdoll[it] - previous[it]) / dt;
+    }
 }
 
 // UpdateSecondaryPoint: a point springing after `target` (world pixels), no further off it than
@@ -595,6 +671,8 @@ rig: struct {
     upper_body: [MAX_JOINTS] float;  // how much each joint leans with the upper body
     hands: [2] s32;
     in_hand: [2][MAX_JOINTS] bool;   // a hand and its fingers
+    on_ragdoll: [MAX_JOINTS] bool;   // the joints the bones join
+    ragdoll_carrier: [MAX_JOINTS] s32;  // the nearest of those a joint rides with, -1 if it's one
 };
 positions: [MAX_JOINTS] Vector3;
 rotations: [MAX_JOINTS] Vector4;
@@ -634,6 +712,12 @@ rig_ready :: () -> bool {
     }
     rig.upper_body[spine_01], rig.upper_body[spine_02] = 0.25, 0.6;
     rig.hands = .[joint("hand_l"), joint("hand_r")];
+    for BONES { rig.on_ragdoll[rig.bone_joints[it_index][0]] = true; rig.on_ragdoll[rig.bone_joints[it_index][1]] = true; }
+    for 0..joint_count-1 {
+        carrier: s32 = xx it;
+        while carrier >= 0 && !rig.on_ragdoll[carrier] carrier = myth_ozz_rig_joint_parent(handle, carrier);
+        rig.ragdoll_carrier[it] = ifx carrier == it then -1 else carrier;
+    }
     for hand: 0..1 for 0..joint_count-1 {
         j: s32 = xx it;
         while j >= 0 && j != rig.hands[hand] j = myth_ozz_rig_joint_parent(handle, j);

@@ -92,6 +92,7 @@ update :: (p: *Player) {
     update_rig(*p.rig, p, delta, p.grounded);
     sounds(p, events);
     dust(p, events, falling);
+    if events & .LANDED land_rig(*p.rig, falling * 0.5);  // Player.OnLanded's RigLandingScale
 
     if p.grounded && p.state == .NORMAL p.last_safe_ground = p.position;
     if p.state == .BURROW p.grounded = false;  // a point on the surface, not standing on it
