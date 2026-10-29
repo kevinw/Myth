@@ -75,7 +75,7 @@ update :: (p: *Player) {
         if p.state_time >= DEATH_DURATION respawn_requested = true;
     }
     update_burrow_always(p, delta);
-    if demo && events log("%: % at % vel % anim %", demo_time, events, p.position, p.velocity, p.animation);
+    if (demo || trace) && events log("%: % at % vel % anim %", ifx demo then demo_time else cast(float) now(), events, p.position, p.velocity, p.animation);
     // What the rig plays, from the pawn's animation, as Pawn.UpdateRig picks it: a let-go walk
     // idles; a crawl that's stopped, or still sliding out of a run, crouches; sprinting gets the
     // full run, and the sprint once it's really moving; holding jump past the top of a jump with a

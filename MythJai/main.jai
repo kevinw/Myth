@@ -31,6 +31,8 @@ next_sprite_check: float64;
 show_light_mask: bool;      // `myth lightmask`: the background's light alone, like Myth's LightMask view
 shot_path: string;          // `myth shot <path> [frame]`: save the lit view there at that frame (default 90) and quit
 shot_frame := 90;
+trace: bool;                // `myth trace`: log what the player does, and keep a capture to real time
+last_frame_ticks: u64;
 frame_count: int;
 
 main :: () { while !frame() {} }
@@ -52,6 +54,7 @@ frame :: () -> bool {
         populate_room();
         args := get_command_line_arguments();
         demo = array_find(args, "demo");
+        trace = array_find(args, "trace");
         if demo && array_find(args, "pad") attach_demo_pad();
         show_light_mask = array_find(args, "lightmask");
         found, at := array_find(args, "shot");
@@ -83,6 +86,11 @@ frame :: () -> bool {
     ticks := SDL_GetTicksNS();
     delta = ifx last_ticks then min(cast(float) (ticks - last_ticks) / 1_000_000_000, 1.0 / 20) else 1.0 / 60;
     if shot_path delta = 1.0 / 60;  // captures step evenly, so a frame number is a moment
+    if shot_path && trace {  // ...at real speed, for input from outside
+        elapsed := SDL_GetTicksNS() - last_frame_ticks;
+        if elapsed < 16_666_667 SDL_DelayNS(16_666_667 - elapsed);
+        last_frame_ticks = SDL_GetTicksNS();
+    }
     last_ticks = ticks;
 
     if now() > next_sprite_check {
@@ -113,7 +121,7 @@ frame :: () -> bool {
     render();
     frame_count += 1;
     if shot_path && frame_count == shot_frame {
-        if demo for context.actors.players log("shot at demo %: player % at % health % zoom % glitch %", demo_time, it.state, it.position, it.health, zoom, glitch);
+        if demo || trace for context.actors.players log("shot at demo %: player % at % health % zoom % glitch %", demo_time, it.state, it.position, it.health, zoom, glitch);
         if !save_png(lit, shot_path) log_error("can't write %", shot_path);
         return true;
     }
