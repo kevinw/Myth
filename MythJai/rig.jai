@@ -8,7 +8,7 @@
 // Turning round eases through the front (UpdateTurn); the head and hands trail on springs.
 // Grounded, the feet find the floor (UpdateFoot); the body rides springs that a landing knocks
 // down (UpdateRagdoll).
-// Not ported yet: clip-driven turns and the other pose modifiers, hit impulses,
+// Not ported yet: the other pose modifiers (look, aim, reach, pike), hit impulses (enemies'),
 // kilts, the trousers' cloth swing (their hems hang at rest), costume surfaces, the sculpted
 // head (a circle stands in), hands' fingers, skin modes.
 
@@ -31,6 +31,7 @@ Rig_Pose :: struct {
     run_lean_time: float;
     was_running: bool;
     extra_lean: float;                  // degrees, leaning into a run's start
+    skid_facing: s32;                   // the facing a skid started from
     yaw: float;                         // radians the figure is turned: 0 facing left, PI right
     turn_from, turn_to, turn_time: float;
     turning_to: s32;                    // the facing it's turning toward, 0 before the first pose
@@ -109,7 +110,7 @@ take_for :: (animation: string) -> string {
 // clip can open with a lead-in take (a jump's start, a landing, a run's stop...) played through
 // once first; walks and runs play as fast as the body moves; a run starts with a lean into it.
 // `restart` replays the take if it's already playing.
-play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, restart := false) {
+play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, restart := false, facing: s32 = 0) {
     RUN_LEAN_IN :: 39.0;         // degrees
     RUN_LEAN_PEAK :: 0.19;       // seconds in
     GAIT_RATE :: 2.2;
@@ -120,8 +121,13 @@ play_rig :: (pose: *Rig_Pose, animation: string, velocity: Vector2, dt: float, r
     main := find_take(take_for(animation));
     if main < 0 return;
     if main != pose.requested {
-        pose.lead = lead_for(pose.requested, main, velocity);
+        // Once the body has turned round, a skid plays out before the run resumes.
+        name := rig.takes[main].name;
+        skid_holds := pose.take >= 0 && rig.takes[pose.take].name == "PlayerSkid" && facing != pose.skid_facing &&
+            (name == "PlayerIdle" || name == "Walk_Loop" || name == "PlayerRun" || name == "Jog_Fwd_Loop" || name == "Sprint_Loop");
+        pose.lead = ifx skid_holds then pose.take else lead_for(pose.requested, main, velocity);
         pose.requested = main;
+        if name == "PlayerSkid" pose.skid_facing = facing;
     }
     if pose.lead >= 0 && pose.take == pose.lead && take_finished(pose) pose.lead = -1;
     shown := ifx pose.lead >= 0 then pose.lead else main;

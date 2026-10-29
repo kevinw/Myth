@@ -88,7 +88,7 @@ update :: (p: *Player) {
         rig_animation = ifx speed > MAX_GROUND_SPEED * 1.15 then "sprint" else "jog";
     if p.state == .NORMAL && !p.grounded && take_for(p.animation) == "PlayerAir" && p.velocity.y >= 0 && p.rig_dive_grace > 0 && can_burrow(p)
         rig_animation = "dive";
-    play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta);
+    play_rig(*p.rig, rig_animation, p.velocity, delta, restart = p.state == .ATTACK && p.state_time <= delta, facing = p.facing);
     update_rig(*p.rig, p, delta, p.grounded);
     sounds(p, events);
     dust(p, events, falling);
