@@ -117,7 +117,7 @@ static struct {
     bool on_ragdoll[MAX_JOINTS];    // the joints the bones join
     float lower_body[MAX_JOINTS];   // how much each joint goes with the legs
     s32 ragdoll_carrier[MAX_JOINTS];// the nearest of those a joint rides with, -1 if it's one
-} rig;
+} rig{};
 static Vector3 positions[MAX_JOINTS];
 static Vector4 rotations[MAX_JOINTS];
 

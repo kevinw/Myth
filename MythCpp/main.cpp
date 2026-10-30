@@ -39,6 +39,7 @@ static s32 frame_count;
 static SDL_Joystick* demo_pad;  // `myth demo pad`: the demo through a virtual gamepad
 
 static void populate_room();
+static void restart_room();
 static void render();
 static void update_camera();
 static Vector2 clamp_camera(Vector2 target);
@@ -95,7 +96,9 @@ void pulse_dither_glitch(Vector2 axis, float amount) {
 }
 
 // What a reload that changes these layouts can't carry over: the room restarts instead.
-static u64 state_layout() { return layout_of<Actors, Room, Pack>(); }
+#define X(Type, pool, capacity) , Type
+static u64 state_layout() { return layout_of<Actors, Room, Pack ACTOR_TYPES(X)>(); }
+#undef X
 
 static int argc;
 static char** argv;
@@ -203,11 +206,7 @@ int main(int count, char** values) {
     argv = values;
     if (!start()) return 1;
     for (;;) {
-        if (live_update(state_layout) == Reload::Layout) {
-            log("state layout changed: restarting the room");
-            actors = {};
-            populate_room();
-        }
+        if (live_update(state_layout) == Reload::Layout) restart_room();
         if (frame()) return 0;
     }
 }
@@ -365,6 +364,14 @@ static Point2 start_position() {
 static void populate_room() {
     for (Json& a : room.actors) if (!spawn(a)) log("no actor type %.*s", (int)a["Type"].as_string().size(), a["Type"].as_string().data());
     if (Player* p = spawn_player(start_position())) spawn_bud(*p);
+}
+
+// After a reload that changed the state's layout: the actors as the room has them, fresh. A function
+// of its own so it runs the reloaded code on the reloaded globals; main still runs the code it started with.
+static void restart_room() {
+    log("state layout changed: restarting the room");
+    actors = {};
+    populate_room();
 }
 
 // Game.RespawnPlayerAtLastSafeGrounded after a death: the room reloads, everything back in its

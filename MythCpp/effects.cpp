@@ -207,7 +207,7 @@ static struct {
     struct { Vector2 at; float time; s32 direction; float strength; } samples[64];
     s32 head, count;
     float clock;
-} trail;
+} trail{};
 
 static struct {
     Texture front, back, stir_a, stir_b, scene;
@@ -215,7 +215,7 @@ static struct {
     s32 pass;
     bool live;
     float idle = 100;
-} field;
+} field{};
 
 static Shader pixel_sort;
 

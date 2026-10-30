@@ -30,7 +30,7 @@ static Vertex vertices[1 << 16];
 static u32 vertex_count;
 static Batch batches[4096];  // runs of vertices sharing a texture
 static s32 batch_count;
-static Pass passes[64];
+static Pass passes[64]{};
 struct Dispatch {
     SDL_GPUComputePipeline* pipeline;
     SDL_GPUStorageTextureReadWriteBinding textures[4];

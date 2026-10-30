@@ -7,12 +7,14 @@
 
 int mix_layout_line(u64* hash, const char* format, ...);
 
-// Hashes the field names and types of each T (recursively), not their values. Internal to each
+// Hashes the size and field names and types of each T (recursing into members, but not into arrays:
+// name an array's element type too), not their values. Internal to each
 // file: a template's weak symbol would bind a reload's calls to the old copy, with the old layout.
 namespace {
 template <typename... T> u64 layout_of() {
     u64 hash = 14695981039346656037ull;
     ([&] {
+        hash = (hash ^ sizeof(T)) * 1099511628211ull;
         alignas(T) static char blank[sizeof(T)];
         __builtin_dump_struct((T*)blank, mix_layout_line, &hash);
     }(), ...);

@@ -234,7 +234,7 @@ static struct {
     bool idle_triggered;
     Point2 last_player;
     Speech speech;
-} story;
+} story{};
 static Font speech_font;
 static std::span<string_view> clip_names;
 static std::span<s8> clip_vowels;   // per clip: 0..4 for a e i o u

@@ -366,7 +366,7 @@ void draw_tile_field() {
 
 // --- Sprites by name ---
 
-static struct { char name[64]; Sprite sprite; bool tried, loaded; } sprite_cache[64];
+static struct { char name[64]; Sprite sprite; bool tried, loaded; } sprite_cache[64]{};
 
 Sprite* get_sprite(string_view name) {
     for (auto& s : sprite_cache) {

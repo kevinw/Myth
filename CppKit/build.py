@@ -25,6 +25,7 @@ FLAGS = [
     "-fno-exceptions", "-fno-rtti",
     "-fvisibility-inlines-hidden",  # a reload's inline functions are its own, not coalesced with the running ones
     "-Wall", "-Wno-missing-braces", "-Wno-unused-function",
+    "-Werror=global-constructors",  # a reload runs its globals' constructors as it loads, and crashes
 ]
 
 
