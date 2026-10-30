@@ -124,8 +124,13 @@ static bool sound_ready() {
         if (FMOD_Studio_System_LoadBankFile(system, asset("Sounds/FMOD/Build/Desktop/%s", bank), 0, &loaded) != FMOD_OK) log("can't load bank %s", bank);
     }
     fmod_system = system;
-    if (FMOD_Studio_System_SetParameterByName(system, "RoomReverb", room.reverb, 1) != FMOD_OK) log("no RoomReverb parameter");  // Game.ApplyRoomReverb
+    apply_room_reverb();
     return true;
+}
+
+// Game.ApplyRoomReverb: how much the room rings.
+void apply_room_reverb() {
+    if (fmod_system && FMOD_Studio_System_SetParameterByName(fmod_system, "RoomReverb", room.reverb, 1) != FMOD_OK) log("no RoomReverb parameter");
 }
 
 void* start_sound(string_view path, Vector2 at) {
@@ -437,6 +442,8 @@ static void line(Vector2 from, Vector2 to, Color color) {
     Vector2 side = unit({to.y - from.y, from.x - to.x});  // weight 2: one pixel either side
     polygon(from + side, to + side, to - side, from - side, color);
 }
+
+void shift_speech(Vector2 offset) { story.speech.at += offset; }
 
 void draw_speech(Vector2 view) {
     Speech& s = story.speech;

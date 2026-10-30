@@ -219,6 +219,13 @@ static struct {
 
 static Shader pixel_sort;
 
+void shift_effects(Vector2 offset) {
+    for (Particle& p : particles) p.position += offset;
+    for (auto& sample : trail.samples) sample.at += offset;
+    field.live = false;
+}
+
+
 // Where the burrow has been lately (PixelSortTrail.Record); `toward` points into the surface.
 void churn_record(Point2 at, Vector2 toward, float speed01) {
     const float SPACING = 2, STRENGTH = 0.6f;
@@ -334,6 +341,7 @@ constexpr s32 SHADOW_SAMPLES = 512;
 Texture shadow_depths;  // SHADOW_SAMPLES x MAX_LIGHTS, r = distance to the nearest occluder
 static ComputeShader shadow_kernel;
 static GpuBuffer segments;
+static u32 segments_version;
 
 void update_shadow_depths(std::span<Vector2> lights) {
     if (!shadow_depths.gpu) {
@@ -341,9 +349,10 @@ void update_shadow_depths(std::span<Vector2> lights) {
         shadow_kernel = load_compute("shadow_depths", 1, 1, 1, 64).value_or(ComputeShader{});
     }
     // The occluders only change with the room.
-    if (segments.size != occluders.count * sizeof(Segment)) {
-        segments = make_buffer(occluders.count * sizeof(Segment));
-        update_buffer(segments, occluders.data, segments.size);
+    if (segments_version != occluders_version) {
+        segments_version = occluders_version;
+        if (segments.size < occluders.count * sizeof(Segment)) segments = make_buffer(occluders.count * sizeof(Segment));
+        update_buffer(segments, occluders.data, occluders.count * sizeof(Segment));
     }
     struct { u32 segment_count, light_count, samples, padding; Vector4 lights[MAX_LIGHTS]; } params{(u32)occluders.count, (u32)lights.size(), SHADOW_SAMPLES};
     for (size_t i = 0; i < lights.size(); i++) params.lights[i] = {lights[i].x, lights[i].y};

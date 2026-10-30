@@ -3,9 +3,11 @@
 #include "live.h"
 #include <cstdarg>
 
-static const char* ROOM = "Rooms/Myth/super_simple.json";
+static const char* START_ROOM = "Myth/super_simple.json";  // `myth room <path>` starts in another
 
 Room room;
+Room previous_room;
+bool transitioning;
 Pack pack;
 Actors actors;
 float delta;                    // seconds this frame
@@ -37,14 +39,20 @@ static s32 shot_frame = 90;
 static u64 last_frame_ticks;
 static s32 frame_count;
 static SDL_Joystick* demo_pad;  // `myth demo pad`: the demo through a virtual gamepad
+static float transition_ease;   // 0..1 across the camera's glide into the next room
+static Vector2 transition_from, transition_to, transition_offset;  // the glide, and where the room left sits from the new one
+static Point2 transition_direction;
+static Point2 entry_point;      // where the player came into this room: a respawn without a PlayerStart
 
 static void populate_room();
 static void restart_room();
 static void render();
 static void update_camera();
+static void ease_transition();
 static Vector2 clamp_camera(Vector2 target);
 static Vector2 camera_target();
 static void respawn_after_death();
+static void resolve_player_after_transition(Player& p, Point2 direction);
 static void push_demo_keys(float from, float to);
 static void attach_demo_pad();
 
@@ -111,9 +119,11 @@ static bool start() {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) { log("SDL_Init: %s", SDL_GetError()); return false; }
     SDL_Window* window = SDL_CreateWindow("Human Questions", 1280, 720, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!window || !gfx_init(window)) { log("%s", SDL_GetError()); return false; }
-    auto loaded_room = load_room(asset("%s", ROOM));
-    if (!loaded_room) { log("can't load %s", ROOM); return false; }
+    const char* start_room = arg_after("room") ? arg_after("room") : START_ROOM;
+    auto loaded_room = load_room(start_room);
+    if (!loaded_room) { log("can't load %s", start_room); return false; }
     room = *loaded_room;
+    index_rooms(start_room);
     auto loaded_pack = load_pack();
     if (!loaded_pack) { log("can't load the visual pack"); return false; }
     pack = *loaded_pack;
@@ -125,8 +135,9 @@ static bool start() {
         if (arg == "trace") trace = true;
         if (arg == "lightmask") show_light_mask = true;
         if (arg == "shot" && i + 1 < argc) shot_path = argv[i + 1];
-        if (arg == "shot" && i + 2 < argc) shot_frame = atoi(argv[i + 2]);
+        if (arg == "shot" && i + 2 < argc && isdigit(argv[i + 2][0])) shot_frame = atoi(argv[i + 2]);
         if (arg == "pad" && demo) attach_demo_pad();
+        if (arg == "hold" && i + 1 < argc) held.add(SDL_GetKeyFromName(argv[i + 1]));  // `myth hold right`: as if held from the start
     }
     render_offscreen = shot_path;  // a capture runs whether or not the window can show
     camera = clamp_camera(camera_target());
@@ -169,11 +180,14 @@ static bool frame() {
     shake_timer = approach(shake_timer, 0, delta);
     if (map_open) {
         // Paused under the map.
+    } else if (transitioning) {
+        update_particles(delta);
     } else if (hit_stun_timer > 0) {
         hit_stun_timer -= delta;
     } else {
         if (demo) { push_demo_keys(demo_time, demo_time + delta); demo_time += delta; }
-#define X(Type, pool, capacity) for (Type& it : actors.pool) update(it);
+        // Once a transition starts, nothing else updates: the next room's actors wait for it.
+#define X(Type, pool, capacity) for (Type& it : actors.pool) { if (transitioning) break; update(it); }
         ACTOR_TYPES(X)
 #undef X
         if (respawn_requested) respawn_after_death();
@@ -187,7 +201,8 @@ static bool frame() {
     float zoom_target = control_zoom_down() ? 2 : 1;
     zoom += (zoom_target - zoom) * (1 - expf(-delta * ZOOM_RATE));
     if (fabsf(zoom - zoom_target) < 0.005f) zoom = zoom_target;
-    update_camera();
+    if (transitioning) ease_transition();
+    else update_camera();
     update_sound(camera + VIEW * 0.5f);
     render();
     frame_count++;
@@ -211,6 +226,8 @@ int main(int count, char** values) {
     }
 }
 
+static float cube_in_out(float t) { return t < 0.5f ? 4 * t * t * t : 1 - powf(-2 * t + 2, 3) / 2; }  // Foster's Ease.Cube.InOut
+
 struct LightingUniforms {
     Vector4 view, ambient, noise, noise_scale, response, dither, counts, normal_light, sprite_shadow, glitch, glitch_axis;
     Vector4 lights[MAX_LIGHTS * 2];
@@ -229,8 +246,12 @@ static LightingUniforms lighting_uniforms(Vector2 view) {
 
     LightingUniforms u{};
     u.view = {VIEW.x, VIEW.y, view.x, view.y};
-    float k = room.ambient_intensity / 255;
-    u.ambient = {room.ambient.r * k, room.ambient.g * k, room.ambient.b * k, room.ambient_intensity};
+    // Into a new room, its ambient eases in with the camera.
+    float blend = transitioning ? cube_in_out(transition_ease) : 1;
+    Color ambient = transitioning ? mix(previous_room.ambient, room.ambient, blend) : room.ambient;
+    float intensity = transitioning ? lerp(previous_room.ambient_intensity, room.ambient_intensity, blend) : room.ambient_intensity;
+    float k = intensity / 255;
+    u.ambient = {ambient.r * k, ambient.g * k, ambient.b * k, intensity};
     Vector2 noise_size = pack.lighting_noise.size;
     if (noise_size.x > 0) {
         Vector2 drift = LIGHT_NOISE_DRIFT * (float)now() / noise_size;
@@ -279,15 +300,20 @@ static void render() {
     if (shake_timer > 0) view += Vector2{random_range(-1, 1), random_range(-1, 1)} * 2;
     view = view.floor();
     auto world = [&] { push_matrix(-view * zoom, zoom); };
+    // Gliding into a new room, the one being left still shows beside it.
+    auto both_rooms = [&](auto draw) {
+        if (transitioning) { push_matrix(transition_offset, 1); draw(previous_art); pop_matrix(); }
+        draw(art);
+    };
 
     // The world, unlit: the background, and the foreground over a transparent clear.
-    begin_pass({.target = scene, .clear = room.backdrop});
+    begin_pass({.target = scene, .clear = transitioning ? mix(previous_room.backdrop, room.backdrop, cube_in_out(transition_ease)) : room.backdrop});
     world();
-    draw_tiles(background_tiles.span());
+    both_rooms([](RoomArt& a) { draw_tiles(a.background.span()); });
     pop_matrix();
     begin_pass({.target = front});
     world();
-    draw_tiles(foreground_tiles.span());
+    both_rooms([](RoomArt& a) { draw_tiles(a.foreground.span()); });
 #define X(Type, pool, capacity) for (Type& it : actors.pool) draw(it);
     ACTOR_TYPES(X)
 #undef X
@@ -296,8 +322,7 @@ static void render() {
     // The tiles' and rigs' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
     begin_pass({.target = normals, .clear = {128, 128, 255, 0}});
     world();
-    draw_tiles(background_tiles.span(), true);
-    draw_tiles(foreground_tiles.span(), true);
+    both_rooms([](RoomArt& a) { draw_tiles(a.background.span(), true); draw_tiles(a.foreground.span(), true); });
     for (Player& it : actors.players) draw_normals(it);
     for (Bud& it : actors.buds) draw_normals(it);
     for (Blob& it : actors.blobs) draw_normals(it);
@@ -305,7 +330,8 @@ static void render() {
 
     begin_pass({.target = tile_field});
     world();
-    draw_tile_field();
+    if (transitioning) { push_matrix(transition_offset, 1); draw_tile_field(previous_room, previous_art); pop_matrix(); }
+    draw_tile_field(room, art);
     pop_matrix();
 
     // r: what casts sprite shadows (not the player or Bud: their glow would shadow itself, and
@@ -314,7 +340,7 @@ static void render() {
     begin_pass({.target = actor_mask});
     world();
     silhouette = {0, 255, 0, 255};
-    draw_tiles(background_tiles.span());
+    both_rooms([](RoomArt& a) { draw_tiles(a.background.span()); });
     silhouette = {0, 0, 255, 255};
     for (Player& it : actors.players) draw(it);
     silhouette = {255, 0, 255, 255};
@@ -354,16 +380,129 @@ static void render() {
     present();
 }
 
-static Point2 start_position() {
-    for (PlayerStart& s : actors.player_starts) return s.position;
-    return {};
+// Where the view centres: the player's feet, pushed ahead by the right stick and, burrowing, the
+// way the burrow is climbing or diving (Game.UpdateCamera).
+static Vector2 look_ahead;
+static float burrow_lead, burrow_lead_target;
+static Vector2 camera_error;    // a jump in the clamped target, gliding away
+static Vector2 previous_target, previous_focus;
+static bool has_previous_target;
+
+// Game.ResolvePlayerRoomTransition: walking into the new room, if the player's in its walls, out the
+// nearest way, on ahead first, then to either side (the way they're moving last).
+static void resolve_player_after_transition(Player& p, Point2 direction) {
+    if (!overlaps_solid(p)) return;
+    Point2 original = p.position;
+    Point2 forward = abs(direction.x) > abs(direction.y) ? Point2{sign((float)direction.x), 0} : Point2{0, sign((float)direction.y)};
+    Point2 perpendicular = forward.x ? Point2{0, 1} : Point2{1, 0};
+    float perpendicular_velocity = forward.x ? p.velocity.y : p.velocity.x;
+    const s32 MAX_DISTANCE = TILE_SIZE * 4;
+    auto try_place = [&](s32 across) {
+        for (s32 ahead = 0; ahead <= MAX_DISTANCE; ahead++) {
+            p.position = original + perpendicular * across + forward * ahead;
+            if (!overlaps_solid(p)) return true;
+        }
+        return false;
+    };
+    s32 first = perpendicular_velocity > 0 ? -1 : 1;
+    for (s32 distance = 0; distance <= MAX_DISTANCE; distance++)
+        if (try_place(first * distance) || (distance && try_place(-first * distance))) return;
+    p.position = original;
 }
 
-// The room's actors as its json has them, the player at its start (rolling in, as player.json
-// starts it) and Bud beside them.
+// The room's actors as its json has them (those the port has: the rest are skipped, once each).
+static void spawn_room_actors() {
+    static List<string_view> missing{.arena = &persist};
+    for (Json& a : room.actors) {
+        string_view type = a["Type"].as_string();
+        if (!spawn(a) && !missing.contains(type)) { missing.add(type); log("no actor type %.*s", (int)type.size(), type.data()); }
+    }
+}
+
+// Game.FindFallbackPlayerPosition: with no PlayerStart, the footing nearest the room's middle (rows
+// count a quarter as much) where a standing body fits on solid ground.
+static Point2 fallback_start() {
+    Point2 best = to_point((room.size * TILE_SIZE).vector() * 0.5f);
+    float best_score = 3.4e38f;
+    Vector2 target = (room.size - Point2{1, 1}).vector() * 0.5f;
+    for (s32 y = 1; y < room.size.y; y++) for (s32 x = 0; x < room.size.x; x++) {
+        Vector2 d = Point2{x, y}.vector() - target;
+        float score = d.x * d.x + d.y * d.y * 0.25f;
+        Point2 candidate{x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE};
+        if (score >= best_score || overlaps_solid(STANDING_HITBOX + candidate) || !overlaps_solid(RectInt{candidate.x - 4, candidate.y, 8, 1})) continue;
+        best_score = score;
+        best = candidate;
+    }
+    return best;
+}
+
+// Those, and the player at its start (rolling in, as player.json starts it), Bud beside them.
 static void populate_room() {
-    for (Json& a : room.actors) if (!spawn(a)) log("no actor type %.*s", (int)a["Type"].as_string().size(), a["Type"].as_string().data());
-    if (Player* p = spawn_player(start_position())) spawn_bud(*p);
+    spawn_room_actors();
+    entry_point = fallback_start();
+    for (PlayerStart& s : actors.player_starts) { entry_point = s.position; break; }
+    if (const char* at = arg_after("at")) sscanf(at, "%d,%d", &entry_point.x, &entry_point.y);  // `myth at 500,112`: start there (room pixels)
+    if (Player* p = spawn_player(entry_point)) spawn_bud(*p);
+}
+
+bool transition(Point2 direction) {
+    Player* player = nullptr;
+    for (Player& p : actors.players) player = &p;
+    if (transitioning || !player) return false;
+    const char* next = adjacent_room(direction, player->position.vector());
+    if (!next) return false;
+    auto loaded = load_room(next);
+    if (!loaded) { log("can't load %s", next); return false; }
+
+    // Everything but the player, their glow and Bud goes (KeepOnRoomTransition).
+    Light* glow = actors.lights.get(player->light);
+    for (Light& l : actors.lights) if (&l != glow) actors.lights.remove(&l);
+    actors.blobs.clear();
+    actors.pops.clear();
+    actors.player_starts.clear();
+
+    previous_room = room;
+    room = *loaded;
+    std::swap(art, previous_art);
+    build_tile_draws();
+    apply_room_reverb();
+    // Positions are room pixels: what came along moves into the new room's.
+    Vector2 offset = ((previous_room.position - room.position) * TILE_SIZE).vector();
+    Point2 shift = to_point(offset);
+    for (Player& p : actors.players) { p.position += shift; p.last_safe_ground += shift; }
+    for (Bud& b : actors.buds) { b.position += shift; b.entry += shift; b.pop_at += shift; }
+    if (glow) glow->position += shift;
+    shift_effects(offset);
+    shift_speech(offset);
+    camera += offset;
+    spawn_room_actors();
+
+    transitioning = true;
+    transition_ease = 0;
+    transition_offset = offset;
+    transition_direction = {sign((float)direction.x), sign((float)direction.y)};
+    for (Bud& b : actors.buds) bud_room_changed(b, transition_direction);
+    transition_from = camera;
+    transition_to = clamp_camera(player->position.vector() - VIEW / zoom * 0.5f);
+    return true;
+}
+
+// The camera glides into the new room; then play picks up there (Game.Update's nextRoom branch).
+static void ease_transition() {
+    if (transition_ease < 1) {
+        camera = transition_from + (transition_to - transition_from) * cube_in_out(transition_ease);
+        transition_ease = approach(transition_ease, 1, delta * 4);
+        return;
+    }
+    transitioning = false;
+    has_previous_target = false;
+    camera_error = {};
+    for (Player& p : actors.players) {
+        resolve_player_after_transition(p, transition_direction);
+        entry_point = p.position;
+    }
+    hit_stun(0.1f);
+    bark(Trigger::ROOM_ENTERED);
 }
 
 // After a reload that changed the state's layout: the actors as the room has them, fresh. A function
@@ -389,14 +528,6 @@ static void respawn_after_death() {
         play(p, "idle");
     }
 }
-
-// Where the view centres: the player's feet, pushed ahead by the right stick and, burrowing, the
-// way the burrow is climbing or diving (Game.UpdateCamera).
-static Vector2 look_ahead;
-static float burrow_lead, burrow_lead_target;
-static Vector2 camera_error;    // a jump in the clamped target, gliding away
-static Vector2 previous_target, previous_focus;
-static bool has_previous_target;
 
 static Vector2 camera_target() {
     for (Player& p : actors.players) return p.position.vector() + look_ahead + Vector2{0, burrow_lead} - VIEW / zoom * 0.5f;

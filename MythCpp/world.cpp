@@ -2,6 +2,7 @@
 // them, sprites by name, and actors moving against the solid tiles.
 #include "game.h"
 #include <algorithm>
+#include <strings.h>
 
 // --- A Myth room file (Myth/Assets/Rooms/**.json): two layers of tile chars, a legend naming each
 // char's tile type, lighting settings, and the actors. ---
@@ -18,13 +19,22 @@ static std::span<u8> read_layer(Json rows, Point2 size) {
     return layer;
 }
 
+// A room's layer: rooms in a SubN folder of their world are on layer N (Assets.RoomSublayerFromPath).
+static s32 sublayer_of(const char* path) {
+    const char* folder = strchr(path, '/');  // past the world's
+    return folder && strncasecmp(folder + 1, "Sub", 3) == 0 ? max(0, atoi(folder + 4)) : 0;
+}
+
 std::optional<Room> load_room(const char* path) {
-    auto text = read_file(path, persist);  // the json's strings point into it
+    auto text = read_file(asset("Rooms/%s", path), persist);  // the json's strings point into it
     if (text.empty()) return {};
     auto json = parse_json({(const char*)text.data(), text.size()}, persist);
     if (!json) { log("%s isn't valid JSON", path); return {}; }
 
     Room r;
+    char* own_path = (char*)persist.alloc(strlen(path) + 1, 1);
+    r.path = strcpy(own_path, path);
+    r.sublayer = sublayer_of(path);
     Vector2 size = (*json)["size"].as_vector2(), position = (*json)["position"].as_vector2();
     r.size = {(s32)size.x, (s32)size.y};
     r.position = {(s32)position.x, (s32)position.y};
@@ -39,6 +49,62 @@ std::optional<Room> load_room(const char* path) {
     r.background = read_layer((*json)["backgroundTiles"], r.size);
     r.actors = (*json)["actors"];
     return r;
+}
+
+static struct RoomInfo { const char* path; s32 sublayer; RectInt bounds; } room_index[512]{};  // bounds in world tiles
+static s32 room_count;
+
+static SDL_EnumerationResult index_folder(void* rooms_folder, const char* folder, const char* name) {
+    const char* full = tprint("%s%s", folder, name);
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(full, &info)) return SDL_ENUM_CONTINUE;
+    if (info.type == SDL_PATHTYPE_DIRECTORY) SDL_EnumerateDirectory(full, index_folder, rooms_folder);
+    else if (string_view(name).ends_with(".json") && room_count < (s32)SDL_arraysize(room_index)) {
+        // Just where it is: the whole parse is thrown away.
+        size_t mark = temp.used;
+        auto text = read_file(full);
+        auto json = parse_json({(const char*)text.data(), text.size()}, temp);
+        if (json && (*json)["size"].kind == Json::Array) {
+            Vector2 position = (*json)["position"].as_vector2(), size = (*json)["size"].as_vector2();
+            const char* path = full + strlen((const char*)rooms_folder);
+            char* own = (char*)persist.alloc(strlen(path) + 1, 1);
+            strcpy(own, path);
+            room_index[room_count++] = {own, sublayer_of(own), {(s32)position.x, (s32)position.y, (s32)size.x, (s32)size.y}};
+        }
+        temp.used = mark;
+    }
+    return SDL_ENUM_CONTINUE;
+}
+
+void index_rooms(const char* path) {
+    const char* rooms = asset("Rooms/");
+    char* own = (char*)persist.alloc(strlen(rooms) + 1, 1);
+    strcpy(own, rooms);
+    const char* slash = strchr(path, '/');
+    room_count = 0;
+    SDL_EnumerateDirectory(tprint("%s%.*s", own, slash ? (int)(slash - path) : 0, path), index_folder, own);
+}
+
+const char* adjacent_room(Point2 direction, Vector2 exit) {
+    // In world pixels.
+    RectInt from = {room.position.x * TILE_SIZE, room.position.y * TILE_SIZE, room.size.x * TILE_SIZE, room.size.y * TILE_SIZE};
+    Vector2 at = exit + Point2{from.x, from.y}.vector();
+    auto contains = [](s32 lo, s32 hi, float v) { return v >= lo && v < hi; };
+    const char* best = nullptr;
+    float best_distance = 3.4e38f;
+    for (s32 i = 0; i < room_count; i++) {
+        const RoomInfo& r = room_index[i];
+        if (r.sublayer != room.sublayer || strcmp(r.path, room.path) == 0) continue;
+        RectInt to = {r.bounds.x * TILE_SIZE, r.bounds.y * TILE_SIZE, r.bounds.w * TILE_SIZE, r.bounds.h * TILE_SIZE};
+        bool touches = direction.x > 0 ? to.x == from.x + from.w && contains(to.y, to.y + to.h, at.y)
+                     : direction.x < 0 ? to.x + to.w == from.x && contains(to.y, to.y + to.h, at.y)
+                     : direction.y > 0 ? to.y == from.y + from.h && contains(to.x, to.x + to.w, at.x)
+                     : to.y + to.h == from.y && contains(to.x, to.x + to.w, at.x);
+        if (!touches) continue;
+        float distance = direction.x ? fabsf(to.y + to.h * 0.5f - at.y) : fabsf(to.x + to.w * 0.5f - at.x);
+        if (distance < best_distance) { best = r.path; best_distance = distance; }
+    }
+    return best;
 }
 
 // --- Myth's visual asset pack (Myth/Assets/Packed/Visuals): the C# baker's output, read rather than
@@ -184,8 +250,9 @@ void draw_subtex(const Subtex& t, Vector2 pos, RectInt clip, Color color, bool w
 // the edges that cast shadows: the room's bounds and the foreground kits' occluders.
 // Not ported yet: slopes, fill patterns spanning tiles. ---
 
-List<TileDraw> background_tiles{.arena = &persist}, foreground_tiles{.arena = &persist};
+RoomArt art, previous_art;
 List<Segment> occluders{.arena = &persist};
+u32 occluders_version;
 
 // Game.TileFieldColor: r = variant, g = dither family << 5 (the low bits are the anchor, 0 for rooms).
 static Color tile_field_color(u8 c, Point2 world) {
@@ -342,12 +409,13 @@ static void merge_occluders() {
 }
 
 void build_tile_draws() {
-    background_tiles.count = foreground_tiles.count = occluders.count = 0;
+    art.background.count = art.foreground.count = occluders.count = 0;
+    occluders_version++;
     Vector2 size = (room.size * TILE_SIZE).vector();
     Vector2 corners[4] = {{}, {size.x, 0}, size, {0, size.y}};
     for (s32 i = 0; i < 4; i++) occluders.add({corners[i], corners[(i + 1) % 4]});
-    build_layer(room.background, background_tiles, false);
-    build_layer(room.tiles, foreground_tiles, true);
+    build_layer(room.background, art.background, false);
+    build_layer(room.tiles, art.foreground, true);
     merge_occluders();
 }
 
@@ -358,10 +426,10 @@ void draw_tiles(std::span<TileDraw> draws, bool normals) {
     }
 }
 
-void draw_tile_field() {
-    for (s32 y = 0; y < room.size.y; y++) for (s32 x = 0; x < room.size.x; x++)
-        rect({Point2{x, y}.vector() * TILE_SIZE, {TILE_SIZE, TILE_SIZE}}, tile_field_color('0', room.position + Point2{x, y}));
-    for (TileDraw& d : foreground_tiles) if (d.tile.source.w) draw_subtex(d.tile, d.pos, d.clip, d.field, true);
+void draw_tile_field(const Room& r, RoomArt& a) {
+    for (s32 y = 0; y < r.size.y; y++) for (s32 x = 0; x < r.size.x; x++)
+        rect({Point2{x, y}.vector() * TILE_SIZE, {TILE_SIZE, TILE_SIZE}}, tile_field_color('0', r.position + Point2{x, y}));
+    for (TileDraw& d : a.foreground) if (d.tile.source.w) draw_subtex(d.tile, d.pos, d.clip, d.field, true);
 }
 
 // --- Sprites by name ---

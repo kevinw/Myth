@@ -302,11 +302,17 @@ void update(Player& p) {
 
     if (p.grounded && p.state == Player::NORMAL) p.last_safe_ground = p.position;
     if (p.state == Player::BURROW) p.grounded = false;  // a point on the surface, not standing on it
-    // Player.CheckRoomBounds: well below the room is a cliff fall; at the other edges, where Myth
-    // would move on to the next room, the player is held.
+    // Player.ClampPositionToRoomOrTransitionRooms: past an edge with a room beyond it, on into that
+    // room; otherwise held at the edge, or, well below the room, a cliff fall. The fall is resolved
+    // first, so outward speed at a bottom corner can't keep re-clamping x instead.
     Point2 size = room.size * TILE_SIZE;
-    if (p.position.y > size.y + 12) { if (p.state != Player::DEAD) fall_off_cliff(p); }
-    else p.position = {clamp(p.position.x, 0, size.x), max(p.position.y, 0)};
+    if (p.health > 0) {
+        if (p.position.y > size.y + 12) { if (!transition({0, 1})) fall_off_cliff(p); }
+        else if (p.position.x > size.x && !transition({1, 0})) p.position.x = size.x;
+        else if (p.position.x < 0 && !transition({-1, 0})) p.position.x = 0;
+        else if (p.position.y < 0) { if (transition({0, -1})) p.velocity.y = -150; else p.position.y = 0; }
+    }
+    if (transitioning) return;
 
     if (Light* light = actors.lights.get(p.light)) { light->position = p.position + Point2{0, -6}; burrow_light(p, p.state == Player::BURROW, *light, delta); }
 
@@ -381,7 +387,47 @@ constexpr float BUD_BACK_DASH_COOLDOWN = 0.6f;
 // Any floor under room pixel x, from y down to the bottom of the room.
 static bool ground_below(s32 x, s32 y) { return overlaps_solid(RectInt{x, y, 1, room.size.y * TILE_SIZE - y}); }
 
+// Bud.FindEnterPosition: on the entry edge level with where the player came in, or the nearest spot
+// round it (rings out to five tiles) where he stands on ground.
+static Point2 enter_position(Point2 anchor, Point2 direction) {
+    const s32 SEARCH_RADIUS = 5, GROUND_PROBE = 4;
+    Point2 size = room.size * TILE_SIZE;
+    Point2 base = anchor;
+    if (direction.x > 0) base.x = TILE_SIZE;
+    else if (direction.x < 0) base.x = size.x - TILE_SIZE;
+    else if (direction.y > 0) base.y = TILE_SIZE * 2;
+    else if (direction.y < 0) base.y = size.y - 1;
+    base = {clamp(base.x, TILE_SIZE, size.x - TILE_SIZE), clamp(base.y, TILE_SIZE * 2, size.y - 1)};
+    auto fits = [&](Point2 at) {
+        RectInt body = STANDING_HITBOX + at;
+        return body.x >= 0 && body.y >= 0 && body.x + body.w <= size.x && body.y + body.h <= size.y &&
+            !overlaps_solid(body) && overlaps_solid(RectInt{body.x, body.y + body.h, body.w, GROUND_PROBE});
+    };
+    for (Point2 offset : {Point2{}, Point2{0, -TILE_SIZE}, Point2{0, -TILE_SIZE * 2}, Point2{TILE_SIZE, 0}, Point2{-TILE_SIZE, 0}, Point2{TILE_SIZE * 2, 0}, Point2{-TILE_SIZE * 2, 0}})
+        if (fits(base + offset)) return base + offset;
+    for (s32 radius = 1; radius <= SEARCH_RADIUS; radius++)
+        for (s32 y = -radius; y <= radius; y++) for (s32 x = -radius; x <= radius; x++)
+            if ((abs(x) == radius || abs(y) == radius) && fits(base + Point2{x, y} * TILE_SIZE)) return base + Point2{x, y} * TILE_SIZE;
+    return anchor;
+}
+
+void bud_room_changed(Bud& b, Point2 direction) {
+    if (b.riding || b.pop_delay > 0) return;  // in the player's burrow: comes out with them
+    b.enter_timer = 1;
+    b.enter_direction = direction;
+    b.respawn_timer = b.back_dash_timer = 0;
+    b.velocity = b.remainder = {};
+}
+
 void update(Bud& b) {
+    if (b.enter_timer > 0) {
+        b.enter_timer = approach(b.enter_timer, 0, delta);
+        if (b.enter_timer > 0) return;
+        for (Player& player : actors.players) b.position = enter_position(player.position, b.enter_direction);
+        b.entry = b.position;
+        play(b, "idle");
+        return;
+    }
     if (b.respawn_timer > 0) {
         b.respawn_timer -= delta;
         if (b.respawn_timer <= 0) { b.position = b.entry; b.velocity = b.remainder = {}; }
@@ -434,7 +480,7 @@ void update(Bud& b) {
     update_rig(b.rig, b, delta, b.grounded);
 }
 
-static bool bud_shown(const Bud& b) { return b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0; }
+static bool bud_shown(const Bud& b) { return b.respawn_timer <= 0 && !b.riding && b.pop_delay <= 0 && b.enter_timer <= 0; }
 void draw(Bud& b) { if (bud_shown(b)) draw_rig(b.rig, b.position.vector(), BUD_LOOK); }
 void draw_normals(Bud& b) { if (bud_shown(b)) draw_rig_normals(b.rig, b.position.vector(), BUD_LOOK); }
 

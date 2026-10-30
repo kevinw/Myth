@@ -39,6 +39,8 @@ u64 random_u64();
 // --- The room (room.cpp) ---
 
 struct Room {
+    const char* path = nullptr; // under Assets/Rooms
+    s32 sublayer = 0;           // rooms only neighbour rooms on their own layer (a SubN folder)
     Point2 position;            // in world tiles
     Point2 size;                // in tiles
     Color backdrop, ambient;
@@ -49,7 +51,14 @@ struct Room {
     std::span<u8> background;
     Json actors;                // the file's "actors" array
 };
+// `path` under Assets/Rooms, like "Myth/super_simple.json".
 std::optional<Room> load_room(const char* path);
+// Every room in the world (Rooms/<world>/) that `path` is in, for finding neighbours.
+void index_rooms(const char* path);
+// The room across `room`'s edge in `direction` from `exit` (room pixels), as Myth's
+// Assets.FindAdjacentRoomPlayMode picks it: on the same layer, its edge touching that one, the
+// exit along it, the nearest by centre.
+const char* adjacent_room(Point2 direction, Vector2 exit);
 
 // A trimmed image in the atlas: `source` is where its pixels are, `frame` places them in the
 // untrimmed image (x/y are minus the trim), like Foster's Subtexture.
@@ -83,11 +92,15 @@ std::optional<Pack> load_pack();
 void draw_subtex(const Subtex& t, Vector2 pos, RectInt clip = {}, Color color = WHITE, bool wash = false);
 
 struct TileDraw { Subtex tile, normal; Vector2 pos; RectInt clip; Color field; };
+// A room's tiles as drawn: `art` the current room's, `previous_art` the one a transition is leaving.
+struct RoomArt { List<TileDraw> background{.arena = &persist}, foreground{.arena = &persist}; };
+extern RoomArt art, previous_art;
+// The current room's art and occluders.
 void build_tile_draws();
 void draw_tiles(std::span<TileDraw> draws, bool normals = false);
-void draw_tile_field();
-extern List<TileDraw> background_tiles, foreground_tiles;
+void draw_tile_field(const Room& r, RoomArt& a);
 extern List<Segment> occluders;  // room pixels
+extern u32 occluders_version;    // bumped when they change
 
 // Sprites by name, loaded on first use from Myth's sources and reloaded when their files change.
 Sprite* get_sprite(string_view name);
@@ -361,6 +374,8 @@ struct Bud : Pawn {
     Vector2 pop_velocity, pop_squish;
     s32 pop_facing = 0;
     float back_dash_timer = 0, back_dash_cooldown = 0;
+    float enter_timer = 0;      // > 0: on his way into a new room, out of sight
+    Point2 enter_direction;     // the way the room was entered
 };
 
 constexpr s32 HIT_DAMAGE = 17;
@@ -387,6 +402,8 @@ void spawn_bud(Player& player);
 void bud_struck(Bud& b, RectInt swing, s32 attacker_x);
 bool bud_rides_burrow(Bud& b, Pawn& player);
 void bud_pop_from_burrow(Bud& b, Pawn& player);
+// Bud.OnRoomChanged: he follows a moment later, turning up near where the player came in.
+void bud_room_changed(Bud& b, Point2 direction);
 void update(Blob& b);
 void draw(Blob& b);
 void draw_normals(Blob& b);
@@ -409,6 +426,8 @@ void emit(string_view effect, Vector2 at, s32 count, float direction, float spee
 // The effect's burst spread along a line from `origin` (ParticleSystem.EmitLine).
 void emit_line(string_view effect, Vector2 origin, Vector2 direction, float length = -1, Vector2 base_velocity = {});
 void update_particles(float dt);
+// Moves what the effects hold in room pixels by `offset`, into the room a transition enters.
+void shift_effects(Vector2 offset);
 void draw_particles();
 void churn_record(Point2 at, Vector2 toward, float speed01);
 void apply_pixel_sort(const Texture& lit, Vector2 view, float dt);
@@ -423,6 +442,7 @@ void* start_sound(string_view path, Vector2 at);
 void place_sound(void* instance, Vector2 at);
 void finish_sound(void* instance);
 void update_sound(Vector2 listener);
+void apply_room_reverb();
 
 extern "C" {
 int FMOD_Studio_EventInstance_Start(void* instance);
@@ -455,6 +475,7 @@ void bark(Trigger trigger);
 void load_story();
 void update_story();
 void draw_speech(Vector2 view);
+void shift_speech(Vector2 offset);
 void draw_hud();
 extern bool map_open;
 void toggle_map();
@@ -463,6 +484,11 @@ void draw_map();
 // --- The frame (main.cpp) ---
 
 extern Room room;
+extern Room previous_room;      // the room a transition is leaving, while `transitioning`
+extern bool transitioning;
+// Myth's Game.Transition: on into the room across that edge, if there is one. The player, their
+// glow and Bud come along; the rest of the room goes.
+bool transition(Point2 direction);
 extern Pack pack;
 extern float delta;             // seconds this frame
 extern float zoom;              // view pixels per room pixel

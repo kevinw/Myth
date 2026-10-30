@@ -26,7 +26,9 @@ static SDL_GPUBuffer* vertex_buffer;
 static SDL_GPUTransferBuffer* upload;
 static Texture white;
 
-static Vertex vertices[1 << 16];
+static constexpr u32 MAX_VERTICES = 1 << 19;
+alignas(Vertex) static u8 vertex_memory[sizeof(Vertex) * MAX_VERTICES];  // raw: too big to constant-initialize
+static Vertex* const vertices = (Vertex*)vertex_memory;
 static u32 vertex_count;
 static Batch batches[4096];  // runs of vertices sharing a texture
 static s32 batch_count;
@@ -191,9 +193,9 @@ bool gfx_init(SDL_Window* w) {
     repeat_info.address_mode_u = repeat_info.address_mode_v = repeat_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
     sampler = SDL_CreateGPUSampler(device, &clamp_info);
     repeat_sampler = SDL_CreateGPUSampler(device, &repeat_info);
-    SDL_GPUBufferCreateInfo buffer_info{.usage = SDL_GPU_BUFFERUSAGE_VERTEX, .size = sizeof(vertices)};
+    SDL_GPUBufferCreateInfo buffer_info{.usage = SDL_GPU_BUFFERUSAGE_VERTEX, .size = sizeof(vertex_memory)};
     vertex_buffer = SDL_CreateGPUBuffer(device, &buffer_info);
-    SDL_GPUTransferBufferCreateInfo upload_info{.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, .size = sizeof(vertices)};
+    SDL_GPUTransferBufferCreateInfo upload_info{.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, .size = sizeof(vertex_memory)};
     upload = SDL_CreateGPUTransferBuffer(device, &upload_info);
     white = make_texture(&WHITE, 1, 1);  // rects draw it in fill mode, which ignores it
     return sampler && vertex_buffer && upload && white.gpu;
@@ -298,10 +300,14 @@ Vector2 screen_size() {
 
 // The batch to add vertices to: the current one unless the texture changes or a pass starts.
 static bool batch_for(SDL_GPUTexture* texture, u32 vertices_needed) {
-    if (vertex_count + vertices_needed > SDL_arraysize(vertices)) return false;
+    static bool warned;
+    if (vertex_count + vertices_needed > MAX_VERTICES || batch_count == SDL_arraysize(batches)) {
+        if (!warned) SDL_Log("gfx: a frame's draws overflowed the batcher; the rest are dropped");
+        warned = true;
+        return false;
+    }
     bool pass_start = pass_count && passes[pass_count - 1].first_batch == batch_count;
     if (!batch_count || pass_start || batches[batch_count - 1].texture != texture) {
-        if (batch_count == SDL_arraysize(batches)) return false;
         batches[batch_count++] = {texture, vertex_count, 0};
     }
     batches[batch_count - 1].count += vertices_needed;
