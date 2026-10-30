@@ -56,7 +56,11 @@ def shaders(out, extra):
     sources = [(os.path.join(ROOT, "Foster", "Framework", "Content", "Shaders", "Batcher.hlsl"), "batcher")]
     sources += [(path, os.path.splitext(os.path.basename(path))[0]) for path in extra]
     for source, name in sources:
-        for stage in ("vertex", "fragment"):
+        # name.compute.hlsl is a compute kernel; anything else is the batcher's vertex and a fragment.
+        stages = ("compute",) if name.endswith(".compute") else ("vertex", "fragment")
+        if name.endswith(".compute"):
+            name = name[:-len(".compute")]
+        for stage in stages:
             target = os.path.join(out, "shaders", f"{name}.{stage}.msl")
             if os.path.exists(target) and os.path.getmtime(target) > os.path.getmtime(source):
                 continue

@@ -246,7 +246,6 @@ static LightingUniforms lighting_uniforms(Vector2 view) {
     u.glitch_axis = {glitch_axis.x, glitch_axis.y, glitch, 0};
     s32 count = 0;
     Vector2 positions[MAX_LIGHTS];
-    float radii[MAX_LIGHTS];
     for (Light& l : actors.lights) {
         if (count == MAX_LIGHTS || l.intensity <= 0) continue;
         float scale = flicker_scale(l);
@@ -254,12 +253,11 @@ static LightingUniforms lighting_uniforms(Vector2 view) {
         // The soft shadow's penumbra breathes with the flicker (Light.RenderShadowSourceRadius).
         float source_radius = SHADOW_SOURCE_RADIUS * (1 + (scale / (1 + l.flicker_intensity) - 1) * 0.45f);
         positions[count] = l.position.vector();
-        radii[count] = l.radius * scale;
         u.lights[count * 2] = {positions[count].x, positions[count].y, l.radius * scale, l.height};
         u.lights[count * 2 + 1] = {l.light_color.r * c, l.light_color.g * c, l.light_color.b * c, source_radius};
         count++;
     }
-    update_shadow_depths({positions, (size_t)count}, {radii, (size_t)count});
+    update_shadow_depths({positions, (size_t)count});
     u.counts = {(float)count, SHADOW_BIAS, (float)show_light_mask, zoom};
     return u;
 }

@@ -36,6 +36,24 @@ void release_texture(const Texture& t);
 // A QOI file, premultiplied.
 std::optional<Texture> load_qoi(const char* path);
 
+// Compute: a kernel from <exe dir>/shaders/<name>.compute.msl (HLSL's compute_main, with SDL's
+// register spaces: read-only buffers t/space0, writable textures u/space1, uniforms b/space2).
+// Dispatches queue up and run at present, ahead of the frame's passes, so they see what it writes.
+struct ComputeShader { SDL_GPUComputePipeline* pipeline = nullptr; };
+std::optional<ComputeShader> load_compute(const char* name, u32 buffers, u32 textures, u32 uniforms, u32 threads_x, u32 threads_y = 1);
+struct GpuBuffer { SDL_GPUBuffer* gpu = nullptr; u32 size = 0; };
+GpuBuffer make_buffer(u32 bytes);                       // read by compute
+void update_buffer(const GpuBuffer& b, const void* data, u32 bytes);
+Texture make_storage(s32 w, s32 h, SDL_GPUTextureFormat format);  // written by compute, sampled after
+struct DispatchInfo {
+    const ComputeShader* shader;
+    std::span<const Texture> textures;
+    std::span<const GpuBuffer> buffers;
+    std::span<const u8> uniforms;
+    u32 groups_x = 1, groups_y = 1;
+};
+void dispatch(const DispatchInfo& info);
+
 struct PassInfo {
     Texture target;                 // the window when it has no texture
     Color clear;

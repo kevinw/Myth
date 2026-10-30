@@ -324,58 +324,31 @@ void apply_pixel_sort(const Texture& lit, Vector2 view, float dt) {
     pop_matrix();
 }
 
-// --- Myth's point-light shadows (LightShadowDepth.hlsl), cast on the CPU since the room's occluders
-// never move and its lights rarely do: each light sends SHADOW_SAMPLES rays around itself, and a
-// row of `shadow_depths` holds how far each gets before an occluder. The lighting shader softens
-// and compares against it, and only the background is shadowed.
-// Not ported yet: sprite shadows (actors casting soft ones), the sun. ---
+// --- Myth's point-light shadows (LightShadowDepth.hlsl), cast on the GPU like Myth's: a compute
+// pass (shaders/shadow_depths.compute.hlsl) sends SHADOW_SAMPLES rays round each light against the
+// room's merged occluder edges, and a row of `shadow_depths` holds how far each gets. The lighting
+// shader softens and compares against it, and only the background is shadowed.
+// Not ported yet: the sun. ---
 
 constexpr s32 SHADOW_SAMPLES = 512;
 Texture shadow_depths;  // SHADOW_SAMPLES x MAX_LIGHTS, r = distance to the nearest occluder
-static float depths[SHADOW_SAMPLES * MAX_LIGHTS];
-static Vector2 cast_from[MAX_LIGHTS];
-static s32 cast_count = -1;
+static ComputeShader shadow_kernel;
+static GpuBuffer segments;
 
-static float segment_distance(Vector2 p, Segment s) {
-    Vector2 edge = s.b - s.a;
-    float t = clamp(dot(p - s.a, edge) / max(dot(edge, edge), 0.0001f), 0.0f, 1.0f);
-    return (p - (s.a + edge * t)).length();
-}
-
-static bool ray_segment(Vector2 origin, Vector2 direction, Segment segment, float* distance) {
-    auto cross = [](Vector2 a, Vector2 b) { return a.x * b.y - a.y * b.x; };
-    Vector2 edge = segment.b - segment.a;
-    float denominator = cross(direction, edge);
-    if (fabsf(denominator) <= 0.0001f) return false;
-    Vector2 delta = segment.a - origin;
-    *distance = cross(delta, edge) / denominator;
-    float along = cross(delta, direction) / denominator;
-    return *distance >= 0 && along >= 0 && along <= 1;
-}
-
-// `lights`: their positions and reach, in the lighting uniforms' order. A light is recast only when
-// it moves, against just the edges within its reach.
-void update_shadow_depths(std::span<Vector2> lights, std::span<float> radii) {
-    if (!shadow_depths.gpu) shadow_depths = make_texture(depths, SHADOW_SAMPLES, MAX_LIGHTS, SDL_GPU_TEXTUREFORMAT_R32_FLOAT);
-    bool changed = false;
-    List<Segment> near;
-    for (s32 row = 0; row < (s32)lights.size(); row++) {
-        Vector2 light = lights[row];
-        if (row < cast_count && cast_from[row] == light) continue;
-        cast_from[row] = light;
-        changed = true;
-        near.count = 0;
-        float reach = radii[row] * 1.25f;  // flicker breathes the radius
-        for (Segment& s : occluders) if (segment_distance(light, s) <= reach) near.add(s);
-        for (s32 i = 0; i < SHADOW_SAMPLES; i++) {
-            float angle = (i + 0.5f) / SHADOW_SAMPLES * TAU;
-            Vector2 direction{cosf(angle), sinf(angle)};
-            float depth = 3.4e38f, distance;
-            for (Segment& s : near) if (ray_segment(light, direction, s, &distance)) depth = min(depth, distance);
-            depths[row * SHADOW_SAMPLES + i] = depth;
-        }
+void update_shadow_depths(std::span<Vector2> lights) {
+    if (!shadow_depths.gpu) {
+        shadow_depths = make_storage(SHADOW_SAMPLES, MAX_LIGHTS, SDL_GPU_TEXTUREFORMAT_R32_FLOAT);
+        shadow_kernel = load_compute("shadow_depths", 1, 1, 1, 64).value_or(ComputeShader{});
     }
-    if ((s32)lights.size() != cast_count) changed = true;
-    cast_count = (s32)lights.size();
-    if (changed) update_texture(shadow_depths, depths);
+    // The occluders only change with the room.
+    if (segments.size != occluders.count * sizeof(Segment)) {
+        segments = make_buffer(occluders.count * sizeof(Segment));
+        update_buffer(segments, occluders.data, segments.size);
+    }
+    struct { u32 segment_count, light_count, samples, padding; Vector4 lights[MAX_LIGHTS]; } params{(u32)occluders.count, (u32)lights.size(), SHADOW_SAMPLES};
+    for (size_t i = 0; i < lights.size(); i++) params.lights[i] = {lights[i].x, lights[i].y};
+    Texture targets[] = {shadow_depths};
+    GpuBuffer buffers[] = {segments};
+    dispatch({.shader = &shadow_kernel, .textures = targets, .buffers = buffers, .uniforms = bytes_of(params),
+              .groups_x = SHADOW_SAMPLES / 64, .groups_y = (u32)max<size_t>(lights.size(), 1)});
 }

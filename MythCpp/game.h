@@ -413,7 +413,7 @@ void draw_particles();
 void churn_record(Point2 at, Vector2 toward, float speed01);
 void apply_pixel_sort(const Texture& lit, Vector2 view, float dt);
 extern Texture shadow_depths;
-void update_shadow_depths(std::span<Vector2> lights, std::span<float> radii);
+void update_shadow_depths(std::span<Vector2> lights);
 
 // --- Sound (ui.cpp) ---
 

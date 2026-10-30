@@ -31,6 +31,18 @@ static u32 vertex_count;
 static Batch batches[4096];  // runs of vertices sharing a texture
 static s32 batch_count;
 static Pass passes[64];
+struct Dispatch {
+    SDL_GPUComputePipeline* pipeline;
+    SDL_GPUStorageTextureReadWriteBinding textures[4];
+    u32 texture_count;
+    SDL_GPUBuffer* buffers[4];
+    u32 buffer_count;
+    u8 uniforms[1024];
+    u32 uniform_count;
+    u32 groups_x, groups_y;
+};
+static Dispatch dispatches[16];
+static s32 dispatch_count;
 static s32 pass_count;
 static Matrix matrices[16];
 static s32 matrix_top;
@@ -107,6 +119,59 @@ std::optional<Shader> load_shader(const char* name, u32 samplers, u32 uniforms) 
         return {};
     }
     return shader;
+}
+
+std::optional<ComputeShader> load_compute(const char* name, u32 buffers, u32 textures, u32 uniforms, u32 threads_x, u32 threads_y) {
+    auto code = read_file(tprint("%sshaders/%s.compute.msl", SDL_GetBasePath(), name));
+    if (code.empty()) { SDL_Log("no compute shader %s", name); return {}; }
+    SDL_GPUComputePipelineCreateInfo info{
+        .code_size = code.size(), .code = code.data(), .entrypoint = "compute_main", .format = SDL_GPU_SHADERFORMAT_MSL,
+        .num_readonly_storage_buffers = buffers, .num_readwrite_storage_textures = textures, .num_uniform_buffers = uniforms,
+        .threadcount_x = threads_x, .threadcount_y = threads_y, .threadcount_z = 1,
+    };
+    SDL_GPUComputePipeline* pipeline = SDL_CreateGPUComputePipeline(device, &info);
+    if (!pipeline) { SDL_Log("can't load compute shader %s: %s", name, SDL_GetError()); return {}; }
+    return ComputeShader{pipeline};
+}
+
+GpuBuffer make_buffer(u32 bytes) {
+    SDL_GPUBufferCreateInfo info{.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ, .size = bytes};
+    return {SDL_CreateGPUBuffer(device, &info), bytes};
+}
+
+void update_buffer(const GpuBuffer& b, const void* data, u32 bytes) {
+    bytes = min(bytes, b.size);
+    if (!bytes) return;
+    SDL_GPUTransferBufferCreateInfo info{.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, .size = bytes};
+    SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &info);
+    memcpy(SDL_MapGPUTransferBuffer(device, transfer, false), data, bytes);
+    SDL_UnmapGPUTransferBuffer(device, transfer);
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTransferBufferLocation from{.transfer_buffer = transfer};
+    SDL_GPUBufferRegion to{.buffer = b.gpu, .size = bytes};
+    SDL_UploadToGPUBuffer(copy, &from, &to, false);
+    SDL_EndGPUCopyPass(copy);
+    SDL_SubmitGPUCommandBuffer(cmd);
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+}
+
+Texture make_storage(s32 w, s32 h, SDL_GPUTextureFormat format) {
+    SDL_GPUTextureCreateInfo info{
+        .type = SDL_GPU_TEXTURETYPE_2D, .format = format, .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE,
+        .width = (u32)w, .height = (u32)h, .layer_count_or_depth = 1, .num_levels = 1,
+    };
+    return {SDL_CreateGPUTexture(device, &info), {(float)w, (float)h}, format};
+}
+
+void dispatch(const DispatchInfo& info) {
+    if (!info.shader || !info.shader->pipeline || dispatch_count == SDL_arraysize(dispatches)) return;
+    Dispatch& d = dispatches[dispatch_count++];
+    d = {.pipeline = info.shader->pipeline, .groups_x = info.groups_x, .groups_y = info.groups_y};
+    for (const Texture& t : info.textures) if (d.texture_count < 4) d.textures[d.texture_count++] = {.texture = t.gpu};
+    for (const GpuBuffer& b : info.buffers) if (d.buffer_count < 4) d.buffers[d.buffer_count++] = b.gpu;
+    d.uniform_count = (u32)min(info.uniforms.size(), sizeof(d.uniforms));
+    memcpy(d.uniforms, info.uniforms.data(), d.uniform_count);
 }
 
 bool gfx_init(SDL_Window* w) {
@@ -338,6 +403,15 @@ void present(Color clear) {
             SDL_UploadToGPUBuffer(copy, &from, &to, true);
             SDL_EndGPUCopyPass(copy);
         }
+        for (s32 i = 0; i < dispatch_count; i++) {
+            Dispatch& d = dispatches[i];
+            SDL_GPUComputePass* pass = SDL_BeginGPUComputePass(cmd, d.textures, d.texture_count, nullptr, 0);
+            SDL_BindGPUComputePipeline(pass, d.pipeline);
+            if (d.buffer_count) SDL_BindGPUComputeStorageBuffers(pass, 0, d.buffers, d.buffer_count);
+            if (d.uniform_count) SDL_PushGPUComputeUniformData(cmd, 0, d.uniforms, d.uniform_count);
+            SDL_DispatchGPUCompute(pass, d.groups_x, d.groups_y, 1);
+            SDL_EndGPUComputePass(pass);
+        }
         for (s32 index = 0; index < pass_count; index++) {
             Pass& p = passes[index];
             s32 last_batch = index + 1 < pass_count ? passes[index + 1].first_batch : batch_count;
@@ -373,5 +447,5 @@ void present(Color clear) {
     }
     SDL_SubmitGPUCommandBuffer(cmd);
     vertex_count = 0;
-    batch_count = pass_count = 0;
+    batch_count = pass_count = dispatch_count = 0;
 }
