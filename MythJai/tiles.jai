@@ -26,6 +26,44 @@ build_tile_draws :: () {
     for corners array_add(*occluders, .{it, corners[(it_index + 1) % 4]});
     build_layer(room.background, *tile_draws.background, foreground = false);
     build_layer(room.tiles, *tile_draws.foreground, foreground = true);
+    merge_occluders();
+}
+
+// DualGrid.MergeAxisAlignedShadowSegments: tile edges that line up become one run, so a light
+// tests a handful of long edges instead of every tile's.
+merge_occluders :: () {
+    Run :: struct { horizontal: bool; axis, start, end: float; };
+    runs: [..] Run;
+    runs.allocator = temp;
+    kept := 0;
+    for occluders {
+        if abs(it.a.y - it.b.y) < 0.01 array_add(*runs, .{true, it.a.y, min(it.a.x, it.b.x), max(it.a.x, it.b.x)});
+        else if abs(it.a.x - it.b.x) < 0.01 array_add(*runs, .{false, it.a.x, min(it.a.y, it.b.y), max(it.a.y, it.b.y)});
+        else { occluders[kept] = it; kept += 1; }
+    }
+    occluders.count = kept;
+    quick_sort(runs, (a: Run, b: Run) -> s64 {
+        if a.horizontal != b.horizontal return ifx a.horizontal then -1 else 1;
+        if abs(a.axis - b.axis) >= 0.01 return ifx a.axis < b.axis then -1 else 1;
+        return ifx a.start < b.start then -1 else ifx a.start > b.start then 1 else 0;
+    });
+    add_run :: (r: Run) {
+        if r.end <= r.start return;
+        if r.horizontal array_add(*occluders, .{.{r.start, r.axis}, .{r.end, r.axis}});
+        else array_add(*occluders, .{.{r.axis, r.start}, .{r.axis, r.end}});
+    }
+    if !runs.count return;
+    current := runs[0];
+    for 1..runs.count-1 {
+        next := runs[it];
+        if next.horizontal == current.horizontal && abs(next.axis - current.axis) < 0.01 && next.start <= current.end + 0.001 {
+            current.end = max(current.end, next.end);
+            continue;
+        }
+        add_run(current);
+        current = next;
+    }
+    add_run(current);
 }
 
 draw_tiles :: (draws: [] Tile_Draw, normals := false) {
