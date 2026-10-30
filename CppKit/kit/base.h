@@ -31,14 +31,26 @@ struct Vector2 {
     Vector2 floor() const { return {floorf(x), floorf(y)}; }
 };
 inline float dot(Vector2 a, Vector2 b) { return a.x * b.x + a.y * b.y; }
+inline Vector2 operator*(float k, Vector2 v) { return v * k; }
+struct Vector3 { float x = 0, y = 0, z = 0; };
+struct Vector4 { float x = 0, y = 0, z = 0, w = 0; };
 
 struct Point2 {
     s32 x = 0, y = 0;
     Point2 operator+(Point2 b) const { return {x + b.x, y + b.y}; }
     Point2 operator-(Point2 b) const { return {x - b.x, y - b.y}; }
     Point2 operator*(s32 k) const { return {x * k, y * k}; }
+    Point2 operator-() const { return {-x, -y}; }
+    Point2& operator+=(Point2 b) { return *this = *this + b; }
+    Point2& operator-=(Point2 b) { return *this = *this - b; }
     bool operator==(const Point2&) const = default;
     Vector2 vector() const { return {(float)x, (float)y}; }
+};
+
+struct RectInt {
+    s32 x = 0, y = 0, w = 0, h = 0;
+    RectInt operator+(Point2 p) const { return {x + p.x, y + p.y, w, h}; }
+    bool overlaps(RectInt b) const { return x < b.x + b.w && b.x < x + w && y < b.y + b.h && b.y < y + h; }
 };
 
 struct Rect {
@@ -58,11 +70,15 @@ constexpr Color WHITE{255, 255, 255, 255};
 template <typename T> T min(T a, T b) { return a < b ? a : b; }
 template <typename T> T max(T a, T b) { return a > b ? a : b; }
 template <typename T> T clamp(T v, T lo, T hi) { return v < lo ? lo : v > hi ? hi : v; }
+inline s32 sign(float v) { return (v > 0) - (v < 0); }
 inline float approach(float value, float target, float amount) {
     return value < target ? min(value + amount, target) : max(value - amount, target);
 }
+inline Vector2 approach(Vector2 value, Vector2 target, float amount) {
+    return {approach(value.x, target.x, amount), approach(value.y, target.y, amount)};
+}
 
-// Bump allocation, reset all at once: `temp` is reset every frame.
+// Bump allocation, reset all at once: `temp` is reset every frame; `persist` never is.
 struct Arena {
     u8* base = nullptr;
     size_t capacity = 0, used = 0;
@@ -77,7 +93,7 @@ struct Arena {
     template <typename T> std::span<T> array(size_t count) { return {(T*)alloc(sizeof(T) * count, alignof(T)), count}; }
     void reset() { used = 0; }
 };
-extern Arena temp;
+extern Arena temp, persist;
 
 // printf into the scratch arena.
 const char* tprint(const char* format, ...) __attribute__((format(printf, 1, 2)));
@@ -98,6 +114,9 @@ template <typename T> struct List {
         data[count++] = v;
     }
     T& operator[](s32 i) { return data[i]; }
+    bool contains(const T& v) const { for (s32 i = 0; i < count; i++) if (data[i] == v) return true; return false; }
+    void add_unique(const T& v) { if (!contains(v)) add(v); }
+    void remove_unordered(const T& v) { for (s32 i = 0; i < count; i++) if (data[i] == v) { data[i] = data[--count]; return; } }
     T* begin() { return data; }
     T* end() { return data + count; }
     std::span<T> span() { return {data, (size_t)count}; }
@@ -111,35 +130,40 @@ template <typename T> struct Handle {
     bool operator==(const Handle&) const = default;
 };
 
+// `T*` from a pool is good until that slot is removed; hold a Handle across frames.
 template <typename T, u32 N> struct Pool {
     T items[N];
     u32 generations[N] = {};
     bool alive[N] = {};
+    u32 used = 0;  // slots ever handed out: iteration stops here
 
-    Handle<T> add(const T& value = {}) {
-        for (u32 i = 0; i < N; i++) {
-            if (alive[i]) continue;
-            alive[i] = true;
-            if (++generations[i] == 0) generations[i] = 1;
-            items[i] = value;
-            return {i, generations[i]};
-        }
-        fprintf(stderr, "pool full (%u)\n", N);
-        return {};
+    // A fresh default T, or null when full. Freed slots are reused first, most recent first.
+    T* add() {
+        u32 i = 0;
+        for (u32 k = used; k-- > 0;) if (!alive[k]) { i = k; goto found; }
+        if (used == N) { fprintf(stderr, "pool full (%u)\n", N); return nullptr; }
+        i = used++;
+    found:
+        alive[i] = true;
+        if (++generations[i] == 0) generations[i] = 1;
+        items[i] = T{};
+        return &items[i];
     }
-    T* get(Handle<T> h) { return h && h.index < N && alive[h.index] && generations[h.index] == h.generation ? &items[h.index] : nullptr; }
-    void remove(Handle<T> h) { if (get(h)) alive[h.index] = false; }
+    Handle<T> handle_of(const T* item) const { u32 i = u32(item - items); return {i, generations[i]}; }
+    T* get(Handle<T> h) { return h && h.index < used && alive[h.index] && generations[h.index] == h.generation ? &items[h.index] : nullptr; }
+    void remove(const T* item) { alive[item - items] = false; }
+    void clear() { for (u32 i = 0; i < used; i++) alive[i] = false; }
 
     // for (T& it : pool) visits the live ones.
     struct Iterator {
         Pool* pool; u32 i;
-        void skip() { while (i < N && !pool->alive[i]) i++; }
+        void skip() { while (i < pool->used && !pool->alive[i]) i++; }
         T& operator*() { return pool->items[i]; }
         Iterator& operator++() { i++; skip(); return *this; }
         bool operator!=(const Iterator& o) const { return i != o.i; }
     };
     Iterator begin() { Iterator it{this, 0}; it.skip(); return it; }
-    Iterator end() { return {this, N}; }
+    Iterator end() { return {this, used}; }
 };
 
 // A whole file into the arena, null-terminated; empty if it can't be read.

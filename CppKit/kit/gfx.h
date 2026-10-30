@@ -56,11 +56,26 @@ void image(const Texture& texture, Rect source, Vector2 pos, Color color = WHITE
 void triangle(Vector2 a, Vector2 b, Vector2 c, Color ca, Color cb, Color cc);
 inline void triangle(Vector2 a, Vector2 b, Vector2 c, Color color) { triangle(a, b, c, color, color, color); }
 void circle(Vector2 center, float radius, int steps, Color color);
+inline void polygon(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color color) { triangle(a, b, c, color); triangle(a, c, d, color); }
+// Foster's Batcher.Capsule: a tapered quad from `from` to `to`, with round caps.
+void capsule(Vector2 from, Vector2 to, float from_radius, float to_radius, int steps, Color color, bool from_cap = true, bool to_cap = true);
+
+// While its alpha is set, everything draws as a flat shape in this color: images washed through
+// their alpha, filled shapes recolored. For masks of what something covers.
+extern Color silhouette;
 
 // Translate, then scale, relative to the current matrix. A negative scale flips.
 void push_matrix(Vector2 translate, Vector2 scale);
 inline void push_matrix(Vector2 translate, float scale) { push_matrix(translate, {scale, scale}); }
 void pop_matrix();
+
+// Reads a target back (waiting on the GPU) and writes it as a PNG. For dev screenshots.
+bool save_png(const Texture& t, const char* path);
+
+// When set, present doesn't wait for the window: if it can't take a frame (hidden, display
+// asleep) the passes into targets still render and only the window's are skipped. For headless
+// captures, which then pace themselves.
+extern bool render_offscreen;
 
 // Draws everything since the last present. With no begin_pass, it all goes to the window, cleared to `clear`.
 void present(Color clear = {});

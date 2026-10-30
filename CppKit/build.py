@@ -64,7 +64,7 @@ def shaders(out, extra):
                  "-I", os.path.dirname(source), "-o", target])
 
 
-def build(name, sources, shader_sources=(), copy=(), args=()):
+def build(name, sources, shader_sources=(), copy=(), libs=(), args=()):
     """Builds `name` from the game's directory into build/."""
     game = os.getcwd()
     out = os.path.join(game, "build")
@@ -75,7 +75,7 @@ def build(name, sources, shader_sources=(), copy=(), args=()):
 
     sources = [os.path.abspath(s) for s in sources] + [os.path.join(KIT, "kit", f) for f in sorted(os.listdir(os.path.join(KIT, "kit"))) if f.endswith(".cpp")]
     jet_includes = ["src", "libs/efsw/include", "libs/tiny-process-library", "libs/utils"]
-    includes = ["-I" + os.path.join(KIT, "kit"), *["-I" + os.path.join(JET_LIVE, d) for d in jet_includes], "-I" + os.path.join(BREW, "include"), "-I" + game]
+    includes = ["-I" + os.path.join(KIT, "kit"), *["-I" + os.path.join(JET_LIVE, d) for d in jet_includes], "-I" + os.path.join(BREW, "include"), "-I" + os.path.join(BREW, "include", "freetype2"), "-I" + game]
     commands = []
     def compile(source):
         obj = os.path.join(objects_dir, os.path.relpath(source, ROOT).replace(os.sep, "_") + ".o")
@@ -106,9 +106,13 @@ def build(name, sources, shader_sources=(), copy=(), args=()):
     run([CXX, *[obj for obj, _ in results], "-o", exe, "-g",
          "-Wl,-export_dynamic", "-Wl,-flat_namespace", "-Wl,-undefined,dynamic_lookup",   # what jet-live needs
          lib, "-Wl,-rpath," + os.path.dirname(lib),
-         "-L" + os.path.join(BREW, "lib"), "-lSDL3", "-Wl,-rpath," + os.path.join(BREW, "lib")])
+         "-L" + os.path.join(BREW, "lib"), "-lSDL3", "-lfreetype", "-lz", "-Wl,-rpath," + os.path.join(BREW, "lib"),
+         "-Wl,-rpath,@executable_path", *libs])
+    # Only when changed: overwriting a library under a running game would kill it.
     for path in copy:
-        shutil.copy2(path, out)
+        to = os.path.join(out, os.path.basename(path))
+        if not os.path.exists(to) or os.path.getmtime(to) < os.path.getmtime(path):
+            shutil.copy2(path, out)
     print(f"built {os.path.relpath(exe)}")
     if "run" in args:
         os.execv(exe, [exe])

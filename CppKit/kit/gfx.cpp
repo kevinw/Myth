@@ -36,6 +36,8 @@ static Matrix matrices[16];
 static s32 matrix_top;
 
 static constexpr Color FILL_MODE{0, 0, 255, 0};
+Color silhouette;
+bool render_offscreen;
 
 static SDL_GPUShader* load_stage(const char* name, SDL_GPUShaderStage stage, u32 samplers, u32 uniforms) {
     bool vertex = stage == SDL_GPU_SHADERSTAGE_VERTEX;
@@ -209,7 +211,7 @@ std::optional<Texture> load_qoi(const char* path) {
             }
             seen[(px.r * 3 + px.g * 5 + px.b * 7 + px.a * 11) % 64] = px;
         }
-        out = {u8(px.r * px.a / 255), u8(px.g * px.a / 255), u8(px.b * px.a / 255), px.a};
+        out = {u8((px.r * px.a + 127) / 255), u8((px.g * px.a + 127) / 255), u8((px.b * px.a + 127) / 255), px.a};
     }
     return make_texture(pixels.data(), w, h);
 }
@@ -245,6 +247,7 @@ static Vector2 transform(Vector2 p) { return p * matrices[matrix_top].scale + ma
 
 static void quad(Rect r, Vector2 uv0, Vector2 uv1, Color color, Color mode, SDL_GPUTexture* texture) {
     if (!batch_for(texture, 6)) return;
+    if (silhouette.a) { color = silhouette; if (mode.r) mode = {0, 255, 0, 0}; }
     Vector2 p0 = transform(r.pos), p1 = transform(r.pos + r.size);
     Vertex a{p0, uv0, color, mode}, b{{p1.x, p0.y}, {uv1.x, uv0.y}, color, mode};
     Vertex c{p1, uv1, color, mode}, d{{p0.x, p1.y}, {uv0.x, uv1.y}, color, mode};
@@ -260,6 +263,7 @@ void image(const Texture& texture, Rect source, Vector2 pos, Color color, bool w
 
 void triangle(Vector2 a, Vector2 b, Vector2 c, Color ca, Color cb, Color cc) {
     if (!batch_for(white.gpu, 3)) return;
+    if (silhouette.a) ca = cb = cc = silhouette;
     vertices[vertex_count++] = {transform(a), {}, ca, FILL_MODE};
     vertices[vertex_count++] = {transform(b), {}, cb, FILL_MODE};
     vertices[vertex_count++] = {transform(c), {}, cc, FILL_MODE};
@@ -273,6 +277,38 @@ void circle(Vector2 center, float radius, int steps, Color color) {
         triangle(center, previous, next, color);
         previous = next;
     }
+}
+
+void capsule(Vector2 from, Vector2 to, float from_radius, float to_radius, int steps, Color color, bool from_cap, bool to_cap) {
+    Vector2 along = to - from;
+    float span = along.length();
+    along = span > 0.0001f ? along / span : Vector2{0, 1};
+    Vector2 across{along.y, -along.x};
+    polygon(from + across * from_radius, from - across * from_radius, to - across * to_radius, to + across * to_radius, color);
+    if (from_cap) circle(from, from_radius, steps, color);
+    if (to_cap) circle(to, to_radius, steps, color);
+}
+
+bool save_png(const Texture& t, const char* path) {
+    u32 w = (u32)t.size.x, h = (u32)t.size.y;
+    SDL_GPUTransferBufferCreateInfo info{.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, .size = w * h * 4};
+    SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &info);
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion region{.texture = t.gpu, .w = w, .h = h, .d = 1};
+    SDL_GPUTextureTransferInfo to{.transfer_buffer = transfer};
+    SDL_DownloadFromGPUTexture(copy, &region, &to);
+    SDL_EndGPUCopyPass(copy);
+    SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    SDL_WaitForGPUFences(device, true, &fence, 1);
+    SDL_ReleaseGPUFence(device, fence);
+    void* pixels = SDL_MapGPUTransferBuffer(device, transfer, false);
+    SDL_Surface* surface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_ABGR8888, pixels, w * 4);
+    bool ok = surface && SDL_SavePNG(surface, path);
+    SDL_DestroySurface(surface);
+    SDL_UnmapGPUTransferBuffer(device, transfer);
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    return ok;
 }
 
 void push_matrix(Vector2 translate, Vector2 scale) {
@@ -290,7 +326,9 @@ void present(Color clear) {
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
     SDL_GPUTexture* swapchain = nullptr;
     u32 w, h;
-    if (SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, &swapchain, &w, &h) && swapchain) {
+    bool acquired = render_offscreen ? SDL_AcquireGPUSwapchainTexture(cmd, window, &swapchain, &w, &h)
+                                     : SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, &swapchain, &w, &h);
+    if (acquired && (swapchain || render_offscreen)) {
         if (u32 bytes = vertex_count * sizeof(Vertex)) {
             memcpy(SDL_MapGPUTransferBuffer(device, upload, true), vertices, bytes);
             SDL_UnmapGPUTransferBuffer(device, upload);
@@ -304,6 +342,7 @@ void present(Color clear) {
             Pass& p = passes[index];
             s32 last_batch = index + 1 < pass_count ? passes[index + 1].first_batch : batch_count;
             SDL_GPUTexture* texture = p.target.gpu ? p.target.gpu : swapchain;
+            if (!texture) continue;
             Vector2 size = p.target.gpu ? p.target.size : Vector2{(float)w, (float)h};
             const float k = 1.0f / 255;
             SDL_GPUColorTargetInfo target{

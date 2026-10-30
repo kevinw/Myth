@@ -3,6 +3,8 @@
 
 static u8 temp_memory[64 << 20];
 Arena temp{temp_memory, sizeof(temp_memory)};
+static u8 persist_memory[256 << 20];  // untouched pages cost nothing
+Arena persist{persist_memory, sizeof(persist_memory)};
 
 const char* tprint(const char* format, ...) {
     va_list args, again;
