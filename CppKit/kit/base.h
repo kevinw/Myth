@@ -1,0 +1,146 @@
+// CppKit's basics: Foster's value types, a per-frame scratch arena, and pools of objects
+// addressed by generational handles instead of pointers into the heap.
+#pragma once
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <span>
+#include <optional>
+
+using u8 = uint8_t; using u16 = uint16_t; using u32 = uint32_t; using u64 = uint64_t;
+using s8 = int8_t;  using s16 = int16_t;  using s32 = int32_t;  using s64 = int64_t;
+
+constexpr float TAU = 6.2831853f;
+
+struct Vector2 {
+    float x = 0, y = 0;
+    Vector2 operator+(Vector2 b) const { return {x + b.x, y + b.y}; }
+    Vector2 operator-(Vector2 b) const { return {x - b.x, y - b.y}; }
+    Vector2 operator*(Vector2 b) const { return {x * b.x, y * b.y}; }
+    Vector2 operator/(Vector2 b) const { return {x / b.x, y / b.y}; }
+    Vector2 operator*(float k) const { return {x * k, y * k}; }
+    Vector2 operator/(float k) const { return {x / k, y / k}; }
+    Vector2 operator-() const { return {-x, -y}; }
+    Vector2& operator+=(Vector2 b) { return *this = *this + b; }
+    Vector2& operator-=(Vector2 b) { return *this = *this - b; }
+    bool operator==(const Vector2&) const = default;
+    float length() const { return sqrtf(x * x + y * y); }
+    Vector2 normalized() const { float l = length(); return l > 0 ? *this / l : Vector2{}; }
+    Vector2 floor() const { return {floorf(x), floorf(y)}; }
+};
+inline float dot(Vector2 a, Vector2 b) { return a.x * b.x + a.y * b.y; }
+
+struct Point2 {
+    s32 x = 0, y = 0;
+    Point2 operator+(Point2 b) const { return {x + b.x, y + b.y}; }
+    Point2 operator-(Point2 b) const { return {x - b.x, y - b.y}; }
+    Point2 operator*(s32 k) const { return {x * k, y * k}; }
+    bool operator==(const Point2&) const = default;
+    Vector2 vector() const { return {(float)x, (float)y}; }
+};
+
+struct Rect {
+    Vector2 pos, size;
+    Rect inflate(float by) const { return {pos - Vector2{by, by}, size + Vector2{2 * by, 2 * by}}; }
+};
+
+// Premultiplied, like everything we draw.
+struct Color {
+    u8 r = 0, g = 0, b = 0, a = 0;
+    static constexpr Color rgb(u32 hex) { return {u8(hex >> 16), u8(hex >> 8), u8(hex), 255}; }
+    Color fade(float alpha) const { return {u8(r * alpha), u8(g * alpha), u8(b * alpha), u8(a * alpha)}; }
+    bool operator==(const Color&) const = default;
+};
+constexpr Color WHITE{255, 255, 255, 255};
+
+template <typename T> T min(T a, T b) { return a < b ? a : b; }
+template <typename T> T max(T a, T b) { return a > b ? a : b; }
+template <typename T> T clamp(T v, T lo, T hi) { return v < lo ? lo : v > hi ? hi : v; }
+inline float approach(float value, float target, float amount) {
+    return value < target ? min(value + amount, target) : max(value - amount, target);
+}
+
+// Bump allocation, reset all at once: `temp` is reset every frame.
+struct Arena {
+    u8* base = nullptr;
+    size_t capacity = 0, used = 0;
+
+    void* alloc(size_t bytes, size_t align = 16) {
+        size_t at = (used + align - 1) & ~(align - 1);
+        if (at + bytes > capacity) { fprintf(stderr, "arena out of space (%zu of %zu)\n", at + bytes, capacity); abort(); }
+        used = at + bytes;
+        return base + at;
+    }
+    // Uninitialized, so only for trivial types.
+    template <typename T> std::span<T> array(size_t count) { return {(T*)alloc(sizeof(T) * count, alignof(T)), count}; }
+    void reset() { used = 0; }
+};
+extern Arena temp;
+
+// printf into the scratch arena.
+const char* tprint(const char* format, ...) __attribute__((format(printf, 1, 2)));
+
+// Growable array of trivial types that lives in an arena (default: temp), for this frame's lists.
+template <typename T> struct List {
+    T* data = nullptr;
+    s32 count = 0, capacity = 0;
+    Arena* arena = &temp;
+
+    void add(const T& v) {
+        if (count == capacity) {
+            s32 grown = max(capacity * 2, 16);
+            T* bigger = (T*)arena->alloc(sizeof(T) * grown, alignof(T));
+            if (count) memcpy(bigger, data, sizeof(T) * count);
+            data = bigger; capacity = grown;
+        }
+        data[count++] = v;
+    }
+    T& operator[](s32 i) { return data[i]; }
+    T* begin() { return data; }
+    T* end() { return data + count; }
+    std::span<T> span() { return {data, (size_t)count}; }
+};
+
+// Objects live in fixed slots and are named by Handle: a slot index and the generation that was
+// alive when the handle was made, so a handle to a freed object resolves to null.
+template <typename T> struct Handle {
+    u32 index = 0, generation = 0;  // generation 0 is never alive: a default Handle is null
+    explicit operator bool() const { return generation != 0; }
+    bool operator==(const Handle&) const = default;
+};
+
+template <typename T, u32 N> struct Pool {
+    T items[N];
+    u32 generations[N] = {};
+    bool alive[N] = {};
+
+    Handle<T> add(const T& value = {}) {
+        for (u32 i = 0; i < N; i++) {
+            if (alive[i]) continue;
+            alive[i] = true;
+            if (++generations[i] == 0) generations[i] = 1;
+            items[i] = value;
+            return {i, generations[i]};
+        }
+        fprintf(stderr, "pool full (%u)\n", N);
+        return {};
+    }
+    T* get(Handle<T> h) { return h && h.index < N && alive[h.index] && generations[h.index] == h.generation ? &items[h.index] : nullptr; }
+    void remove(Handle<T> h) { if (get(h)) alive[h.index] = false; }
+
+    // for (T& it : pool) visits the live ones.
+    struct Iterator {
+        Pool* pool; u32 i;
+        void skip() { while (i < N && !pool->alive[i]) i++; }
+        T& operator*() { return pool->items[i]; }
+        Iterator& operator++() { i++; skip(); return *this; }
+        bool operator!=(const Iterator& o) const { return i != o.i; }
+    };
+    Iterator begin() { Iterator it{this, 0}; it.skip(); return it; }
+    Iterator end() { return {this, N}; }
+};
+
+// A whole file into the arena, null-terminated; empty if it can't be read.
+std::span<u8> read_file(const char* path, Arena& arena = temp);

@@ -30,3 +30,5 @@ Myth/Production/.world-map-venv/
 
 # Local secrets (API keys)
 .env
+CppKit/third_party/
+MythCpp/build/
