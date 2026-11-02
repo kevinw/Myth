@@ -80,6 +80,18 @@ def copy(source, to):
     (shutil.copytree if os.path.isdir(source) else shutil.copy2)(source, to)
 
 
+# Inputs git doesn't carry, checked before a previous export is cleared.
+LINUX_OZZ = os.path.join(MYTH, "bin", "publish", "linux-x64", "libmyth_ozz.so")
+missing = [f"  {os.path.relpath(path, ROOT)}: {fix}" for path, fix in [
+    (os.path.join(ROOT, "Foster", "tools", "macos", "shadercross"), "git submodule update --init"),
+    (os.path.join(ASSETS, "Packed", "Visuals", "manifest.bin"), "cd Myth && dotnet build"),
+    (os.path.join(MYTH, "bin", "Debug", "libmyth_ozz.dylib"), "cd Myth && dotnet build"),
+] if not os.path.exists(path)]
+if missing:
+    sys.exit("missing inputs; run, from FosterGames/:\n" + "\n".join(missing))
+if not os.path.exists(LINUX_OZZ):
+    print(f"warning: no {os.path.relpath(LINUX_OZZ, ROOT)}, so `./build.sh linux` won't link: cd Myth && node tools/publish-linux.mjs")
+
 # A previous export's sources go; build/ stays, as the build's cache.
 for d in ("game", "kit", "shaders", "tools", "native", "Assets"):
     shutil.rmtree(os.path.join(OUT, d), ignore_errors=True)
@@ -108,7 +120,8 @@ copy(os.path.join(MYTH, "bin", "Debug", "libmyth_ozz.dylib"), "native/macos/libm
 copy(os.path.join(ROOT, "Foster", "Framework", "Internal", "Native", "linux-x64", "libSDL3.so"), "native/linux-x64/libSDL3.so.0")
 copy(os.path.join(fmod, "linux-x64", "libfmod.so.15"), "native/linux-x64/libfmod.so.15")
 copy(os.path.join(fmod, "linux-x64", "libfmodstudio.so"), "native/linux-x64/libfmodstudio.so.15")
-copy(os.path.join(MYTH, "bin", "publish", "linux-x64", "libmyth_ozz.so"), "native/linux-x64/libmyth_ozz.so")
+if os.path.exists(LINUX_OZZ):
+    copy(LINUX_OZZ, "native/linux-x64/libmyth_ozz.so")
 
 for path in ["Rooms", "Packed/Visuals", "Sources/Sprites", "Sources/Costumes", "Particles",
              "Rigs/ual2.ozzpack", "Rigs/ual2.takes.json", "Fonts/m3x6.ttf", "Fonts/dogica.ttf",
