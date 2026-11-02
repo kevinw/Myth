@@ -1,7 +1,13 @@
 // Human Questions (Myth), in C++ on CppKit: the frame, the camera, and the passes that draw it.
 #include "game.h"
+#ifdef LIVE
 #include "live.h"
+#endif
 #include <cstdarg>
+
+#ifndef ASSETS
+#define ASSETS "../../Myth/Assets/"  // from the executable
+#endif
 
 static const char* START_ROOM = "Myth/super_simple.json";  // `myth room <path>` starts in another
 
@@ -62,7 +68,7 @@ const char* asset(const char* format, ...) {
     va_start(args, format);
     vsnprintf(path, sizeof(path), format, args);
     va_end(args);
-    return tprint("%s../../Myth/Assets/%s", SDL_GetBasePath(), path);
+    return tprint("%s" ASSETS "%s", SDL_GetBasePath(), path);
 }
 
 void log(const char* format, ...) {
@@ -103,10 +109,12 @@ void pulse_dither_glitch(Vector2 axis, float amount) {
     glitch_target = amount;
 }
 
+#ifdef LIVE
 // What a reload that changes these layouts can't carry over: the room restarts instead.
 #define X(Type, pool, capacity) , Type
 static u64 state_layout() { return layout_of<Actors, Room, Pack ACTOR_TYPES(X)>(); }
 #undef X
+#endif
 
 static int argc;
 static char** argv;
@@ -142,7 +150,9 @@ static bool start() {
     render_offscreen = shot_path;  // a capture runs whether or not the window can show
     camera = clamp_camera(camera_target());
     load_story();
+#ifdef LIVE
     live_init();
+#endif
     return true;
 }
 
@@ -221,7 +231,9 @@ int main(int count, char** values) {
     argv = values;
     if (!start()) return 1;
     for (;;) {
+#ifdef LIVE
         if (live_update(state_layout) == Reload::Layout) restart_room();
+#endif
         if (frame()) return 0;
     }
 }

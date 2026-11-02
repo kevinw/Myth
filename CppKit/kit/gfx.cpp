@@ -53,13 +53,19 @@ static constexpr Color FILL_MODE{0, 0, 255, 0};
 Color silhouette;
 bool render_offscreen;
 
+// MSL on Metal, SPIR-V on Vulkan: shaders/<name>.<stage>.msl or .spv beside the executable.
+static SDL_GPUShaderFormat shader_format;
+static const char* shader_path(const char* name, const char* stage) {
+    return tprint("%sshaders/%s.%s.%s", SDL_GetBasePath(), name, stage, shader_format == SDL_GPU_SHADERFORMAT_MSL ? "msl" : "spv");
+}
+
 static SDL_GPUShader* load_stage(const char* name, SDL_GPUShaderStage stage, u32 samplers, u32 uniforms) {
     bool vertex = stage == SDL_GPU_SHADERSTAGE_VERTEX;
-    auto code = read_file(tprint("%sshaders/%s.%s.msl", SDL_GetBasePath(), name, vertex ? "vertex" : "fragment"));
+    auto code = read_file(shader_path(name, vertex ? "vertex" : "fragment"));
     if (code.empty()) return nullptr;
     SDL_GPUShaderCreateInfo info{
         .code_size = code.size(), .code = code.data(), .entrypoint = vertex ? "vertex_main" : "fragment_main",
-        .format = SDL_GPU_SHADERFORMAT_MSL, .stage = stage, .num_samplers = samplers, .num_uniform_buffers = uniforms,
+        .format = shader_format, .stage = stage, .num_samplers = samplers, .num_uniform_buffers = uniforms,
     };
     return SDL_CreateGPUShader(device, &info);
 }
@@ -124,10 +130,10 @@ std::optional<Shader> load_shader(const char* name, u32 samplers, u32 uniforms) 
 }
 
 std::optional<ComputeShader> load_compute(const char* name, u32 buffers, u32 textures, u32 uniforms, u32 threads_x, u32 threads_y) {
-    auto code = read_file(tprint("%sshaders/%s.compute.msl", SDL_GetBasePath(), name));
+    auto code = read_file(shader_path(name, "compute"));
     if (code.empty()) { SDL_Log("no compute shader %s", name); return {}; }
     SDL_GPUComputePipelineCreateInfo info{
-        .code_size = code.size(), .code = code.data(), .entrypoint = "compute_main", .format = SDL_GPU_SHADERFORMAT_MSL,
+        .code_size = code.size(), .code = code.data(), .entrypoint = "compute_main", .format = shader_format,
         .num_readonly_storage_buffers = buffers, .num_readwrite_storage_textures = textures, .num_uniform_buffers = uniforms,
         .threadcount_x = threads_x, .threadcount_y = threads_y, .threadcount_z = 1,
     };
@@ -178,8 +184,9 @@ void dispatch(const DispatchInfo& info) {
 
 bool gfx_init(SDL_Window* w) {
     window = w;
-    device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
+    device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
     if (!device || !SDL_ClaimWindowForGPUDevice(device, window)) return false;
+    shader_format = SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_MSL ? SDL_GPU_SHADERFORMAT_MSL : SDL_GPU_SHADERFORMAT_SPIRV;
     auto loaded = load_shader("batcher");
     if (!loaded) return false;
     batcher = *loaded;

@@ -20,6 +20,7 @@ BREW = "/opt/homebrew"
 CXX = "clang++"
 FLAGS = [
     "-std=c++20", "-g", "-O0",
+    "-DLIVE",                   # the game calls into kit/live.h
     "-MD",                      # depfiles: which headers each object depends on
     "-falign-functions=16",     # room for jet-live's hook trampolines at every function
     "-fno-exceptions", "-fno-rtti",

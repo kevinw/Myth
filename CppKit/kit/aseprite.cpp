@@ -1,5 +1,4 @@
 #include "aseprite.h"
-#include <sys/stat.h>
 #include <zlib.h>
 
 static constexpr s32 MAX_LAYERS = 64;
@@ -77,8 +76,8 @@ s32 tag_step(const Tag& tag, s32 len, s32 k) {
 }
 
 s64 file_modtime(const char* path) {
-    struct stat st;
-    return stat(path, &st) == 0 ? s64(st.st_mtimespec.tv_sec) * 1000000000 + st.st_mtimespec.tv_nsec : 0;
+    SDL_PathInfo info;
+    return SDL_GetPathInfo(path, &info) ? info.modify_time : 0;
 }
 
 std::optional<Sprite> load_sprite(const char* path) {
