@@ -131,5 +131,7 @@ for path in ["Rooms", "Packed/Visuals", "Sources/Sprites", "Sources/Costumes", "
 with open(os.path.join(OUT, "build.sh"), "w") as f:
     f.write(BUILD_SH)
 os.chmod(os.path.join(OUT, "build.sh"), 0o755)
+with open(os.path.join(OUT, ".gitignore"), "w") as f:
+    f.write("# build.sh's outputs, and the zlib and freetype it fetches and builds for Linux\n/build/\n/build-linux/\n/third_party/\n.DS_Store\n")
 size = subprocess.run(["du", "-sh", OUT], capture_output=True, text=True).stdout.split()[0]
 print(f"exported {size} to {OUT}")
