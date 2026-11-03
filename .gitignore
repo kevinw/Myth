@@ -32,4 +32,6 @@ Myth/Production/.world-map-venv/
 .env
 CppKit/third_party/
 MythCpp/build/
+MythCpp/build-linux/
+MythCpp/third_party/
 MythCpp/.cache/
