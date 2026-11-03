@@ -21,18 +21,18 @@ APPLIED = "refs/cloud/applied"
 ASSETS = "Myth/Assets/"
 # What the agent reads and edits, from git (the working tree's version).
 TRACKED = ["MythCpp", "CppKit/build.py", "CppKit/kit", "MythJai/shaders/lighting.hlsl",
-           "Myth/Platforms/FMOD/Native/osx", "Myth/Platforms/FMOD/Native/linux-x64",
+           "Myth/Platforms/FMOD/Native/linux-x64",
            *[ASSETS + p for p in ["Shaders/Crt.hlsl", "Shaders/PixelSort.hlsl", "Shaders/Common.hlsl", "Rooms",
              "Sources/Sprites", "Sources/Costumes", "Particles", "Rigs/ual2.ozzpack", "Rigs/ual2.takes.json",
-             "Fonts/m3x6.ttf", "Fonts/dogica.ttf", "Voice/manifest.json", "Voice/voice-de.json", "Sounds/FMOD/Build/Desktop"]]]
+             "Fonts/m3x6.ttf", "Fonts/dogica.ttf", "Voice/manifest.json", "Voice/voice-de.json",
+             *["Sounds/FMOD/Build/Desktop/" + bank for bank in ["Master.bank", "Master.strings.bank", "SFX.bank"]]]]]
 # What the build needs from outside git: Foster is a submodule, the rest are Myth's build products.
+# Linux only (the agent's sandbox), and only the packed visuals the C++ game reads.
 EXTRAS = {
-    "Foster/tools/macos": "git submodule update --init",
     "Foster/tools/linux": "git submodule update --init",
     "Foster/Framework/Content/Shaders/Batcher.hlsl": "git submodule update --init",
     "Foster/Framework/Internal/Native/linux-x64/libSDL3.so": "git submodule update --init",
-    ASSETS + "Packed/Visuals": "cd Myth && dotnet build",
-    "Myth/bin/Debug/libmyth_ozz.dylib": "cd Myth && dotnet build",
+    **{ASSETS + "Packed/Visuals/" + f: "cd Myth && dotnet build" for f in ["manifest.bin", "atlas.qoi", "lighting-noise.qoi"]},
     "Myth/bin/publish/linux-x64/libmyth_ozz.so": "cd Myth && node tools/publish-linux.mjs",
 }
 AGENTS = """# Human Questions, in C++
@@ -44,16 +44,17 @@ larger repo; this is its C++ port and only what that needs, laid out as in that 
   (rooms, tiles, sprites), actors.cpp, pawn.cpp (the player, burrowing), rig.cpp (ozz-animated rigs),
   effects.cpp (particles, pixel sort, shadows), ui.cpp (input, FMOD audio, barks, HUD).
 - CppKit/kit/: the reusable kit: an SDL_GPU batcher, arenas, pools, JSON, Aseprite and font loading.
-- Myth/Assets/: rooms (json), sprites (.ase), rigs, particles, FMOD banks; and Packed/, the baked tile art.
+- Myth/Assets/: rooms (json), sprites (.ase), rigs, particles, FMOD banks (sound effects; no music); and
+  Packed/, the baked tile art.
 - Foster/, Myth/bin/, Myth/Assets/Packed/ and Myth/Platforms/ are built elsewhere: read them, don't edit them.
 - Put new scripts and sources in MythCpp/.
 
 ## Build and run
 
-    MythCpp/build.sh                 build: macOS (brew install sdl3 freetype) or Linux, x86_64
+    MythCpp/build.sh                 build
     MythCpp/build.sh run [args]      build, then run
 
-Linux (Ubuntu 24.04 or Debian, x86_64) needs
+This export carries Linux tools only. Linux (Ubuntu 24.04 or Debian, x86_64) needs
 `apt-get install -y g++ libfreetype-dev zlib1g-dev libvulkan1 mesa-vulkan-drivers xvfb curl`, plus
 `xdotool imagemagick` for MythCpp/play-linux.sh, which drives the game with keys and takes screenshots.
 The first build fetches SDL3's headers (Debian's libsdl3-dev .deb). mesa-vulkan-drivers is the software
@@ -68,7 +69,7 @@ Arguments, combinable:
   `hold <SDL key name, e.g. Right>`: as if held from the start.
 - `--no-lighting`: skip the lighting pass, about 3x faster on software Vulkan.
 
-CppKit/build.py and MythCpp/build.py are the macOS hot-reload build (jet-live); build.sh doesn't need them.
+CppKit/build.py and MythCpp/build.py are the macOS hot-reload build (jet-live); ignore them.
 
 ## Style
 
