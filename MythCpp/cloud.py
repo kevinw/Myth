@@ -28,27 +28,62 @@ TRACKED = ["MythCpp", "CppKit/build.py", "CppKit/kit", "MythJai/shaders/lighting
 # What the build needs from outside git: Foster is a submodule, the rest are Myth's build products.
 EXTRAS = {
     "Foster/tools/macos": "git submodule update --init",
+    "Foster/tools/linux": "git submodule update --init",
     "Foster/Framework/Content/Shaders/Batcher.hlsl": "git submodule update --init",
     "Foster/Framework/Internal/Native/linux-x64/libSDL3.so": "git submodule update --init",
     ASSETS + "Packed/Visuals": "cd Myth && dotnet build",
     "Myth/bin/Debug/libmyth_ozz.dylib": "cd Myth && dotnet build",
     "Myth/bin/publish/linux-x64/libmyth_ozz.so": "cd Myth && node tools/publish-linux.mjs",
 }
-README = """# FosterGames, the C++ slice
+AGENTS = """# Human Questions, in C++
 
-The C++ port of Human Questions (MythCpp/) on its kit (CppKit/kit/), with the assets it reads, laid out
-as in the FosterGames repo. Build and run with MythCpp/build.sh:
+An isolated C++ fork of Human Questions (code name Myth), a 2D platformer. The main game is C#, in a
+larger repo; this is its C++ port and only what that needs, laid out as in that repo.
 
-    MythCpp/build.sh               macOS (brew install sdl3 freetype)
-    MythCpp/build.sh run [args]    build, then run: room <path>, at <x,y>, hold <key>, demo, shot <png> <frame>
-    MythCpp/build.sh linux         linux-x64, cross-compiled with zig (brew install zig)
+- MythCpp/: the game. game.h declares it all; main.cpp (the frame, camera and render passes), world.cpp
+  (rooms, tiles, sprites), actors.cpp, pawn.cpp (the player, burrowing), rig.cpp (ozz-animated rigs),
+  effects.cpp (particles, pixel sort, shadows), ui.cpp (input, FMOD audio, barks, HUD).
+- CppKit/kit/: the reusable kit: an SDL_GPU batcher, arenas, pools, JSON, Aseprite and font loading.
+- Myth/Assets/: rooms (json), sprites (.ase), rigs, particles, FMOD banks; and Packed/, the baked tile art.
+- Foster/, Myth/bin/, Myth/Assets/Packed/ and Myth/Platforms/ are built elsewhere: read them, don't edit them.
+- Put new scripts and sources in MythCpp/.
 
-Put new scripts and sources in MythCpp/. Foster/, Myth/bin/ and Myth/Assets/Packed/ are built elsewhere:
-read them, don't edit them. CppKit/build.py and MythCpp/build.py are the hot-reload build, which needs
-jet-live; build.sh doesn't.
+## Build and run
+
+    MythCpp/build.sh                 build: macOS (brew install sdl3 freetype) or Linux, x86_64
+    MythCpp/build.sh run [args]      build, then run
+
+Linux (Ubuntu 24.04 or Debian, x86_64) needs
+`apt-get install -y g++ libfreetype-dev zlib1g-dev libvulkan1 mesa-vulkan-drivers xvfb curl`, plus
+`xdotool imagemagick` for MythCpp/play-linux.sh, which drives the game with keys and takes screenshots.
+The first build fetches SDL3's headers (Debian's libsdl3-dev .deb). mesa-vulkan-drivers is the software
+Vulkan (lavapipe) for machines without a GPU; without root, `run` fetches its .deb instead, which only
+loads if Mesa's dependencies (libLLVM, libdrm...) are already installed. Without a DISPLAY, `run` uses
+Xvfb. The .deb URLs in build.sh are pinned: if one 404s, bump its version.
+
+Arguments, combinable:
+- `shot <png> [frame]`: save the view at that frame (default 90) and quit; e.g. `run demo shot /tmp/a.png 900`
+- `demo`: scripted input. What it logs is deterministic, so diff it before and after a change.
+- `trace`: log what the player does. `room <path under Myth/Assets/Rooms>`, `at <x,y>`: where to start.
+  `hold <SDL key name, e.g. Right>`: as if held from the start.
+- `--no-lighting`: skip the lighting pass, about 3x faster on software Vulkan.
+
+CppKit/build.py and MythCpp/build.py are the macOS hot-reload build (jet-live); build.sh doesn't need them.
+
+## Style
+
+- C++20 as "C with classes"; the STL only where it clearly wins. No exceptions or RTTI.
+- Nothing allocates per frame: the `temp` arena resets each frame, `persist` lasts; actors live in Pool<T, N>.
+- Whole-vector arithmetic over per-component math. Tweakables live next to where they're used.
+- Lazy senior dev: fewest lines and files, deletion over addition. Comment only what the code can't say,
+  matching the density around it.
+"""
+README = """# Human Questions, in C++
+
+The C++ port of a 2D platformer. Agents: read [AGENTS.md](AGENTS.md) first; it says how to build and run.
 """
 GITIGNORE = "MythCpp/build/\nMythCpp/build-linux/\nMythCpp/third_party/\nCppKit/third_party/\n__pycache__/\n.DS_Store\n"
-README_NAME = "CLOUD_README.md"  # not README.md: the zip's root is the repo's root, which has its own
+ROOT_FILES = {"AGENTS.md": AGENTS, "README.md": README, ".gitignore": GITIGNORE}  # the zip's own, not the repo's
 
 
 def git(*args, env=None, input=None, text=True):
@@ -88,8 +123,8 @@ def export():
         for f in files:
             if ".git" not in f.split("/"):
                 z.write(os.path.join(ROOT, f), f"{TOP}/{f}")
-        z.writestr(f"{TOP}/{README_NAME}", README)
-        z.writestr(f"{TOP}/.gitignore", GITIGNORE)
+        for name, text in ROOT_FILES.items():
+            z.writestr(f"{TOP}/{name}", text)
     print(f"exported {len(files)} files, {os.path.getsize(out) >> 20}MB, as of {stamp}: {out}")
     subprocess.run(["open", "-R", out])
 
@@ -138,7 +173,7 @@ def commit_for(path):
     env = temp_index()
     git("read-tree", base, env=env)
     # -p2 drops a/ and the zip's top folder; the files the export adds at its root aren't the repo's.
-    git("apply", "--cached", "-p2", f"--exclude={README_NAME}", "--exclude=.gitignore", "--whitespace=nowarn", env=env, input=diff)
+    git("apply", "--cached", "-p2", *[f"--exclude={name}" for name in ROOT_FILES], "--whitespace=nowarn", env=env, input=diff)
     commit = git("commit-tree", git("write-tree", env=env), "-p", base, "-m", os.path.basename(path), env=env)
     git("update-ref", f"refs/cloud/zips/{os.path.basename(path)[:-len('.zip')]}", commit)
     return commit

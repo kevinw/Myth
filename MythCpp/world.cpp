@@ -2,6 +2,7 @@
 // them, sprites by name, and actors moving against the solid tiles.
 #include "game.h"
 #include <algorithm>
+#include <cctype>
 #include <strings.h>
 
 // --- A Myth room file (Myth/Assets/Rooms/**.json): two layers of tile chars, a legend naming each

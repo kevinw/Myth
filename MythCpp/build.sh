@@ -5,12 +5,13 @@
 #   ./build.sh run [args]       build, then run (args: room <path>, at <x,y>, hold <key>, demo, shot <png> ...)
 #   ./build.sh linux            linux-x64: build-linux/myth, cross-compiled with zig (brew install zig).
 #                               zlib and freetype are fetched and built from source the first time.
+# On a Linux host it builds natively instead, into build-linux/ (see linux_host below).
 set -e
 cd "$(dirname "$0")"
-BREW=$(brew --prefix)
 KIT=../CppKit/kit
 SOURCES=(*.cpp $(ls $KIT/*.cpp | grep -v /live.cpp))
-FLAGS=(-std=c++20 -g -O2 -fno-exceptions -fno-rtti -Wall -Wno-missing-braces -Wno-unused-function -I$KIT -I"$BREW/include")
+FLAGS=(-std=c++20 -g -O2 -fno-exceptions -fno-rtti -Wall -Wno-missing-braces -Wno-unused-function -I$KIT)
+SHADERCROSS=../Foster/tools/$([ "$(uname)" = Linux ] && echo linux || echo macos)/shadercross
 SHADERS=(../Foster/Framework/Content/Shaders/Batcher.hlsl ../MythJai/shaders/lighting.hlsl shaders/shadow_depths.compute.hlsl
          ../Myth/Assets/Shaders/Crt.hlsl ../Myth/Assets/Shaders/PixelSort.hlsl)
 FMOD=../Myth/Platforms/FMOD/Native
@@ -23,10 +24,57 @@ shaders() {  # shaders <out> <format> <extension>
         if [[ $name == *.compute ]]; then stages=compute; name=${name%.compute}; else stages="vertex fragment"; fi
         for stage in $stages; do
             out=$1/shaders/$name.$stage.$3
-            [ "$out" -nt "$f" ] || ../Foster/tools/macos/shadercross "$f" -e ${stage}_main -t $stage -s HLSL -d $2 -I "$(dirname "$f")" -o "$out"
+            [ "$out" -nt "$f" ] || $SHADERCROSS "$f" -e ${stage}_main -t $stage -s HLSL -d $2 -I "$(dirname "$f")" -o "$out"
         done
     done
 }
+
+linux_libs() {
+    # Each library under its soname, which is what the executable asks for. The ozz runtime is
+    # Myth's last `node tools/publish-linux.mjs`'s.
+    mkdir -p build-linux
+    cp ../Foster/Framework/Internal/Native/linux-x64/libSDL3.so build-linux/libSDL3.so.0
+    cp $FMOD/linux-x64/libfmod.so.15 build-linux/
+    cp $FMOD/linux-x64/libfmodstudio.so build-linux/libfmodstudio.so.15
+    cp ../Myth/bin/publish/linux-x64/libmyth_ozz.so build-linux/
+    LINUX_LIBS=(build-linux/libSDL3.so.0 build-linux/libfmod.so.15 build-linux/libfmodstudio.so.15 build-linux/libmyth_ozz.so -Wl,-rpath,'$ORIGIN')
+}
+
+fetch_deb() {  # fetch_deb <url> <dir>: unpacks a .deb's files into <dir>, no root needed
+    mkdir -p "$2" && curl -sSfL -o "$2.deb" "$1" && dpkg-deb -x "$2.deb" "$2" || { echo "can't fetch $1 (bump its version?)"; exit 1; }
+}
+
+# Linux, natively (an agent's sandbox, say): the system's c++, freetype and zlib (apt-get install g++
+# libfreetype-dev zlib1g-dev), and SDL3's headers from Debian's package, as Ubuntu 24.04 has none.
+# `run` without a Vulkan driver fetches Mesa's software one, lavapipe (better: apt-get install
+# mesa-vulkan-drivers, as it only loads with Mesa's dependencies installed); without a display, Xvfb.
+if [ "$(uname)" = Linux ]; then
+    SDL3=third_party/libsdl3-dev
+    [ -f $SDL3/usr/include/SDL3/SDL.h ] || fetch_deb https://deb.debian.org/debian/pool/main/libs/libsdl3/libsdl3-dev_3.4.18+ds-1_amd64.deb $SDL3
+    shaders build-linux SPIRV spv
+    linux_libs
+    c++ --version | grep -q clang || FLAGS+=(-Wno-class-memaccess)  # g++'s
+    if [ -z "$(find . $KIT -maxdepth 1 \( -name '*.cpp' -o -name '*.h' \) -newer build-linux/myth 2>&1)" ]; then
+        echo "build-linux/myth is up to date"
+    else
+        c++ "${FLAGS[@]}" -I$SDL3/usr/include -I/usr/include/freetype2 "${SOURCES[@]}" -o build-linux/myth "${LINUX_LIBS[@]}" -lfreetype -lz
+        echo "built build-linux/myth"
+    fi
+    [ "$1" = run ] || exit 0
+    shift
+    if ! ls /usr/share/vulkan/icd.d/*.json >/dev/null 2>&1; then
+        LVP=third_party/mesa-vulkan-drivers
+        [ -f $LVP/lvp_icd.json ] || { fetch_deb http://archive.ubuntu.com/ubuntu/pool/main/m/mesa/mesa-vulkan-drivers_25.2.8-0ubuntu0.24.04.4_amd64.deb $LVP
+            sed "s#\"libvulkan_lvp.so\"#\"$(pwd)/$LVP/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so\"#" $LVP/usr/share/vulkan/icd.d/lvp_icd.json > $LVP/lvp_icd.json; }
+        export VK_DRIVER_FILES=$(pwd)/$LVP/lvp_icd.json VK_ICD_FILENAMES=$(pwd)/$LVP/lvp_icd.json
+    fi
+    export SDL_VIDEODRIVER=x11
+    [ -n "$DISPLAY" ] || exec xvfb-run -a -s "-screen 0 1280x720x24" build-linux/myth "$@"
+    exec build-linux/myth "$@"
+fi
+
+BREW=$(brew --prefix)
+FLAGS+=(-I"$BREW/include")
 
 if [ "$1" = linux ]; then
     CC=(zig cc -target x86_64-linux-gnu.2.38 -O2)  # glibc 2.38: what Foster's libSDL3.so links against
@@ -48,15 +96,9 @@ if [ "$1" = linux ]; then
         zig ar rcs $DEPS/libdeps.a $DEPS/obj/*.o
     fi
     shaders build-linux SPIRV spv
-    # Each library under its soname, which is what the executable asks for. The ozz runtime is
-    # Myth's last `node tools/publish-linux.mjs`'s.
-    cp ../Foster/Framework/Internal/Native/linux-x64/libSDL3.so build-linux/libSDL3.so.0
-    cp $FMOD/linux-x64/libfmod.so.15 build-linux/
-    cp $FMOD/linux-x64/libfmodstudio.so build-linux/libfmodstudio.so.15
-    cp ../Myth/bin/publish/linux-x64/libmyth_ozz.so build-linux/
+    linux_libs
     zig c++ -target x86_64-linux-gnu.2.38 "${FLAGS[@]}" -Ithird_party/freetype-2.13.3/include -Ithird_party/zlib-1.3.1 \
-        "${SOURCES[@]}" $DEPS/libdeps.a -o build-linux/myth \
-        build-linux/libSDL3.so.0 build-linux/libfmod.so.15 build-linux/libfmodstudio.so.15 build-linux/libmyth_ozz.so -Wl,-rpath,'$ORIGIN'
+        "${SOURCES[@]}" $DEPS/libdeps.a -o build-linux/myth "${LINUX_LIBS[@]}"
     echo "built build-linux/myth"
     exit
 fi

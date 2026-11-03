@@ -3,6 +3,7 @@
 #ifdef LIVE
 #include "live.h"
 #endif
+#include <cctype>
 #include <cstdarg>
 
 #ifndef ASSETS
@@ -40,6 +41,7 @@ static float hit_stun_timer;    // the world freezes briefly on a hit
 static float shake_timer;
 static double next_sprite_check;
 static bool show_light_mask;    // `myth lightmask`: the background's light alone, like Myth's LightMask view
+static bool no_lighting;        // `myth --no-lighting`: the world as drawn, skipping the lighting pass and what feeds it (for software GPUs)
 static const char* shot_path;   // `myth shot <path> [frame]`: save the lit view there at that frame (default 90) and quit
 static s32 shot_frame = 90;
 static u64 last_frame_ticks;
@@ -142,6 +144,7 @@ static bool start() {
         if (arg == "demo") demo = true;
         if (arg == "trace") trace = true;
         if (arg == "lightmask") show_light_mask = true;
+        if (arg == "--no-lighting" || arg == "nolighting") no_lighting = true;
         if (arg == "shot" && i + 1 < argc) shot_path = argv[i + 1];
         if (arg == "shot" && i + 2 < argc && isdigit(argv[i + 2][0])) shot_frame = atoi(argv[i + 2]);
         if (arg == "pad" && demo) attach_demo_pad();
@@ -331,40 +334,47 @@ static void render() {
 #undef X
     pop_matrix();
 
-    // The tiles' and rigs' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
-    begin_pass({.target = normals, .clear = {128, 128, 255, 0}});
-    world();
-    both_rooms([](RoomArt& a) { draw_tiles(a.background.span(), true); draw_tiles(a.foreground.span(), true); });
-    for (Player& it : actors.players) draw_normals(it);
-    for (Bud& it : actors.buds) draw_normals(it);
-    for (Blob& it : actors.blobs) draw_normals(it);
-    pop_matrix();
+    if (no_lighting) {
+        // Unlit: the foreground stacked straight over the background.
+        begin_pass({.target = lit, .clear = {0, 0, 0, 255}});
+        image(scene, {{}, VIEW}, {});
+        image(front, {{}, VIEW}, {});
+    } else {
+        // The tiles' and rigs' normals. Elsewhere it's flat and weightless (Myth's NormalBuffer clear).
+        begin_pass({.target = normals, .clear = {128, 128, 255, 0}});
+        world();
+        both_rooms([](RoomArt& a) { draw_tiles(a.background.span(), true); draw_tiles(a.foreground.span(), true); });
+        for (Player& it : actors.players) draw_normals(it);
+        for (Bud& it : actors.buds) draw_normals(it);
+        for (Blob& it : actors.blobs) draw_normals(it);
+        pop_matrix();
 
-    begin_pass({.target = tile_field});
-    world();
-    if (transitioning) { push_matrix(transition_offset, 1); draw_tile_field(previous_room, previous_art); pop_matrix(); }
-    draw_tile_field(room, art);
-    pop_matrix();
+        begin_pass({.target = tile_field});
+        world();
+        if (transitioning) { push_matrix(transition_offset, 1); draw_tile_field(previous_room, previous_art); pop_matrix(); }
+        draw_tile_field(room, art);
+        pop_matrix();
 
-    // r: what casts sprite shadows (not the player or Bud: their glow would shadow itself, and
-    // Myth leaves light emitters out); g: background tiles, where ambient occlusion lands;
-    // b: what's barely dithered (not Bud).
-    begin_pass({.target = actor_mask});
-    world();
-    silhouette = {0, 255, 0, 255};
-    both_rooms([](RoomArt& a) { draw_tiles(a.background.span()); });
-    silhouette = {0, 0, 255, 255};
-    for (Player& it : actors.players) draw(it);
-    silhouette = {255, 0, 255, 255};
-    for (Blob& it : actors.blobs) draw(it);
-    silhouette = {};
-    pop_matrix();
+        // r: what casts sprite shadows (not the player or Bud: their glow would shadow itself, and
+        // Myth leaves light emitters out); g: background tiles, where ambient occlusion lands;
+        // b: what's barely dithered (not Bud).
+        begin_pass({.target = actor_mask});
+        world();
+        silhouette = {0, 255, 0, 255};
+        both_rooms([](RoomArt& a) { draw_tiles(a.background.span()); });
+        silhouette = {0, 0, 255, 255};
+        for (Player& it : actors.players) draw(it);
+        silhouette = {255, 0, 255, 255};
+        for (Blob& it : actors.blobs) draw(it);
+        silhouette = {};
+        pop_matrix();
 
-    // Lit.
-    LightingUniforms uniforms = lighting_uniforms(view);
-    Texture extra[] = {pack.lighting_noise, normals, front, tile_field, shadow_depths, actor_mask};
-    begin_pass({.target = lit, .clear = {0, 0, 0, 255}, .shader = &lighting, .uniforms = bytes_of(uniforms), .extra = extra});
-    image(scene, {{}, VIEW}, {});
+        // Lit.
+        LightingUniforms uniforms = lighting_uniforms(view);
+        Texture extra[] = {pack.lighting_noise, normals, front, tile_field, shadow_depths, actor_mask};
+        begin_pass({.target = lit, .clear = {0, 0, 0, 255}, .shader = &lighting, .uniforms = bytes_of(uniforms), .extra = extra});
+        image(scene, {{}, VIEW}, {});
+    }
 
     apply_pixel_sort(lit, view, delta);
 
