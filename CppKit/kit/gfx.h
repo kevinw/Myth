@@ -1,5 +1,5 @@
 // A Foster-ish batcher over SDL_GPU: textured, tinted quads in pixel space, drawn with Foster's own
-// Batcher shader (see build.py), into passes: each pass draws into the window or a render target,
+// Batcher shader (compiled by the game's build), into passes: each pass draws into the window or a render target,
 // optionally through a game's own fragment shader.
 #pragma once
 #include "base.h"

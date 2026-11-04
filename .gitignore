@@ -33,6 +33,7 @@ Myth/Production/.world-map-venv/
 CppKit/third_party/
 MythCpp/build/
 MythCpp/build-linux/
+MythCpp/build-live/
 MythCpp/third_party/
 MythCpp/.cache/
 /compile_commands.json

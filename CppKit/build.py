@@ -1,7 +1,7 @@
 # CppKit's build: plain clang++, no build system, shaped for jet-live's hot reload.
 #
-#   python3 build.py          build (from a game's directory, via its own build.py)
-#   python3 build.py run      build, then run
+#   python3 MythCpp/macos-build-live.py        build (a game's own script, calling build() here)
+#   python3 MythCpp/macos-build-live.py run    build, then run
 #
 # Every source compiles to its own object with -MD depfiles, and compile_commands.json lands
 # next to the executable: that's how jet-live finds what to recompile when a file is saved.
@@ -71,9 +71,9 @@ def shaders(out, extra):
 
 
 def build(name, sources, shader_sources=(), copy=(), libs=(), args=()):
-    """Builds `name` from the game's directory into build/."""
+    """Builds `name` from the game's directory into build-live/."""
     game = os.getcwd()
-    out = os.path.join(game, "build")
+    out = os.path.join(game, "build-live")
     objects_dir = os.path.join(out, "obj")
     os.makedirs(objects_dir, exist_ok=True)
     lib = jet_live()

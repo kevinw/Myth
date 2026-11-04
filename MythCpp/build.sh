@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the game without hot reload (build.py is the jet-live build): HLSL to shaders with Foster's
+# Builds the game without hot reload (macos-build-live.py is the jet-live build): HLSL to shaders with Foster's
 # shadercross, then a generated <out>/build.ninja compiles MythCpp and CppKit/kit incrementally (needs ninja).
 #   ./build.sh                  macOS: build/myth, against Homebrew's sdl3 and freetype
 #   ./build.sh run [args]       build, then run (args: room <path>, at <x,y>, hold <key>, demo, shot <png> ...)
@@ -12,7 +12,7 @@ KIT=../CppKit/kit
 SOURCES=(*.cpp $(ls $KIT/*.cpp | grep -v /live.cpp))
 FLAGS=(-std=c++20 -g -O2 -fno-exceptions -fno-rtti -Wall -Wno-missing-braces -Wno-unused-function -I$KIT)
 SHADERCROSS=../Foster/tools/$([ "$(uname)" = Linux ] && echo linux || echo macos)/shadercross
-SHADERS=(../Foster/Framework/Content/Shaders/Batcher.hlsl ../MythJai/shaders/lighting.hlsl shaders/shadow_depths.compute.hlsl
+SHADERS=(../Foster/Framework/Content/Shaders/Batcher.hlsl shaders/lighting.hlsl shaders/shadow_depths.compute.hlsl
          ../Myth/Assets/Shaders/Crt.hlsl ../Myth/Assets/Shaders/PixelSort.hlsl)
 FMOD=../Myth/Platforms/FMOD/Native
 

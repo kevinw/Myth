@@ -15,13 +15,13 @@
 import glob, os, re, subprocess, sys, tempfile, time, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SELF = os.path.relpath(os.path.abspath(__file__), ROOT)
+OMIT = {os.path.relpath(os.path.abspath(__file__), ROOT), "MythCpp/macos-build-live.py"}
 DOWNLOADS = os.path.expanduser("~/Downloads")
 TOP = "FosterGames"
 APPLIED = "refs/cloud/applied"
 ASSETS = "Myth/Assets/"
 # What the agent reads and edits, from git (the working tree's version).
-TRACKED = ["MythCpp", "CppKit/build.py", "CppKit/kit", "MythJai/shaders/lighting.hlsl",
+TRACKED = ["MythCpp", "CppKit/kit",
            "Myth/Platforms/FMOD/Native/linux-x64",
            *[ASSETS + p for p in ["Shaders/Crt.hlsl", "Shaders/PixelSort.hlsl", "Shaders/Common.hlsl", "Rooms",
              "Sources/Sprites", "Sources/Costumes", "Particles", "Rigs/ual2.ozzpack", "Rigs/ual2.takes.json",
@@ -69,8 +69,6 @@ Arguments, combinable:
 - `trace`: log what the player does. `room <path under Myth/Assets/Rooms>`, `at <x,y>`: where to start.
   `hold <SDL key name, e.g. Right>`: as if held from the start.
 - `--no-lighting`: skip the lighting pass, about 3x faster on software Vulkan.
-
-CppKit/build.py and MythCpp/build.py are the macOS hot-reload build (jet-live); ignore them.
 
 ## Style
 
@@ -123,7 +121,7 @@ def export():
     out = os.path.join(DOWNLOADS, f"{TOP}-cpp.zip")
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:
-            if ".git" not in f.split("/") and f != SELF:
+            if ".git" not in f.split("/") and f not in OMIT:
                 z.write(os.path.join(ROOT, f), f"{TOP}/{f}")
         for name, text in ROOT_FILES.items():
             z.writestr(f"{TOP}/{name}", text)
