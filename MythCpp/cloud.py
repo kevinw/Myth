@@ -15,6 +15,7 @@
 import glob, os, re, subprocess, sys, tempfile, time, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SELF = os.path.relpath(os.path.abspath(__file__), ROOT)
 DOWNLOADS = os.path.expanduser("~/Downloads")
 TOP = "FosterGames"
 APPLIED = "refs/cloud/applied"
@@ -122,7 +123,7 @@ def export():
     out = os.path.join(DOWNLOADS, f"{TOP}-cpp.zip")
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:
-            if ".git" not in f.split("/"):
+            if ".git" not in f.split("/") and f != SELF:
                 z.write(os.path.join(ROOT, f), f"{TOP}/{f}")
         for name, text in ROOT_FILES.items():
             z.writestr(f"{TOP}/{name}", text)
