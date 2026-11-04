@@ -37,3 +37,4 @@ MythCpp/build-live/
 MythCpp/third_party/
 MythCpp/.cache/
 /compile_commands.json
+.cache
