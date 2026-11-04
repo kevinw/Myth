@@ -35,3 +35,4 @@ MythCpp/build/
 MythCpp/build-linux/
 MythCpp/third_party/
 MythCpp/.cache/
+/compile_commands.json

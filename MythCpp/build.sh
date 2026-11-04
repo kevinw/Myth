@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the game without hot reload (build.py is the jet-live build): HLSL to shaders with Foster's
-# shadercross, then one compiler call over MythCpp and CppKit/kit.
+# shadercross, then a generated <out>/build.ninja compiles MythCpp and CppKit/kit incrementally (needs ninja).
 #   ./build.sh                  macOS: build/myth, against Homebrew's sdl3 and freetype
 #   ./build.sh run [args]       build, then run (args: room <path>, at <x,y>, hold <key>, demo, shot <png> ...)
 #   ./build.sh linux            linux-x64: build-linux/myth, cross-compiled with zig (brew install zig).
@@ -40,12 +40,34 @@ linux_libs() {
     LINUX_LIBS=(build-linux/libSDL3.so.0 build-linux/libfmod.so.15 build-linux/libfmodstudio.so.15 build-linux/libmyth_ozz.so -Wl,-rpath,'$ORIGIN')
 }
 
+compile() {  # compile <out> <link args...>: CXX compiles each of SOURCES with FLAGS, then links <out>/myth
+    local q objs=() o
+    q() { printf '%q ' "$@" | sed 's/\$/$$/g'; }
+    {
+        echo "builddir = $1"
+        echo "cxx = $(q "${CXX[@]}")"
+        echo "flags = $(q "${FLAGS[@]}")"
+        echo "ldflags = $(q "${@:2}")"
+        echo 'rule cc
+  command = $cxx $flags -MMD -MF $out.d -c $in -o $out
+  depfile = $out.d
+  deps = gcc
+  description = cc $in
+rule link
+  command = $cxx $in -o $out $ldflags
+  description = link $out'
+        for s in "${SOURCES[@]}"; do o=$1/obj/$(basename "$s" .cpp).o; objs+=("$o"); echo "build $o: cc $s"; done
+        echo "build $1/myth: link ${objs[*]}"
+    } > "$1/build.ninja"
+    ninja -f "$1/build.ninja" && ninja -f "$1/build.ninja" -t compdb cc > ../compile_commands.json  # for clangd, at the root so CppKit is covered too
+}
+
 fetch_deb() {  # fetch_deb <url> <dir>: unpacks a .deb's files into <dir>, no root needed
     mkdir -p "$2" && curl -sSfL -o "$2.deb" "$1" && dpkg-deb -x "$2.deb" "$2" || { echo "can't fetch $1 (bump its version?)"; exit 1; }
 }
 
 # Linux, natively (an agent's sandbox, say): the system's c++, freetype and zlib (apt-get install g++
-# libfreetype-dev zlib1g-dev), and SDL3's headers from Debian's package, as Ubuntu 24.04 has none.
+# ninja-build libfreetype-dev zlib1g-dev), and SDL3's headers from Debian's package, as Ubuntu 24.04 has none.
 # `run` without a Vulkan driver fetches Mesa's software one, lavapipe (better: apt-get install
 # mesa-vulkan-drivers, as it only loads with Mesa's dependencies installed); without a display, Xvfb.
 if [ "$(uname)" = Linux ]; then
@@ -54,12 +76,8 @@ if [ "$(uname)" = Linux ]; then
     shaders build-linux SPIRV spv
     linux_libs
     c++ --version | grep -q clang || FLAGS+=(-Wno-class-memaccess)  # g++'s
-    if [ -z "$(find . $KIT -maxdepth 1 \( -name '*.cpp' -o -name '*.h' \) -newer build-linux/myth 2>&1)" ]; then
-        echo "build-linux/myth is up to date"
-    else
-        c++ "${FLAGS[@]}" -I$SDL3/usr/include -I/usr/include/freetype2 "${SOURCES[@]}" -o build-linux/myth "${LINUX_LIBS[@]}" -lfreetype -lz
-        echo "built build-linux/myth"
-    fi
+    CXX=(c++) FLAGS+=(-I$SDL3/usr/include -I/usr/include/freetype2)
+    compile build-linux "${LINUX_LIBS[@]}" -lfreetype -lz
     [ "$1" = run ] || exit 0
     shift
     if ! ls /usr/share/vulkan/icd.d/*.json >/dev/null 2>&1; then
@@ -97,16 +115,14 @@ if [ "$1" = linux ]; then
     fi
     shaders build-linux SPIRV spv
     linux_libs
-    zig c++ -target x86_64-linux-gnu.2.38 "${FLAGS[@]}" -Ithird_party/freetype-2.13.3/include -Ithird_party/zlib-1.3.1 \
-        "${SOURCES[@]}" $DEPS/libdeps.a -o build-linux/myth "${LINUX_LIBS[@]}"
-    echo "built build-linux/myth"
+    CXX=(zig c++ -target x86_64-linux-gnu.2.38) FLAGS+=(-Ithird_party/freetype-2.13.3/include -Ithird_party/zlib-1.3.1)
+    compile build-linux $DEPS/libdeps.a "${LINUX_LIBS[@]}"
     exit
 fi
 
 shaders build MSL msl
 cp $FMOD/osx/libfmod.dylib $FMOD/osx/libfmodstudio.dylib ../Myth/bin/Debug/libmyth_ozz.dylib build/  # loaded from beside the executable
-clang++ "${FLAGS[@]}" -I"$BREW/include/freetype2" "${SOURCES[@]}" -o build/myth \
-    -L"$BREW/lib" -lSDL3 -lfreetype -lz -Wl,-rpath,"$BREW/lib" -Wl,-rpath,@executable_path \
+CXX=(clang++) FLAGS+=(-I"$BREW/include/freetype2")
+compile build -L"$BREW/lib" -lSDL3 -lfreetype -lz -Wl,-rpath,"$BREW/lib" -Wl,-rpath,@executable_path \
     build/libfmod.dylib build/libfmodstudio.dylib build/libmyth_ozz.dylib
-echo "built build/myth"
 if [ "$1" = run ]; then shift; exec build/myth "$@"; fi
